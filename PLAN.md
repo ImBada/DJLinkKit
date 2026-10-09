@@ -1,0 +1,354 @@
+# DJLinkKit(가칭) — alphatheta-connect Swift 포팅 계획
+
+작성 2026-10-10. TypeScript 라이브러리 alphatheta-connect를 Swift 패키지로 1:1 옮긴다. 원본 시험은 입력과 기대값을 그대로 둔 채 하나씩 옮겨 모두 통과시킨다. 다 옮긴 뒤 DJCrate가 이 패키지를 불러 쓴다(§13).
+
+## 1. 목표와 범위
+
+**목표**
+
+- 원본의 공개 동작을 Swift로 똑같이 옮긴다. 대상은 다음과 같다.
+  - 장치 발견, 가상 CDJ로 참여·번호 정하기
+  - CDJ·믹서 상태, 정밀 위치, on-air
+  - remotedb로 메타데이터·파형·그리드·큐·재생 목록 받기
+  - NFS로 파일 받기, USB DB(`export.pdb`·`exportLibrary.db`)와 ANLZ 읽기
+  - 앨범아트·태그, mixstatus, 제어 명령, 패시브(pcap) 모드, CLI
+- 원본 시험 531개(41개 파일)를 하나씩 옮겨 모두 통과시킨다. 원본 저장소에 기대고 있는 두 저장소의 시험도 함께 옮긴다(§2).
+- 펌웨어 분석에 근거한 원본 지식도 옮긴다(§10).
+
+**범위 밖**
+
+- `src/remote/`(HTTP 서버·Hue 조명)와 `src/utils/telemetry.ts`의 Sentry 보고. 원본 시험이 0개라 시험 수는 줄지 않는다. telemetry를 부르는 자리는 아무것도 하지 않는 함수로 둔다.
+- CDJ에 라이브러리를 내주는 쪽(Link Export 서버). 원본에 없다.
+- 1:1을 마치기 전에 기능을 더하거나 버그를 고치는 일(§9).
+
+## 2. 원본 (고정 커밋)
+
+| 저장소 | 커밋 | 라이선스 | 쓰는 부분 |
+|---|---|---|---|
+| [chrisle/alphatheta-connect](https://github.com/chrisle/alphatheta-connect) | `7496991` (v0.28.5, 2026-10-04) | MIT, Copyright (c) 2013 Evan Purkhiser | 범위 밖을 뺀 전부 |
+| [chrisle/onelibrary-connect](https://github.com/chrisle/onelibrary-connect) | `ac3edd3` (2026-09-26) | MIT | `getEncryptionKey`, `OneLibraryAdapter`, `openOneLibraryDb`과 형들. 시험 1개 파일 |
+| [chrisle/metadata-connect](https://github.com/chrisle/metadata-connect) | `c2ae262` (2026-09-08) | MIT | `extractMetadata`, `isExtensionSupported`, `FileReader`(부분 읽기). 시험 2개 파일 |
+
+- alphatheta-connect는 두 저장소를 `file:../`로 불러온다. 그래서 세 저장소를 같은 부모 폴더 아래에 나란히 받는다(예: `~/src/upstream/`).
+- 받은 원본은 읽기만 한다. 그 안에서 npm이나 스크립트를 돌리지 않는다. 원본 시험을 실제로 돌려 기대값을 확인할 일이 생기면 그때 따로 정한다.
+
+## 3. 결정 사항 (기본값, 바꿀 수 있음)
+
+| 항목 | 기본값 | 이유 |
+|---|---|---|
+| 패키지 이름 | 가칭 `DJLinkKit` | AlphaTheta·PRO DJ LINK는 상표라서 이름에 넣지 않는다. README에 "PRO DJ LINK 호환, AlphaTheta와 관계없는 독립 프로젝트"라고 고지한다 |
+| 플랫폼 | macOS 15 이상, swift-tools 6.2, Swift 6 언어 모드(엄격 동시성) | macOS 15부터 로컬 네트워크 권한이 생겼다. Linux는 지원하지 않는다 |
+| localdb | 1:1로 옮긴다(원본 시험 234개) | kaitai `.ksy`(EPL-1.0)는 옮기지 않는다. 파서는 같은 저작자의 MIT 코드인 DJCrate 리더를 출발점으로 쓴다(§7) |
+| control | 옮긴다. 별도 product `DJLinkControl` | 공연 중인 장비를 움직이는 기능이다. 쓰는 쪽이 골라서 넣게 한다 |
+| passive | 옮긴다. 별도 product `DJLinkPassive`, 마지막 단계 | libpcap과 BPF 권한이 필요하다 |
+| CLI | `djlink` 실행 파일로 옮긴다 | 실기 확인에 쓴다 |
+| 시험 실행 시점 | 단계마다 시험과 코드를 옮긴 뒤, 사용자가 "구현 완료"라고 하면 그 단계 시험을 돌린다 | 사용자의 작업 방식 |
+
+## 4. "1:1"의 뜻
+
+**같아야 하는 것**
+
+- 공개 API의 이름·인자·결과. Swift 관례에 맞춘 이름 변환만 허용한다(§6).
+- 보내는 패킷의 바이트와, 받은 패킷을 읽은 결과.
+- 시간 상수와 상태가 바뀌는 순서. 예를 들면 다음과 같다.
+  - keep-alive 1.5초
+  - 시작 패킷 300ms 간격으로 3번
+  - 10초 동안 소식이 없으면 장치가 끊긴 것으로 본다
+  - remotedb 접속과 미디어 슬롯 응답의 제한 시간 10초
+  - NFS는 1초 기다린 뒤 다시 보낸다
+- 원본 시험의 입력과 기대값. 원본의 버그도 그대로 옮긴다(§9).
+
+**달라도 되는 것**
+
+- 시험을 준비하는 코드. `jest.mock`과 가짜 타이머는 주입한 가짜로 바꾼다(§6).
+- Node 전용 의존성의 내부 구현(§6).
+- 내부 자료 구조. 예를 들어 메모리 SQLite ORM은 시험이 보는 결과만 같으면 다르게 만들어도 된다.
+
+**시험 대응 규칙**
+
+- 원본 파일 하나는 Swift 시험 파일 하나로 옮긴다.
+- 원본 `describe`는 `@Suite`로, `it('문구')`는 `@Test("문구")`로 옮긴다. 문구는 원본 영어 그대로 둔다.
+- 원본에 `it.each`·`describe.each`는 없다(고정 커밋 기준).
+
+## 5. 구조
+
+```swift
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+    name: "DJLinkKit",
+    platforms: [.macOS(.v15)],
+    products: [
+        .library(name: "DJLinkKit", targets: ["DJLinkKit"]),
+        .library(name: "DJLinkControl", targets: ["DJLinkControl"]),
+        .library(name: "DJLinkPassive", targets: ["DJLinkPassive"]),
+        .executable(name: "djlink", targets: ["djlink"]),
+    ],
+    dependencies: [
+        // SQLCipher: §7 참고
+    ],
+    targets: [
+        .target(name: "DJLinkKit", dependencies: [/* SQLCipher */]),
+        .target(name: "DJLinkControl", dependencies: ["DJLinkKit"]),
+        .systemLibrary(name: "CPcap"),  // module.modulemap에서 link "pcap"
+        .target(name: "DJLinkPassive", dependencies: ["DJLinkKit", "CPcap"]),
+        .executableTarget(name: "djlink", dependencies: ["DJLinkKit", "DJLinkControl"]),
+        .target(name: "DJLinkTestSupport", dependencies: ["DJLinkKit"]),
+        .testTarget(name: "DJLinkKitTests", dependencies: ["DJLinkKit", "DJLinkTestSupport"], resources: [.copy("Fixtures")]),
+        .testTarget(name: "DJLinkControlTests", dependencies: ["DJLinkControl", "DJLinkTestSupport"]),
+        .testTarget(name: "DJLinkPassiveTests", dependencies: ["DJLinkPassive", "DJLinkTestSupport"]),
+    ]
+)
+```
+
+타깃 사이에서만 보여야 하는 내부 API는 `package` 접근 수준으로 둔다.
+
+| 원본 | Swift |
+|---|---|
+| `src/constants.ts`, `types.ts`, `entities.ts`, `index.ts`, `network.ts`, `logger.ts` | `Sources/DJLinkKit/` 바로 아래 |
+| `src/utils/` (`udp.ts` 포함) | `Sources/DJLinkKit/Utils/`, `Sources/DJLinkKit/Socket/` |
+| `src/devices/` | `Sources/DJLinkKit/Devices/` |
+| `src/status/` | `Sources/DJLinkKit/Status/` |
+| `src/virtualcdj/` | `Sources/DJLinkKit/VirtualCDJ/` |
+| `src/remotedb/` | `Sources/DJLinkKit/RemoteDB/` |
+| `src/nfs/` | `Sources/DJLinkKit/NFS/` |
+| `src/localdb/`, onelibrary-connect | `Sources/DJLinkKit/LocalDB/`, `Sources/DJLinkKit/LocalDB/OneLibrary/` |
+| `src/db/` | `Sources/DJLinkKit/DB/` |
+| `src/artwork/`, `src/metadata.ts`, metadata-connect | `Sources/DJLinkKit/Artwork/`, `Sources/DJLinkKit/Metadata/` |
+| `src/mixstatus/` | `Sources/DJLinkKit/MixStatus/` |
+| `src/control/` | `Sources/DJLinkControl/` |
+| `src/passive/` | `Sources/DJLinkPassive/` |
+| `src/cli/` | `Sources/djlink/` |
+| `src/remote/`, `src/utils/telemetry.ts` | 옮기지 않음. telemetry는 아무것도 하지 않는 함수로 |
+
+파일 단위 대응표는 0단계에서 `docs/port-map.md`로 만든다. 칸은 원본 파일, Swift 파일, 상태(안 함/옮김/통과)다.
+
+## 6. Node → Swift 바꿈표
+
+| 원본 | Swift | 시험에서 |
+|---|---|---|
+| `dgram`(UDP) | `UDPSocket` 프로토콜. 실제 구현은 BSD 소켓과 DispatchSource로, `SO_REUSEADDR`·`SO_BROADCAST`를 켜고 `0.0.0.0`에 바인드한다. Network.framework는 브로드캐스트를 지원하지 않아 쓰지 않는다 | `FakeUDPSocket`: 보낸 바이트를 기록하고, 받은 패킷을 주입한다 |
+| `net`·`promise-socket`(TCP) | `TCPConnection` 프로토콜. 실제 구현은 `NWConnection` | `FakeTCPConnection`: 정해 둔 순서대로 주고받는다 |
+| `setTimeout`·`setInterval`, jest 가짜 타이머(6개 파일) | `any Clock<Duration>`을 주입한다 | 직접 만든 `TestClock`(`advance(by:)`) |
+| `EventEmitter`, `strict-event-emitter-types` | 구독자 여럿에게 나눠 주는 `EventHub<Event>`(AsyncStream 기반) | 그대로 |
+| `os.networkInterfaces` | `InterfaceProvider`(`getifaddrs`) | 가짜 |
+| `child_process`(`ioreg`·`networksetup`·`arp`) | `getifaddrs`(AF_LINK)와 sysctl로 같은 값을 얻는다 | 가짜 |
+| `fs`, `path` | `FileManager`. mock하는 시험 1개 파일은 `FileSystem` 프로토콜로 | 임시 폴더 |
+| `crypto.createHash` | CryptoKit | |
+| `async-mutex` | actor | |
+| `promise-retry`, `promise-timeout` | `withRetry`·`withTimeout(clock:)` 도우미 | `TestClock` |
+| `lru_map` | 작은 `LRUCache` | |
+| `js-xdr` | XDR 인코더·디코더를 직접 구현 | |
+| `iconv-lite` | `String.Encoding`(UTF-16BE·LE 등) | |
+| `ip-address` | `IPv4Address`·`IPv4CIDR`를 직접 구현 | |
+| `lodash` | 표준 라이브러리 | |
+| `kaitai-struct`와 `.ksy`(EPL-1.0) | 옮기지 않는다. DJCrate 리더를 옮겨 쓴다(§7) | |
+| `better-sqlite3-multiple-ciphers` | 메모리 ORM은 SQLite로, OneLibrary는 SQLCipher로 | 픽스처 DB |
+| `signale`(logger) | `os.Logger` | |
+| `jest.mock`(모듈 바꿔치기, 11개 파일) | 위에서 프로토콜로 주입한 자리에 가짜를 넣는다 | |
+
+원본 테스트가 mock하는 모듈은 `onelibrary-connect`(5), `src/localdb/rekordbox`(4), `src/localdb`(4), `os`(2)와, 한 번씩 쓰는 telemetry·remotedb·nfs·hydrator·orm·anlz ksy·devices/utils·db·kaitai-struct·fs·child_process다. 괄호 안은 그 모듈을 mock하는 시험 파일 수다.
+
+## 7. localdb와 DJCrate 리더
+
+**원본 구조**
+
+- kaitai로 `export.pdb`와 ANLZ를 읽어 메모리 SQLite(`MetadataORM`)에 채우고, 그 위에서 질의한다.
+- OneLibrary는 onelibrary-connect로 SQLCipher DB를 연다.
+
+**옮기는 방법**
+
+- kaitai `.ksy` 2개(Deep Symmetry crate-digger 출신, EPL-1.0)는 쓰지 않는다.
+- 대신 DJCrate(MIT, 같은 저작자)의 리더를 옮겨 출발점으로 삼는다.
+  - `Sources/RekordboxKit/Usb/DeviceLibrary/`: `PdbFile`·`PdbReader`·`PdbRows`
+  - `Sources/RekordboxKit/Usb/OneLibrary/`(`OneLibraryReader`), `Sources/RekordboxKit/CipherDatabase.swift`
+  - `Sources/RekordboxKit/AnlzFile.swift`, `Anlz*.swift`, `Usb/Anlz/`(큐·마스크·경로 태그)
+  - DJCrate THIRD_PARTY_NOTICES에서 이 리더들에 해당하는 항목도 같이 옮긴다: pyrekordbox·baken·rekordbox_converter(MIT), 칸 위치만 참고한 rekordcrate(MPL-2.0)·Crate Digger 문서(EPL-2.0).
+- 이 리더 위에 원본 localdb의 바깥 모양을 그대로 만든다. 맞춰야 할 것은 형, 필드 이름, 빈 값 처리, 2EX, 노래 구조, 보컬 설정이다.
+- DJCrate 리더와 원본 시험의 결과가 다르면 원본 시험이 정답이다(1:1).
+- `CipherDatabase`를 옮기면 DJCrate의 cold-open 경쟁 시험도 같이 옮긴다. SQLCipher 초기화 경쟁은 DJCrate에서 실제로 겪은 문제다.
+
+**SQLCipher**
+
+- DJCrate는 지금 `binaryTarget`으로 `SQLCipher.xcframework` 4.19.0을 직접 선언한다. 이 패키지도 같은 이름의 타깃을 선언하면, DJCrate에 붙일 때 서로 부딪친다.
+- 그래서 이 패키지는 [SQLCipher.swift](https://github.com/sqlcipher/SQLCipher.swift) 패키지에 의존한다(4.19.0). DJCrate도 붙일 때 같은 패키지 의존으로 바꾼다.
+- 그 패키지가 SPM product를 내주는지는 0단계에서 확인한다.
+
+**픽스처**
+
+- 원본의 `tests/localdb/fixtures/test-onelibrary.db`는 들여오기 전에 열어서 개인 데이터와 토큰이 없는지 본다. 공개 저장소이기 때문이다.
+
+## 8. 단계
+
+각 단계는 이 순서로 진행한다.
+
+1. 원본 시험을 옮긴다.
+2. 원본 코드를 옮긴다.
+3. 사용자가 "구현 완료"라고 하면 그 단계와 앞 단계의 시험을 돌린다.
+4. 끝 조건을 확인한다.
+
+**끝 조건**(모든 단계 공통)
+
+- `scripts/port-status.sh`에서 원본 `it(` 수와 옮긴 `@Test` 수가 같다.
+- 그 단계와 앞 단계의 시험이 모두 통과한다.
+- 실제 소켓을 연 시험이 0개다.
+
+| 단계 | 원본 | 원본 시험(파일: 개수) | 합 |
+|---|---|---|---|
+| 0 뼈대 | — | — | 0 |
+| 1 기초·상태 | `constants`·`types`·`entities`, `utils/`, `devices/`, `status/` | `tests/utils/index` 8, `tests/devices/index` 7, `tests/devices/utils` 3, `tests/status/utils` 14, `tests/status/position` 7, `tests/status/on-air` 8, `src/status/stagehand-gating` 2 | 49 |
+| 2 가상 CDJ·네트워크 | `virtualcdj/`, `network.ts`, `index.ts` | `src/virtualcdj/heartbeat` 7, `tests/virtualcdj/conflict` 11, `device-id` 25, `stagehand` 8, `startup` 23, `wire-selection` 8, `tests/network/stagehand-identity` 2 | 84 |
+| 3 remotedb·NFS | `remotedb/`, `nfs/` | `tests/remotedb/connection` 4, `fields` 13, `src/nfs/index` 16, `tests/nfs/path` 14 | 47 |
+| 4 localdb | `localdb/`, onelibrary-connect | `tests/localdb/`: `anlz-2ex-integration` 20, `anlz-parsers-2ex` 18, `anlz-parsers-cue-nulls` 2, `anlz-parsers-cues` 3, `anlz-parsers-extended-cues` 5, `anlz-parsers-song-structure` 5, `anlz-parsing` 31, `database-fallback` 12, `database-loading` 22, `edge-cases` 44, `load-anlz-vocal-config` 10, `onelibrary-adapter` 62. 여기에 onelibrary-connect 시험 1개 파일 | 234 + α |
+| 5 db·앨범아트·태그 | `db/`, `artwork/`, `metadata.ts`, metadata-connect | `tests/db/blankMetadata` 4, `getMetadata` 13, `getPlaylist` 3, `getWaveforms` 8, `tests/artwork/extraction.integration` 5, `parsers` 13. 여기에 metadata-connect 시험 2개 파일 | 46 + α |
+| 6 mixstatus | `mixstatus/` | `tests/mixstatus/index` 29 | 29 |
+| 7 제어 | `control/` | `tests/control/load` 2, `stagehand` 9 | 11 |
+| 8 패시브 | `passive/` | `tests/passive/alphatheta` 22, `pcap-adapter` 9 | 31 |
+| 9 CLI·실기 확인 | `cli/` | — | 0 |
+| 합 | | 41개 파일 | 531 + α |
+
+**0단계 할 일**
+
+- `Package.swift`와 폴더 뼈대
+- `LICENSE`, `THIRD_PARTY_NOTICES.md`, `PROVENANCE.md`, `UPSTREAM.md`, `AGENTS.md`(§14), `docs/port-map.md`
+- `DJLinkTestSupport`: `FakeUDPSocket`, `FakeTCPConnection`, `TestClock`, `FakeInterfaceProvider`
+- `scripts/port-status.sh`: 원본 시험 파일별 `it(` 수와, 대응하는 Swift 파일의 `@Test` 수를 나란히 보여 주고 다르면 실패한다. 원본 위치는 `UPSTREAM_DIR` 환경 변수로 받는다.
+- CI: GitHub Actions macOS 러너에서 `swift test`와 `scripts/port-status.sh`(원본은 고정 커밋으로 받는다)
+- SQLCipher.swift 패키지에 product가 있는지 확인(§7)
+- 펌웨어 근거가 있는 곳을 다시 찾아 `PROVENANCE.md`에 적는다(§10)
+
+**9단계 실기 확인 순서**
+
+- 환경: 시험용 스위치에 CDJ 1~2대와 믹서만 묶는다. 공연이나 리허설 중인 네트워크는 쓰지 않는다. 같은 Mac의 rekordbox·rekordboxAgent는 꺼 둔다.
+- 순서:
+  1. 장치 목록
+  2. 7번으로 참여하기, 번호가 겹치면 옮기기
+  3. 상태·정밀 위치·on-air
+  4. remotedb로 메타데이터·파형·그리드·큐 받기
+  5. NFS로 `export.pdb`·`exportLibrary.db`·ANLZ 받기
+  6. mixstatus
+  7. 마지막에 따로 제어 명령
+- 캡처: 확인하면서 받은 패킷을 pcap으로 남겨 회귀 시험 픽스처로 쓴다. 개인 곡이 없는 시험용 USB로만 캡처한다.
+
+## 9. 1:1 이후 고칠 것
+
+1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 고정 커밋 기준으로 알려진 것은 다음과 같다.
+
+- 정밀 위치 파서(`src/status/utils.ts:132` `positionFromPacket`)는 머리말과 0x20 바이트만 보고 패킷 종류 바이트(0x0a, 0x0b여야 함)는 보지 않는다. 그래서 같은 50001 포트로 오는 비트 패킷(0x28)을 위치로 읽을 수 있다.
+- on-air 패킷을 상태 소켓(50002)에서만 읽는다(`src/status/index.ts:122`). beat-link는 50001에서 읽는다. 실기 캡처로 확인한 뒤 정한다.
+- 비트 패킷(0x28)을 읽는 코드가 없다(기능 추가).
+- `makeStatusPacket`(`src/virtualcdj/index.ts:48`)이 정의만 있고 쓰이지 않는다.
+- README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
+- Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
+
+## 10. 라이선스·출처
+
+**LICENSE**
+
+- MIT로 한다. 원본 LICENSE의 저작권 표시("Copyright (c) 2013 Evan Purkhiser")와 허가 문구를 그대로 두고, 우리 저작권 줄을 더한다.
+
+**THIRD_PARTY_NOTICES.md**
+
+- alphatheta-connect: 기여자는 `package.json` contributors의 Chris Le 등
+- prolink-connect
+- onelibrary-connect, metadata-connect: 각 LICENSE의 저작권자를 옮길 때 확인한다
+- §7에서 DJCrate 리더와 함께 옮기는 항목
+
+**옮기지 않는 것**
+
+- `.ksy` 2개(EPL-1.0).
+- 원본 `docs/` 중 Deep Symmetry DJL Analysis 문서를 그대로 인용한 부분(예: `docs/ALL_IN_ONE_UNITS.md`의 인용 블록). 링크로만 가리키고 내용은 우리 말로 적는다.
+
+**PROVENANCE.md(출처 기록)**
+
+- 펌웨어 분석에 근거한 원본 지식을 옮긴 곳을 적는다.
+- 고정 커밋에서 확인한 곳:
+  - `src/status/types.ts:5-8`: CDJ-3000 FW3.20의 `sub_d7d3c8`
+  - `src/status/utils.ts:43-47`: `sub_d7d610`, 피치 네 값의 뜻
+  - `docs/FULL_STARTUP.md:241-279`
+- "firmware" 낱말 검색으로 걸린 후보: `src/constants.ts`, `src/virtualcdj/index.ts`, `src/virtualcdj/stagehand.ts`, `docs/STAGEHAND.md`, `docs/USB_EXPORT.md`, `docs/REMOTE.md`. 0단계에서 하나씩 열어 확인하고 표로 남긴다.
+- 원칙:
+  - 원본에 공개된 지식은 옮긴다.
+  - 펌웨어나 rekordbox 실행 파일을 우리가 직접 분석하지 않는다(strings·디스어셈블 포함).
+  - 새로 알아내는 것은 실기 패킷 캡처를 비교해서만 한다.
+- 결정 기록(2026-10-10): AlphaTheta EULA §2.2(리버스 엔지니어링 금지)는 분석한 쪽에 걸리는 조항이다. 그 결과를 옮겨 배포하는 위험이 작지만 0은 아니라는 것을 알고, 옮기기로 정했다.
+
+## 11. 안전 규칙
+
+**시험**
+
+- 시험은 실제 소켓을 열지 않는다(원본 시험도 0개다).
+- 실제 소켓을 만드는 쪽(`SocketFactory.live`)은 시험 프로세스에서 부르면 바로 실패하게 한다. DJCrate의 `TestProcess`처럼 시험 프로세스를 알아본다.
+- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다. 시험은 LAN에 아무것도 보내지 않는다.
+
+**실기와 CLI**
+
+- 공연이나 리허설 중인 네트워크에서 돌리지 않는다.
+- 같은 Mac에서 rekordbox·rekordboxAgent가 켜져 있으면 UDP 50000~50002를 잡지 않는다. 잡으면 rekordbox LINK가 망가질 수 있다. `djlink`는 시작할 때 이것을 확인하고 거부한다. 이 확인은 CLI·앱 쪽 규칙이며 라이브러리 동작(1:1)에는 넣지 않는다.
+- 가상 CDJ 번호는 7 이상만 쓴다(CLI 기본값). 1~6은 실기 확인에서 일부러 고른 경우만 쓴다.
+- 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
+- macOS 로컬 네트워크 권한:
+  - 라이브러리는 Info.plist를 가질 수 없다.
+  - 터미널에서 돌린 `djlink`는 권한을 자동으로 받는다. 그래서 앱에서는 결과가 다를 수 있고, DJCrate에 붙일 때 따로 확인한다(§13).
+
+## 12. 원본 따라가기
+
+- `UPSTREAM.md`에 세 저장소의 고정 커밋을 적는다.
+- 새 원본 릴리스를 따라갈 때는 한 번에 한 릴리스씩 다음 순서로 한다.
+  1. 두 커밋 사이의 차이를 본다.
+  2. 바뀐 시험부터 옮긴다.
+  3. 코드를 옮긴다.
+  4. `port-status`와 시험이 통과하는지 본다.
+  5. `UPSTREAM.md`를 갱신한다.
+- 새 차이에 펌웨어 분석 근거가 생기면 `PROVENANCE.md`에 더한다.
+
+## 13. DJCrate에 붙이기 (1:1 완료 뒤, DJCrate 저장소 이슈로)
+
+**준비**
+
+- DJCrate에 새 이슈를 만든다. USB 에픽 #3은 Pro DJ Link를 범위 밖으로 적어 두었다.
+- DJCrate AGENTS.md에 §10의 출처 원칙을 한 줄 더한다.
+- SQLCipher를 같은 패키지 의존으로 맞춘다(§7).
+- Info.plist에 `NSLocalNetworkUsageDescription`을 더한다. Apple Development 인증서로 서명했을 때 권한이 빌드마다 유지되는지 확인한다. ad-hoc 서명이면 다시 물을 수 있다.
+
+**관문**
+
+- rekordbox·rekordboxAgent가 켜져 있으면 포트를 잡지 않는다.
+- 가상 CDJ 번호는 7 이상으로 강제한다.
+- `DJLinkControl`은 코드 관문(비상 스위치)과 동작마다 받는 동의 뒤에 둔다. USB 실물 쓰기와 같은 모양이다.
+
+**데이터와 화면**
+
+- NFS로 받은 DB·ANLZ는 Mac 사본(`DJC_HOME` 아래 캐시)에서 연다.
+- `PIONEER/extracted`·`PIONEER/CDP`·`djprofile.nxs`는 NFS로도 열거·읽기·복사하지 않는다(`UsbLayout.neverRead`).
+- 원격 플레이어를 그리려면 `DeckModel` 없이 값만 받는 `DrawState`·`ZoomWaveformView` init을 만든다.
+- 리더가 두 벌이 된다(§7). DJCrate가 패키지 리더를 쓸지, 지금 리더를 그대로 둘지 붙일 때 정한다.
+- CLI는 `djc link …`로 낸다.
+
+## 14. 새 저장소 AGENTS.md 초안
+
+```markdown
+# AGENTS.md — DJLinkKit
+
+alphatheta-connect(TypeScript)를 Swift로 1:1 옮기는 패키지다. 계획은 docs/PLAN.md, 원본 고정 커밋은 UPSTREAM.md, 출처 기록은 PROVENANCE.md에 있다.
+
+- 사용자에게 하는 말·보고·질문은 한국어로 한다. 주석·커밋 메시지는 한국어, 식별자는 영어(원본 이름을 따른다)로 쓴다.
+- 원본 동작을 1:1로 옮긴다. 1:1을 마치기 전에는 원본과 다르게 고치지 않는다. 원본 버그도 그대로 옮기고, 고칠 것은 docs/PLAN.md §9에 적는다.
+- 원본 시험의 입력과 기대값을 바꾸지 않는다. `it('문구')`는 `@Test("문구")`로, 원본 파일 하나는 Swift 파일 하나로 옮긴다.
+- 구현하는 동안에는 빌드·시험을 돌리지 않는다. 사용자가 "구현 완료"라고 하면 그 단계 시험부터 돌린다.
+- 시험은 실제 소켓을 열지 않고 LAN에 아무것도 보내지 않는다.
+- 실기 확인은 공연 중이 아닌 시험용 네트워크에서, 같은 Mac의 rekordbox·rekordboxAgent가 꺼져 있을 때만 한다. 가상 CDJ 번호는 7 이상을 쓴다.
+- 펌웨어나 rekordbox 실행 파일을 직접 분석하지 않는다(strings·디스어셈블 포함). 원본에 공개된 지식만 옮기고, 새로 알아내는 것은 실기 패킷 캡처를 비교해서만 한다.
+- 라이선스가 없는 외부 코드·문서는 쓰지 않는다. 옮기면 THIRD_PARTY_NOTICES.md에 더한다. `.ksy`(EPL-1.0)와 Deep Symmetry 문서 원문은 옮기지 않는다.
+- 패킷 캡처와 픽스처에 개인 곡 정보·경로·토큰을 넣지 않는다(공개 저장소).
+- 커밋 제목은 `타입: 한국어 설명`으로 쓴다. 커밋·푸시는 요청받았을 때만 한다.
+```
+
+## 15. 확인하지 못한 것
+
+- 원본 시험을 실제로 돌려 보지 않았다. 고정 커밋에서 531개가 모두 통과하는지 모른다. 기대값은 시험 코드에 적힌 값을 따른다.
+- onelibrary-connect·metadata-connect의 시험 개수. 파일 수(1개, 2개)만 셌다.
+- SQLCipher.swift 패키지가 SPM product를 내주는지.
+- 펌웨어 근거 표시가 없는 원본 부분(Stagehand, CDJ-3000X 등)이 어디서 왔는지.
+- 시험 개수는 `grep -cE "^\s*(it|test)(\.each)?\("`로 셌다. 들여쓰기가 다르거나 동적으로 만든 시험이 있으면 숫자가 어긋날 수 있다. 0단계의 `port-status.sh`로 다시 센다.
