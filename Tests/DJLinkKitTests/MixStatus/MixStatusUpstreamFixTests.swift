@@ -73,4 +73,57 @@ final class MixStatusUpstreamFixTests {
         await clock.settle()
         #expect(!seHandler.wasCalled)
     }
+
+    @Test("reports setStarted again for the second set after setEnded")
+    func reportsSetStartedForSecondSet() async {
+        let ssHandler = CallRecorder<Void>()
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setStarted, ssHandler.handler)
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+        #expect(ssHandler.callCount == 1)
+
+        feedState(1) { $0.playState = .cued }
+        clock.advance(ms: 30 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+
+        // A different track starts after the set has ended: it is a new set
+        feedState(1) {
+            $0.trackId = 456
+            $0.playState = .playing
+        }
+        #expect(ssHandler.callCount == 2)
+
+        feedState(1) { $0.playState = .cued }
+        clock.advance(ms: 30 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 2)
+    }
+
+    @Test("does not report setEnded again when a stopped deck stops after the set has ended")
+    func doesNotReportSetEndedTwice() async {
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+        feedState(1) { $0.playState = .cued }
+        clock.advance(ms: 30 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+
+        // The set is over, so triggering the next track must not arm another ending
+        processor.triggerNextTrack()
+        #expect(clock.pendingTimerCount == 0)
+        clock.advance(ms: 60 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+    }
 }

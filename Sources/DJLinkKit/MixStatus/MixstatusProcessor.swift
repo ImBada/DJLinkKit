@@ -373,6 +373,8 @@ public final class MixstatusProcessor: EventEmitting {
                 return
             }
 
+            // PLAN §9: 원본은 isSetActive를 되돌리지 않아 다음 세트에서 setStarted가 나지 않았다.
+            isSetActive = false
             emitter.emit(.setEnded, ())
         }
         let endTimeout = clock.setTimeout(.ms(config.timeBetweenSets * 1000)) { [self] in
