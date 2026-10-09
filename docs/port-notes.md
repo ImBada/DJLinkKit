@@ -37,6 +37,8 @@
 
 ## 3단계 (remotedb·NFS)
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): `RemoteDatabase(closesPortQueryConnection: true)`는 포트 응답을 받으면 즉시 조회 TCP를 닫으며 실패 경로에서도 닫는다. 기본 false는 연결을 유지한다. `TCPConnection.setCloseHandler`는 호출했을 때만 원격 FIN·destroy·연결 실패를 보고하며 CLI 장부에서 닫힌 연결을 즉시 제거한다.
+
 - CLI 안전을 위한 추가(기본값은 원본 동작): `UDPSocket.cancelsPendingReads`는 기본 false이며 CLI 래퍼만 true다. RPC는 이 경우 `udpReadCancellable`로 닫기·취소·시간 초과 때 대기자를 실패시키고 구독·타이머를 거둔다. 재시도 대기도 닫기로 풀린다. `withRetry(sleep:)`의 기본 nil은 원본 시계 sleep이며 CLI RPC에서만 취소 가능한 대기를 주입한다. 원본 `udpRead`는 바꾸지 않는다.
 
 - CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다. 찾지 못하면 TCP 연결을 시작하지 않는다. `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다. 미호출 시 원본처럼 라우팅한다.

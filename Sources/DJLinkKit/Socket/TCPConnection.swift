@@ -23,11 +23,18 @@ public protocol TCPConnection: AnyObject {
     /// CLI 안전을 위한 추가(기본값은 원본 동작). 연결 전에 이름으로 인터페이스를 요구한다.
     func setRequiredInterface(name: String) throws
 
+    /// CLI 안전을 위한 추가(기본값은 원본 동작). 원격 종료를 포함해 닫힌 연결을 알린다.
+    func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws
+
     /// `socket.destroy(error)`
     func destroy(_ error: (any Error)?)
 }
 
 extension TCPConnection {
+    public func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws {
+        throw DJLinkError("This connection cannot report closure")
+    }
+
     public func setRequiredInterface(name: String) throws {
         throw DJLinkError("This connection cannot require a network interface")
     }

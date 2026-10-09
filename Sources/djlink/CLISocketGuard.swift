@@ -117,6 +117,10 @@ final class GuardedTCPConnection: TCPConnection {
 
     func setRequiredInterface(name: String) throws { try inner.setRequiredInterface(name: name) }
 
+    func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws {
+        try inner.setCloseHandler(handler)
+    }
+
     func destroy(_ error: (any Error)?) { inner.destroy(error) }
 }
 
@@ -141,6 +145,8 @@ final class CLISocketRegistry: SocketFactory {
         self.inner = inner
         self.abort = abort
     }
+
+    var openTCPConnectionCount: Int { tcpConnections.count }
 
     var openUDPSocketCount: Int { udpSockets.filter { !$0.isCloseRequested }.count }
 
@@ -167,6 +173,10 @@ final class CLISocketRegistry: SocketFactory {
                 try self.requireDestination($0)
             })
         tcpConnections.append(connection)
+        try connection.setCloseHandler { [weak self, weak connection] in
+            guard let connection else { return }
+            self?.tcpConnections.removeAll { $0 === connection }
+        }
         if let boundInterfaceName { try connection.setRequiredInterface(name: boundInterfaceName) }
         return connection
     }

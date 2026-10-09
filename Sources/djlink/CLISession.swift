@@ -270,6 +270,11 @@ final class CLISession {
 
     private func guardedNetworkDependencies() -> NetworkDependencies {
         NetworkDependencies(
+            makeRemoteDatabase: { manager, host, factory in
+                RemoteDatabase(
+                    deviceManager: manager, hostDevice: host, socketFactory: factory,
+                    closesPortQueryConnection: true)
+            },
             makeLocalDatabase: { [self] host, manager, statusEmitter, preference, clock in
                 LocalDatabase(
                     hostDevice: host, deviceManager: manager, statusEmitter: statusEmitter, preference: preference,

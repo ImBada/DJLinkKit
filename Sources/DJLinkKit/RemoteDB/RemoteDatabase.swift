@@ -83,6 +83,7 @@ public struct LookupDescriptor: Sendable {
     private let socketFactory: any SocketFactory
     private let serverQueryPort: Int
     private let pickQueryId: Bool
+    private let closesPortQueryConnection: Bool
     private let queryIdPicker: @DJLinkActor (DeviceID, [Device]) -> DeviceID
     private var connections: [DeviceID: Connection] = [:]
     private var deviceLocks: [DeviceID: AsyncMutex] = [:]
@@ -90,11 +91,13 @@ public struct LookupDescriptor: Sendable {
     public init(
         deviceManager: any RemoteDBDeviceSource, hostDevice: DeviceReference, pickQueryId: Bool = true,
         socketFactory: any SocketFactory = LiveSocketFactory.shared, serverQueryPort: Int = REMOTEDB_SERVER_QUERY_PORT,
+        closesPortQueryConnection: Bool = false,
         queryIdPicker: @escaping @DJLinkActor (DeviceID, [Device]) -> DeviceID = { pickRemoteDbQueryId($0, $1) }
     ) {
         self.deviceManager = deviceManager
         self.hostDeviceRef = hostDevice
         self.pickQueryId = pickQueryId
+        self.closesPortQueryConnection = closesPortQueryConnection
         self.socketFactory = socketFactory
         self.serverQueryPort = serverQueryPort
         self.queryIdPicker = queryIdPicker
@@ -104,18 +107,23 @@ public struct LookupDescriptor: Sendable {
     public convenience init(
         deviceManager: any RemoteDBDeviceSource, hostDevice: Device, pickQueryId: Bool = true,
         socketFactory: any SocketFactory = LiveSocketFactory.shared, serverQueryPort: Int = REMOTEDB_SERVER_QUERY_PORT,
+        closesPortQueryConnection: Bool = false,
         queryIdPicker: @escaping @DJLinkActor (DeviceID, [Device]) -> DeviceID = { pickRemoteDbQueryId($0, $1) }
     ) {
         self.init(
             deviceManager: deviceManager, hostDevice: DeviceReference(hostDevice), pickQueryId: pickQueryId,
-            socketFactory: socketFactory, serverQueryPort: serverQueryPort, queryIdPicker: queryIdPicker)
+            socketFactory: socketFactory, serverQueryPort: serverQueryPort,
+            closesPortQueryConnection: closesPortQueryConnection, queryIdPicker: queryIdPicker)
     }
     public func connectToDevice(_ device: Device) async throws {
         let tx = Telemetry.startTransaction(SpanContext(name: "connectRemotedb"))
         let portConn = try socketFactory.createTCPConnection()
+        // CLI 안전을 위한 추가(기본값 false는 원본 동작). 실패 때도 일회성 연결을 닫는다.
+        defer { if closesPortQueryConnection { portConn.destroy(nil) } }
         try await portConn.connect(port: serverQueryPort, host: device.ip.address)
         try await portConn.write([0, 0, 0, 0x0f] + [UInt8]("RemoteDBServer", encoding: .ascii) + [0])
         guard let resp = try await portConn.read(nil) else { throw DJLinkError("Invalid response from remotedb") }
+        if closesPortQueryConnection { portConn.destroy(nil) }
         guard resp.count == 2 else { throw DJLinkError("Expected 2 bytes, got \(resp.count)") }
         let dbPort = try resp.readUInt16BE()
         let socket = try socketFactory.createTCPConnection()

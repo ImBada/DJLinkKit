@@ -3,6 +3,13 @@ import DJLinkKit
 /// 원본 promise-readable의 크기 지정 읽기와 종료를 흉내 내는 TCP 연결.
 @DJLinkActor
 public final class FakeTCPConnection: TCPConnection {
+    private var closeHandler: (@DJLinkActor () -> Void)?
+    public func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws { closeHandler = handler }
+    private func reportClosed() {
+        let handler = closeHandler
+        closeHandler = nil
+        handler?()
+    }
     public private(set) var connectCalls: [(port: Int, host: String)] = []
     public private(set) var requiredInterfaces: [String] = []
     public var interfaceError: (any Error)?
@@ -57,6 +64,7 @@ public final class FakeTCPConnection: TCPConnection {
         isOpen = false
         clock.clearTimeout(timer)
         drain()
+        reportClosed()
     }
     public func emitTimeout() {
         let action = timeoutAction
@@ -75,6 +83,7 @@ public final class FakeTCPConnection: TCPConnection {
         isOpen = false
         clock.clearTimeout(timer)
         drain()
+        reportClosed()
     }
     private func refreshTimeout() {
         clock.clearTimeout(timer)
