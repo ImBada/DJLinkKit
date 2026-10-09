@@ -262,15 +262,24 @@ public func bringOnline(
 ) async throws -> ProlinkNetwork {
     Telemetry.setTag("connectionId", UUID().uuidString)
     let tx = Telemetry.startTransaction(.init(name: "bringOnline"))
-    let announceSocket = try socketFactory.createUDPSocket(reuseAddr: true)
-    let beatSocket = try socketFactory.createUDPSocket(reuseAddr: true)
-    let statusSocket = try socketFactory.createUDPSocket(reuseAddr: true)
+    let announceSocket: any UDPSocket
+    let beatSocket: any UDPSocket
+    let statusSocket: any UDPSocket
+    var createdSockets: [any UDPSocket] = []
     do {
+        announceSocket = try socketFactory.createUDPSocket(reuseAddr: true)
+        createdSockets.append(announceSocket)
+        beatSocket = try socketFactory.createUDPSocket(reuseAddr: true)
+        createdSockets.append(beatSocket)
+        statusSocket = try socketFactory.createUDPSocket(reuseAddr: true)
+        createdSockets.append(statusSocket)
         try await udpBind(announceSocket, ANNOUNCE_PORT, "0.0.0.0")
         try await udpBind(beatSocket, BEAT_PORT, "0.0.0.0")
         try await udpBind(statusSocket, STATUS_PORT, "0.0.0.0")
         announceSocket.setBroadcast(true)
     } catch {
+        // PLAN §9: 닫기 하나가 실패해도 나머지를 정리하고 원래 오류를 다시 던진다.
+        for socket in createdSockets { try? await udpClose(socket) }
         Telemetry.captureException(error)
         tx.setStatus(.unavailable)
         tx.finish()
