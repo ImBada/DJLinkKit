@@ -97,6 +97,12 @@ CLI가 지키는 안전 규칙(docs/PLAN.md §11):
 - 가상 CDJ 번호 기본값은 7이다.
     1~6은 `--allow-player-id`를 같이 줄 때만 쓴다.
     번호가 겹쳐 다시 골라야 하는데 허용하지 않는 번호(1~6)가 나오면 그 번호로 announce하기 전에 멈추고 오류를 낸 뒤 종료 코드 1로 끝난다.
+- **remotedb 질의 번호는 announce 번호와 별개이며 1~6 중에서 고른다(원본 동작).**
+    CDJ는 remotedb 메시지 안의 장치 번호가 1~6일 때만 답한다(원본 `pickRemoteDbQueryId`의 주석에 CDJ-3000 실기 확인이 적혀 있다).
+    그래서 가상 CDJ가 7 이상이어도 메타데이터·파형 같은 remotedb 조회 메시지에는 원본이 고른 다른 CDJ의 번호(없으면 비어 있는 1~6)가 실린다.
+    announce·heartbeat에는 쓰이지 않고 `--allow-player-id` 규칙과도 무관하다.
+    동작은 바꾸지 않았고, CLI는 remotedb에 연결할 때 고른 번호를 `remotedb 질의 번호 N번을 쓴다 …` 한 줄로 출력한다(announce 번호가 1~6이면 같은 번호를 쓰므로 그 줄이 없다).
+    이 방식을 바꿀지는 사용자가 정한다(docs/PLAN.md §11 메모).
 - 제어 명령은 `--confirm`이 대상 장치 이름과 정확히 같을 때만 보낸다.
     대상을 확인하기 전에는 가상 CDJ로 참여하지 않는다.
 - `control play`·`control pause`는 거부한다(종료 코드 2).

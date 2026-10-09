@@ -319,12 +319,21 @@ final class CLISession {
         configureNFSPathGuard { [self] device, _, path in try guardNFS(path, device: device) }
     }
 
-    private func guardedNetworkDependencies() -> NetworkDependencies {
+    func guardedNetworkDependencies() -> NetworkDependencies {
         NetworkDependencies(
-            makeRemoteDatabase: { manager, host, factory in
+            makeRemoteDatabase: { [output] manager, host, factory in
                 RemoteDatabase(
                     deviceManager: manager, hostDevice: host, socketFactory: factory,
-                    closesPortQueryConnection: true)
+                    closesPortQueryConnection: true,
+                    queryIdPicker: { target, devices in
+                        // 동작은 원본 그대로다. 어떤 번호를 remotedb 메시지에 싣는지 눈에 보이게 한 줄 남긴다.
+                        let id = pickRemoteDbQueryId(target, devices)
+                        output.log(
+                            .info,
+                            "remotedb 질의 번호 \(id)번을 쓴다(장치 \(target)에 질의, announce 번호 \(host.device.id)번과 별개로 CDJ가 답하는 1~6 중에서 고른다)"
+                        )
+                        return id
+                    })
             },
             makeLocalDatabase: { [self] host, manager, statusEmitter, preference, clock in
                 LocalDatabase(
