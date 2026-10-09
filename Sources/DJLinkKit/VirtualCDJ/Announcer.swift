@@ -307,6 +307,12 @@ public final class Announcer {
     /// Callback invoked when the full startup protocol completes
     private var onStartupComplete: (@DJLinkActor () -> Void)?
     private let clock: any DJLinkClock
+    /// CLI 안전을 위한 추가(기본값 nil은 원본 동작). 허용하지 않는 번호로는 announce하지 않는다.
+    private let allowsDeviceId: (@Sendable (DeviceID) -> Bool)?
+    /// 충돌 뒤 다시 고른 번호를 `allowsDeviceId`가 거부하면 announcer를 멈춘 뒤 부른다.
+    private let onDeviceIdRejected: (@DJLinkActor (DeviceID) -> Void)?
+    /// CLI 안전을 위한 추가(기본값 nil은 원본 동작). 패킷을 보낼 장치를 고른다.
+    private let announceTargetFilter: (@Sendable (Device) -> Bool)?
 
     public init(
         _ vcdj: DeviceReference,
@@ -316,8 +322,14 @@ public final class Announcer {
         fullStartup: Bool = false,
         announceToStagehand: Bool = false,
         logger: any Logger = noopLogger,
-        clock: any DJLinkClock = SystemClock.shared
+        clock: any DJLinkClock = SystemClock.shared,
+        allowsDeviceId: (@Sendable (DeviceID) -> Bool)? = nil,
+        onDeviceIdRejected: (@DJLinkActor (DeviceID) -> Void)? = nil,
+        announceTargetFilter: (@Sendable (Device) -> Bool)? = nil
     ) {
+        self.allowsDeviceId = allowsDeviceId
+        self.onDeviceIdRejected = onDeviceIdRejected
+        self.announceTargetFilter = announceTargetFilter
         self.vcdj = vcdj
         self.announceSocket = announceSocket
         self.deviceManager = deviceManager
@@ -348,6 +360,10 @@ public final class Announcer {
 
     /// - Throws: 원본처럼 처음 보내는 패킷의 브로드캐스트 주소를 만들지 못하면(`iface` 주소가 틀리면) 던진다.
     public func start() throws {
+        // CLI 안전을 위한 추가: 처음 번호도 허용하지 않으면 아무것도 보내지 않는다.
+        if let allowsDeviceId, !allowsDeviceId(vcdj.id) {
+            throw DJLinkError("Device ID \(vcdj.id) is not allowed")
+        }
         armConflictListener()
 
         if fullStartup {
@@ -414,6 +430,14 @@ public final class Announcer {
             return
         }
 
+        // CLI 안전을 위한 추가: 허용하지 않는 번호로 옮겨 가지 않는다. 그 번호로 announce하기 전에 멈춘다.
+        if let allowsDeviceId, !allowsDeviceId(newId) {
+            logger.error("Device ID \(newId) is not allowed. Stopping the announcer.")
+            stop()
+            onDeviceIdRejected?(newId)
+            return
+        }
+
         logger.info("Switching to device ID \(newId)")
 
         // Mutate in place rather than building a replacement device. The remotedb,
@@ -460,7 +484,8 @@ public final class Announcer {
     /// this cold-start broadcast costs nothing.
     private func sendPacket(_ packet: [UInt8]) throws {
         let devices = orderedDevices().filter {
-            announceToStagehand || !$0.name.lowercased().contains("stagehand")
+            (announceToStagehand || !$0.name.lowercased().contains("stagehand"))
+                && (announceTargetFilter?($0) ?? true)
         }
         for device in devices {
             announceSocket.send(packet, port: ANNOUNCE_PORT, address: device.ip.address)

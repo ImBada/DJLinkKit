@@ -27,6 +27,10 @@
 - `disconnect()`가 돌려주는 닫기 함수: 원본은 `return this.close`로 바인딩되지 않은 함수라 부르면 TypeError가 난다. Swift 클로저는 인스턴스에 묶여 있어 부르면 정상으로 닫힌다(바인딩 안 된 메서드 참조를 표현할 수 없다).
 - `disconnect()`의 remotedb 종료(`disconnectFromDevice`)는 Task로 돌아, 원본처럼 장치마다 remotedb→localdb가 번갈아 시작하지 않고 localdb를 모두 닫은 뒤 시작한다. 결과 상태는 같다.
 - 원본 버그 그대로: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다(fd가 남는다).
+- CLI 안전을 위한 추가(기본값은 원본 동작): 아래 인자를 주지 않으면 동작이 원본과 같다. `djlink`만 쓴다.
+  - `UDPSocket.setBoundInterface(name:)`: 소켓을 인터페이스 하나에 묶는다(macOS `IP_BOUND_IF`). 부르지 않으면 묶지 않는다. 기본 구현은 던진다(지원하지 않는 소켓이 조용히 넘어가지 않게). `BSDUDPSocket`은 `if_nametoindex`와 `setsockopt`로 구현했고, 두 호출은 `bindSocketToInterface(fd:name:nameToIndex:setsockopt:)`로 바꿔 넣어 시험한다. `FakeUDPSocket`은 호출을 기록한다.
+  - `NetworkConfig.allowsDeviceId`·`Announcer(allowsDeviceId:)`: 허용하지 않는 가상 CDJ 번호로는 announce하지 않는다. 처음 번호가 허용되지 않으면 `start()`가 던지고, 충돌 뒤 다시 고른 번호가 허용되지 않으면 그 번호로 보내기 전에 announcer를 멈추고 `onDeviceIdRejected`를 한 번 부른다(번호는 바꾸지 않는다).
+  - `NetworkConfig.announceTargetFilter`·`Announcer(announceTargetFilter:)`: announcer가 패킷을 보낼 장치를 고른다. 없으면 발견한 모든 장치다.
 
 ## 3단계 (remotedb·NFS)
 
@@ -34,6 +38,8 @@
 
 - 필드 형에 `RemoteDB` 접두사(`RemoteDBUInt32` 등)를 붙였다(표준 형과 이름이 겹친다).
 - 조회 결과는 `RemoteDBQueryResult` enum으로 묶었다. 정수 `Track.year`에 담기지 않는 값은 `.trackWithRawYear`로 보존한다.
+
+- CLI 안전을 위한 추가(기본값은 원본 동작): `configureNFSPathGuard(_:)`는 `fetchFile`·`fetchFileRange`·`getFileInfo`가 소켓을 만들기 전에 경로를 검사하는 훅이다(던지면 아무것도 보내지 않는다). `closeAllNFSClients()`는 캐시에 있는 모든 NFS 클라이언트의 RPC 소켓을 닫고 캐시를 비운다. 부르지 않으면 원본처럼 연결을 그대로 둔다.
 
 ## 4단계 (localdb)
 

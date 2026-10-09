@@ -39,6 +39,10 @@ public final class FakeUDPSocket: UDPSocket {
     /// `off(…)`로 실제로 풀린 구독의 이벤트 이름("message", "error", "close"). 원본 `off('message', fn)` 검사용.
     public private(set) var offEvents: [String] = []
     public private(set) var isClosed = false
+    /// `setBoundInterface` 호출 기록(CLI 안전을 위한 추가).
+    public private(set) var boundInterfaces: [String] = []
+    /// 넣으면 `setBoundInterface`가 이 오류를 던진다.
+    public var boundInterfaceError: (any Error)?
 
     /// `bind`가 돌려줄 주소. nil이면 받은 값으로 만든다.
     public var boundAddress: AddressInfo?
@@ -54,7 +58,9 @@ public final class FakeUDPSocket: UDPSocket {
     // MARK: 시험에서 쓰는 것
 
     /// 패킷이 온 것처럼 'message' 구독자를 동기로 부른다(원본 `mockSocket.emit('message', buf)`).
-    public func emitMessage(_ message: [UInt8], from rinfo: RemoteInfo = RemoteInfo(address: "10.0.0.1", port: 50000, size: 0)) {
+    public func emitMessage(
+        _ message: [UInt8], from rinfo: RemoteInfo = RemoteInfo(address: "10.0.0.1", port: 50000, size: 0)
+    ) {
         var info = rinfo
         if info.size == 0 { info.size = message.count }
         let snapshot = handlers
@@ -150,6 +156,11 @@ public final class FakeUDPSocket: UDPSocket {
         } else {
             Task { @DJLinkActor in callback(error, count) }
         }
+    }
+
+    public func setBoundInterface(name: String) throws {
+        if let boundInterfaceError { throw boundInterfaceError }
+        boundInterfaces.append(name)
     }
 
     public func setBroadcast(_ flag: Bool) {

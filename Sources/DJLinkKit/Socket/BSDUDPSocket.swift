@@ -49,6 +49,27 @@ public struct SocketNotRunningError: Error, Equatable, Sendable, CustomStringCon
     public var description: String { message }
 }
 
+/// `setsockopt`와 같은 모양. 시험이 호출을 기록하는 가짜를 넣는다.
+typealias SetSockOpt = (_ fd: Int32, _ level: Int32, _ name: Int32, _ value: UnsafeRawPointer?, _ length: socklen_t) ->
+    Int32
+
+/// `if_nametoindex`와 같은 모양. 없는 이름이면 0.
+typealias InterfaceNameToIndex = (_ name: String) -> UInt32
+
+/// CLI 안전을 위한 추가: 소켓 하나를 인터페이스 하나에 묶는다(`IP_BOUND_IF`).
+/// 이름을 찾지 못하거나 `setsockopt`가 실패하면 던진다. 실제 호출은 인자로 바꿔 넣을 수 있다.
+func bindSocketToInterface(
+    fd: Int32, name: String,
+    nameToIndex: InterfaceNameToIndex = { if_nametoindex($0) },
+    setsockopt: SetSockOpt = { Darwin.setsockopt($0, $1, $2, $3, $4) }
+) throws {
+    let index = nameToIndex(name)
+    guard index != 0 else { throw SystemCallError(syscall: "if_nametoindex", errno: ENXIO, address: name) }
+    var value = index
+    let result = setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &value, socklen_t(MemoryLayout<UInt32>.size))
+    guard result == 0 else { throw SystemCallError(syscall: "setsockopt", errno: Darwin.errno, address: name) }
+}
+
 /// BSD 소켓과 DispatchSource로 만든 실제 UDP 소켓. Network.framework는 브로드캐스트를 받지 못해 쓰지 않는다.
 /// `SO_REUSEADDR`·`SO_REUSEPORT`(libuv가 macOS에서 reuseAddr로 켜는 것)와 `SO_BROADCAST`를 쓴다.
 @DJLinkActor
@@ -205,6 +226,11 @@ final class BSDUDPSocket: UDPSocket {
                 }
             }
         }
+    }
+
+    func setBoundInterface(name: String) throws {
+        guard !isClosed else { throw SocketNotRunningError() }
+        try bindSocketToInterface(fd: fd, name: name)
     }
 
     func setBroadcast(_ flag: Bool) {

@@ -84,9 +84,18 @@ public protocol UDPSocket: AnyObject {
 
     /// `socket.close(callback)`. 콜백은 'close' 뒤에 불린다.
     func close(_ callback: (@DJLinkActor () -> Void)?) throws
+
+    /// CLI 안전을 위한 추가(기본값은 원본 동작: 부르지 않으면 묶지 않는다).
+    /// 소켓이 보내고 받는 길을 이름이 `name`인 인터페이스 하나로 묶는다(macOS `IP_BOUND_IF`).
+    /// 묶지 못하면 던진다. 지원하지 않는 소켓은 기본 구현이 던진다.
+    func setBoundInterface(name: String) throws
 }
 
 extension UDPSocket {
+    public func setBoundInterface(name: String) throws {
+        throw DJLinkError("This socket cannot be bound to a network interface")
+    }
+
     /// 콜백 없는 `socket.send(msg, port, address)`
     public func send(_ msg: [UInt8], port: Int, address: String) {
         send(msg, port: port, address: address, callback: nil)

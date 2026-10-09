@@ -140,7 +140,8 @@ public final class ProlinkNetwork {
                 Announcer(
                     vcdj, announceSocket, deviceManager, iface,
                     fullStartup: config.fullStartup ?? false, announceToStagehand: config.announceToStagehand ?? false,
-                    logger: logger, clock: clock))
+                    logger: logger, clock: clock, allowsDeviceId: config.allowsDeviceId,
+                    onDeviceIdRejected: config.onDeviceIdRejected, announceTargetFilter: config.announceTargetFilter))
         }
         try announcer.start()
         var heartbeat: StagehandHeartbeat?

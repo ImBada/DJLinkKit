@@ -138,9 +138,11 @@ struct NFSTransportTests {
     func setBroadcast(_ flag: Bool) { fake.setBroadcast(flag) }
     func address() -> AddressInfo? { fake.address() }
     func close(_ callback: (@DJLinkActor () -> Void)?) { fake.close(callback) }
+    var isClosed: Bool { fake.isClosed }
 }
 @DJLinkActor private final class ScriptedNFSFactory: SocketFactory {
     var requests: [rpc.Request] = []
+    var udpSockets: [ScriptedNFSSocket] = []
     let contents: [UInt8] = [1, 2, 3, 4, 5]
     let handle = [UInt8](repeating: 0x12, count: 32)
     var failNextLookup = false
@@ -148,7 +150,7 @@ struct NFSTransportTests {
     var oversizedRead = false
     var exportPaths = ["/C/"]
     func createUDPSocket(reuseAddr: Bool) throws -> any UDPSocket {
-        ScriptedNFSSocket { [self] bytes in
+        let socket = ScriptedNFSSocket { [self] bytes in
             let packet = try rpc.Packet.fromXDR(bytes)
             guard case let .request(request) = packet.message else { throw DJLinkError("요청이어야 한다") }
             requests.append(request)
@@ -195,6 +197,8 @@ struct NFSTransportTests {
                         rpc.AcceptedResponse(verifier: rpc.Auth(flavor: 0, body: []), response: .success(response))))
             ).toXDR()
         }
+        udpSockets.append(socket)
+        return socket
     }
     func createTCPConnection() throws -> any TCPConnection { throw DJLinkError("이 시험은 UDP만 쓴다") }
 }
@@ -356,5 +360,62 @@ extension NFSTransportTests {
         _ = try await getFileInfo(device: device, slot: .rb, path: "E:/fixture.bin")
         _ = try await getFileInfo(device: device, slot: .rb, path: "F:/fixture.bin")
         #expect(factory.requests.filter { $0.program == mount.Program && $0.procedure == 1 }.count == 3)
+    }
+}
+
+extension NFSTransportTests {
+    @Test("경로 검사 훅이 던지면 소켓을 만들거나 요청을 보내기 전에 멈춘다(CLI 안전을 위한 추가)")
+    func pathGuardStopsBeforeAnyRequest() async throws {
+        let factory = ScriptedNFSFactory()
+        let clock = TestClock()
+        let device = mockDevice(ip: try Address4("192.0.2.20"))
+        let seen = CallRecorder<String>()
+        configureNFSDependencies(socketFactory: factory, clock: clock)
+        configureNFSPathGuard { _, slot, path in
+            seen.record("\(slot.rawValue):\(path)")
+            if path.contains("extracted") { throw DJLinkError("blocked") }
+        }
+        defer {
+            configureNFSPathGuard(nil)
+            resetDeviceCache(device)
+            configureNFSDependencies(socketFactory: LiveSocketFactory.shared, clock: SystemClock.shared)
+        }
+        await #expect(throws: DJLinkError("blocked")) {
+            try await fetchFile(device: device, slot: .usb, path: "PIONEER/extracted/x")
+        }
+        await #expect(throws: DJLinkError("blocked")) {
+            try await fetchFileRange(device: device, slot: .usb, path: "PIONEER/extracted/x", offset: 0, length: 4)
+        }
+        await #expect(throws: DJLinkError("blocked")) {
+            try await getFileInfo(device: device, slot: .usb, path: "PIONEER/extracted/x")
+        }
+        #expect(factory.requests.isEmpty)
+        #expect(seen.calls.count == 3)
+        // 허용한 경로는 그대로 읽힌다.
+        #expect(try await fetchFile(device: device, slot: .usb, path: "folder/fixture.bin") == factory.contents)
+        #expect(!factory.requests.isEmpty)
+    }
+
+    @Test("모든 NFS 클라이언트를 닫으면 RPC 소켓이 닫히고 다음 요청은 새로 연결한다(CLI 안전을 위한 추가)")
+    func closeAllClients() async throws {
+        let factory = ScriptedNFSFactory()
+        let clock = TestClock()
+        let device = mockDevice(ip: try Address4("192.0.2.21"))
+        configureNFSDependencies(socketFactory: factory, clock: clock)
+        defer {
+            resetDeviceCache(device)
+            configureNFSDependencies(socketFactory: LiveSocketFactory.shared, clock: SystemClock.shared)
+        }
+        _ = try await getFileInfo(device: device, slot: .usb, path: "folder/fixture.bin")
+        #expect(factory.udpSockets.count == 1)
+        #expect(factory.udpSockets.allSatisfy { !$0.isClosed })
+        await closeAllNFSClients()
+        #expect(factory.udpSockets.allSatisfy { $0.isClosed })
+        _ = try await getFileInfo(device: device, slot: .usb, path: "folder/fixture.bin")
+        #expect(factory.udpSockets.count == 2)
+        #expect(!factory.udpSockets[1].isClosed)
+        // 아무것도 없을 때 부르는 것도 안전하다.
+        await closeAllNFSClients()
+        await closeAllNFSClients()
     }
 }

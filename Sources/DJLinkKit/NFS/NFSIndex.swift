@@ -54,6 +54,26 @@ public func getPortmapPort(_ device: Device) -> Int {
     nfsSocketFactory = socketFactory
     nfsClock = clock
 }
+/// CLI 안전을 위한 추가(기본값 nil은 원본 동작). NFS 요청을 만들기 전에 경로를 검사한다.
+/// 던지면 소켓을 만들거나 요청을 보내기 전에 멈춘다. `fetchFile`·`fetchFileRange`·`getFileInfo`가 모두 거친다.
+@DJLinkActor private var nfsPathGuard:
+    (@DJLinkActor (_ device: Device, _ slot: NfsMediaSlot, _ path: String) throws -> Void)?
+@DJLinkActor public func configureNFSPathGuard(
+    _ guardPath: (@DJLinkActor (_ device: Device, _ slot: NfsMediaSlot, _ path: String) throws -> Void)?
+) {
+    nfsPathGuard = guardPath
+}
+/// CLI 안전을 위한 추가(기본값은 원본 동작: 부르지 않으면 연결을 그대로 둔다).
+/// 캐시에 있는 모든 NFS 클라이언트(장치마다 따로 연 RPC 소켓)를 닫고 캐시를 비운다. 닫기 오류는 무시한다.
+@DJLinkActor public func closeAllNFSClients() async {
+    let clients = Array(clientsCache.values)
+    clientsCache.removeAll()
+    rootHandleCache.removeAll()
+    for client in clients {
+        client.conn.connected = false
+        try? await client.conn.disconnect()
+    }
+}
 @DJLinkActor private func getClients(_ device: Device) async throws -> ClientSet {
     let address = device.ip.address
     if let cached = clientsCache[address], cached.conn.connected { return cached }
@@ -87,6 +107,7 @@ private func badRoothandleError(_ slot: MediaSlot, _ deviceId: DeviceID) -> DJLi
 @DJLinkActor private func locateFile(device: Device, slot: NfsMediaSlot, path: String, span: TelemetrySpan) async throws
     -> (FileInfo, RpcProgram)
 {
+    try nfsPathGuard?(device, slot, path)
     let resolved = resolveNfsPath(slot, path)
     let clients = try await getClients(device)
     guard
