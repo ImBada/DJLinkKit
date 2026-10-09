@@ -89,6 +89,8 @@ final class RecordingNFS: CLINFS {
     var duringFetch: (@DJLinkActor () -> Void)?
     /// true면 응답하지 않고 영원히 기다린다.
     var hangs = false
+    private var pendingFetches: [UUID: CheckedContinuation<Void, any Error>] = [:]
+    var pendingFetchCount: Int { pendingFetches.count }
 
     nonisolated init() {}
 
@@ -99,7 +101,17 @@ final class RecordingNFS: CLINFS {
         fetches.append(path)
         duringFetch?()
         if hangs {
-            await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+            let id = UUID()
+            try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                    pendingFetches[id] = continuation
+                }
+            } onCancel: {
+                Task { @DJLinkActor in
+                    self.pendingFetches.removeValue(forKey: id)?.resume(throwing: CancellationError())
+                }
+            }
         }
         onProgress?(FetchProgress(read: contents.count, total: contents.count))
         return contents

@@ -299,6 +299,8 @@ struct CLIRuntimeAbortTests {
         #expect(h.output.errorLines.contains { $0.contains("제한 시간 20초") })
         #expect(h.files.writes == 0)
         #expect(h.allSocketsClosed)
+        await h.settle()
+        #expect(h.nfs.pendingFetchCount == 0)
     }
 
     @Test("a metadata command that never finds its device times out with exit 1 and sends nothing")
