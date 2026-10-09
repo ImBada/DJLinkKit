@@ -111,6 +111,7 @@ public final class PcapAdapter: EventEmitting {
     public let emitter = EventHub<PcapAdapter>()
     private var cap: (any PcapBackend)?
     private var buffer: [UInt8]
+    private let bufferSize: Int
     private let iface: String
     private var started = false
     private let platform: String
@@ -123,7 +124,9 @@ public final class PcapAdapter: EventEmitting {
         backendFactory: @escaping @DJLinkActor () throws -> any PcapBackend = { try LibpcapBackend() }
     ) {
         iface = config.iface
-        buffer = [UInt8](repeating: 0, count: config.bufferSize ?? 10 * 1024 * 1024)
+        bufferSize = config.bufferSize ?? 10 * 1024 * 1024
+        // 원본과 다름: 생성자는 throws가 아니므로 범위 오류는 start에서 던진다.
+        buffer = [UInt8](repeating: 0, count: max(0, bufferSize))
         self.platform = platform
         self.interfaceProvider = interfaceProvider
         self.backendFactory = {
@@ -133,6 +136,10 @@ public final class PcapAdapter: EventEmitting {
     }
     public func start() throws {
         guard !started else { return }
+        guard bufferSize > 0 else {
+            // 원본과 다름: 요청한 검증에 따라 Buffer.alloc(0)이 허용하는 빈 버퍼도 거부한다.
+            throw BufferRangeError("The value of \"size\" is out of range. Received \(bufferSize)")
+        }
         let backend: any PcapBackend
         do { backend = try backendFactory() } catch { throw DJLinkError(PCAP_MODULE_REQUIRED_ERROR) }
         cap = backend
@@ -220,6 +227,7 @@ public final class LibpcapBackend: PcapBackend {
     private var source: DispatchSourceRead?
     private var packetHandler: (@DJLinkActor ([UInt8], Bool) -> Void)?
     private var errorHandler: (@DJLinkActor (any Error) -> Void)?
+    private var bufferLength = 0
     public private(set) var linkType = "ETHERNET"
     public init() throws {
         // SwiftPM의 CPcap 링크 외에도, 원본 require 실패에 해당하는 오류 주입 경계를 둔다.
@@ -261,26 +269,43 @@ public final class LibpcapBackend: PcapBackend {
     public func open(device: String, filter: String, bufSize: Int, bufferSize: Int) throws {
         // 루프백 허용 환경변수와 관계없이 실제 BPF 캡처는 시험 프로세스에서 금지한다.
         guard !TestProcess.isRunning else { throw DJLinkError("Live pcap capture is disabled in test processes") }
+        close()
         var error = [CChar](repeating: 0, count: Int(PCAP_ERRBUF_SIZE))
+        var net: bpf_u_int32 = 0
+        var mask: bpf_u_int32 = 0
+        if pcap_lookupnet(device, &net, &mask, &error) == -1 {
+            net = 0
+            mask = 0
+            fputs("Warning: \(pcapString(error)) - This may not actually work\n", stderr)
+        }
         guard let pointer = pcap_create(device, &error) else { throw DJLinkError(pcapString(error)) }
         var retained = false
         defer { if !retained { pcap_close(pointer) } }
-        func check(_ code: Int32) throws {
-            guard code >= 0 else { throw DJLinkError(String(cString: pcap_geterr(pointer))) }
+        guard pcap_set_snaplen(pointer, 65535) == 0 else { throw DJLinkError("Unable to set snaplen") }
+        guard pcap_set_promisc(pointer, 1) == 0 else { throw DJLinkError("Unable to set promiscuous mode") }
+        guard pcap_set_buffer_size(pointer, Int32(truncatingIfNeeded: bufSize)) == 0 else {
+            throw DJLinkError("Unable to set buffer size")
         }
-        try check(pcap_set_snaplen(pointer, Int32(clamping: bufferSize)))
-        try check(pcap_set_buffer_size(pointer, Int32(clamping: bufSize)))
-        try check(pcap_set_promisc(pointer, 1))
-        try check(pcap_set_timeout(pointer, 1000))
-        try check(pcap_set_immediate_mode(pointer, 1))
-        try check(pcap_activate(pointer))
-        try check(pcap_setnonblock(pointer, 1, &error))
-        var program = bpf_program()
-        try check(pcap_compile(pointer, &program, filter, 1, PCAP_NETMASK_UNKNOWN))
-        defer { pcap_freecode(&program) }
-        try check(pcap_setfilter(pointer, &program))
+        guard pcap_set_timeout(pointer, 1000) == 0 else { throw DJLinkError("Unable to set read timeout") }
+        guard pcap_activate(pointer) == 0 else { throw DJLinkError(String(cString: pcap_geterr(pointer))) }
+        guard pcap_setnonblock(pointer, 1, &error) != -1 else { throw DJLinkError(pcapString(error)) }
+        if !filter.isEmpty {
+            var program = bpf_program()
+            // 원본 버그 그대로: cap Open은 lookupnet의 mask 대신 net을 compile의 netmask 인자로 쓴다.
+            guard pcap_compile(pointer, &program, filter, 1, net) != -1 else {
+                throw DJLinkError(String(cString: pcap_geterr(pointer)))
+            }
+            defer { pcap_freecode(&program) }
+            guard pcap_setfilter(pointer, &program) != -1 else {
+                throw DJLinkError(String(cString: pcap_geterr(pointer)))
+            }
+        }
         let fd = pcap_get_selectable_fd(pointer)
+        var immediate: UInt32 = 1
+        // 원본 macOS Open과 같이 BIOCIMMEDIATE의 반환값은 검사하지 않는다.
+        _ = ioctl(fd, UInt(DJLINK_BIOCIMMEDIATE), &immediate)
         guard fd >= 0 else { throw DJLinkError("pcap capture has no selectable file descriptor") }
+        bufferLength = bufferSize
         let owned = PcapHandle(pointer)
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DJLinkActor.queue)
         source.setEventHandler { [weak self] in DJLinkActor.assumeIsolated { self?.drain() } }
@@ -288,11 +313,18 @@ public final class LibpcapBackend: PcapBackend {
         self.handle = owned
         self.source = source
         retained = true
-        linkType = pcap_datalink(pointer) == DLT_EN10MB ? "ETHERNET" : String(pcap_datalink(pointer))
+        switch pcap_datalink(pointer) {
+        case DLT_NULL: linkType = "NULL"
+        case DLT_EN10MB: linkType = "ETHERNET"
+        case DLT_IEEE802_11_RADIO: linkType = "IEEE802_11_RADIO"
+        case DLT_LINUX_SLL: linkType = "LINKTYPE_LINUX_SLL"
+        case DLT_RAW: linkType = "RAW"
+        case let type: linkType = "Unknown linktype \(type)"
+        }
         source.resume()
     }
     public func setMinBytes(_ bytes: Int) {
-        // libpcap의 immediate mode를 활성화 전에 설정해 cap.setMinBytes(0)에 대응한다.
+        // 원본 cap의 macOS 구현에는 setMinBytes가 없으며 Open의 BIOCIMMEDIATE로 대응한다.
     }
     public func onPacket(_ handler: @escaping @DJLinkActor ([UInt8], Bool) -> Void) { packetHandler = handler }
     public func onError(_ handler: @escaping @DJLinkActor (any Error) -> Void) { errorHandler = handler }
@@ -312,19 +344,23 @@ public final class LibpcapBackend: PcapBackend {
     }
     private func drain() {
         guard let handle else { return }
+        let context = Unmanaged.passUnretained(self).toOpaque().assumingMemoryBound(to: UInt8.self)
         while self.handle != nil {
-            var header: UnsafeMutablePointer<pcap_pkthdr>?
-            var bytes: UnsafePointer<UInt8>?
-            let result = pcap_next_ex(handle.pointer, &header, &bytes)
-            if result == 0 || result == -2 { break }
-            if result < 0 {
-                errorHandler?(DJLinkError(String(cString: pcap_geterr(handle.pointer))))
-                break
-            }
-            guard let header, let bytes else { break }
-            packetHandler?(
-                Array(UnsafeBufferPointer(start: bytes, count: Int(header.pointee.caplen))),
-                header.pointee.caplen < header.pointee.len)
+            let result = pcap_dispatch(
+                handle.pointer, 1,
+                { context, header, bytes in
+                    guard let context, let header, let bytes else { return }
+                    let backend = Unmanaged<LibpcapBackend>.fromOpaque(UnsafeRawPointer(context)).takeUnretainedValue()
+                    DJLinkActor.assumeIsolated { backend.handleCapturedPacket(header.pointee, bytes) }
+                }, context)
+            // 원본 cap는 -1도 오류 이벤트 없이 반복만 끝내고 다음 readable 콜백을 기다린다.
+            if result <= 0 { break }
         }
+    }
+    private func handleCapturedPacket(_ header: pcap_pkthdr, _ bytes: UnsafePointer<UInt8>) {
+        let capturedLength = Int(header.caplen)
+        let count = min(capturedLength, bufferLength)
+        packetHandler?(
+            Array(UnsafeBufferPointer(start: bytes, count: count)), capturedLength > bufferLength)
     }
 }

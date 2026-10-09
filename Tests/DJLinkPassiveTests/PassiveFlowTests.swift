@@ -226,6 +226,17 @@ struct PassiveFlowTests {
         let unavailable = PcapAdapter(config: .init(iface: "en0"), backendFactory: { throw DJLinkError("unavailable") })
         #expect(throws: DJLinkError(PCAP_MODULE_REQUIRED_ERROR)) { try unavailable.start() }
     }
+    @Test("nonpositive capture buffer throws range error on start without opening backend")
+    func bufferRange() {
+        for size in [-1, 0, Int.min] {
+            let backend = FlowPcapBackend()
+            let adapter = PcapAdapter(config: .init(iface: "en0", bufferSize: size), backend: backend)
+            #expect(throws: BufferRangeError("The value of \"size\" is out of range. Received \(size)")) {
+                try adapter.start()
+            }
+            #expect(backend.openCount == 0 && !adapter.isCapturing)
+        }
+    }
     @Test("live pcap capture is blocked in test processes")
     func guardCapture() throws {
         #expect(TestProcess.isRunning)
