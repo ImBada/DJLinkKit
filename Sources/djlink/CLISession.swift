@@ -32,6 +32,8 @@ final class CLISession {
 
     private var deadline: TimerHandle?
     private let watchdog: CLIWatchdog?
+    /// OneLibrary 임시 DB를 쓰는 곳. 끝날 때 남은 파일을 지운다.
+    let localFileSystem: CLIGuardedLocalFileSystem
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var announcingStopped = false
     private var cleanedUp = false
@@ -48,6 +50,7 @@ final class CLISession {
         self.runtime = runtime
         self.output = output
         self.abort = abort
+        self.localFileSystem = CLIGuardedLocalFileSystem(abort: abort, inner: runtime.localFileSystem)
         self.watchdog = runtime.independentScheduler.map { CLIWatchdog(abort: abort, scheduler: $0) }
         self.sockets = CLISocketRegistry(inner: runtime.socketFactory, abort: abort)
         // 중단되는 순간 동기로 참여부터 멈춘다(announce 타이머가 더 돌지 않게).
@@ -361,7 +364,7 @@ final class CLISession {
                     device: options.device, slot: options.slot, path: options.path, onProgress: onProgress,
                     chunkSize: nil)
             },
-            fileSystem: CLIGuardedLocalFileSystem(abort: abort))
+            fileSystem: localFileSystem)
     }
 
     // MARK: 패시브
@@ -405,6 +408,7 @@ final class CLISession {
             configureNFSDependencies(socketFactory: LiveSocketFactory.shared, clock: SystemClock.shared)
         }
         if let network { try? await network.close() }
+        localFileSystem.removeWrittenFiles()
         await sockets.closeAll()
         await waitForPublishes()
         watchdog?.complete()
@@ -428,20 +432,44 @@ struct CLIGuardedArtworkSource: ArtworkNFSFileSource {
     }
 }
 
-/// OneLibrary를 임시 파일로 풀 때 중단된 뒤에는 쓰지 않는다.
+/// OneLibrary를 임시 파일로 풀 때 중단된 뒤에는 쓰지 않고, 쓴 파일을 기억해 끝날 때 남은 것을 지운다.
+/// 임시 DB(`prolink-onelibrary-*.db`)에는 장치 USB의 곡 정보가 들어 있다. 라이브러리는 정상 종료·장치 제거 때만 지우고
+/// 열기에 실패하면 원본처럼 그대로 둔다(docs/port-notes.md). 강제 종료(두 번째 신호·SIGKILL 등)로는 남을 수 있다.
 @DJLinkActor
-struct CLIGuardedLocalFileSystem: LocalDBFileSystem {
+final class CLIGuardedLocalFileSystem: LocalDBFileSystem {
     let abort: CLIAbort
-    private let inner = LocalDBNativeFileSystem()
+    private let inner: any LocalDBFileSystem
+    /// 쓰기를 시작한 파일(반쯤 쓰다 실패한 것도 포함). 라이브러리가 지운 것은 빠진다.
+    private(set) var writtenPaths: [String] = []
 
-    init(abort: CLIAbort) { self.abort = abort }
+    /// SQLite가 DB 옆에 만들 수 있는 부속 파일.
+    static let sidecarSuffixes = ["-journal", "-wal", "-shm"]
+
+    init(abort: CLIAbort, inner: any LocalDBFileSystem = LocalDBNativeFileSystem()) {
+        self.abort = abort
+        self.inner = inner
+    }
 
     var tmpdir: String { inner.tmpdir }
 
     func writeFileSync(_ path: String, _ data: [UInt8]) throws {
         try abort.check()
+        if !writtenPaths.contains(path) { writtenPaths.append(path) }
         try inner.writeFileSync(path, data)
     }
 
-    func unlinkSync(_ path: String) throws { try inner.unlinkSync(path) }
+    func unlinkSync(_ path: String) throws {
+        try inner.unlinkSync(path)
+        writtenPaths.removeAll { $0 == path }
+    }
+
+    /// 아직 남은 임시 파일을 지운다(이미 없거나 지우지 못하면 넘어간다). 여러 번 불러도 안전하다.
+    func removeWrittenFiles() {
+        let paths = writtenPaths
+        writtenPaths = []
+        for path in paths {
+            try? inner.unlinkSync(path)
+            for suffix in Self.sidecarSuffixes { try? inner.unlinkSync(path + suffix) }
+        }
+    }
 }

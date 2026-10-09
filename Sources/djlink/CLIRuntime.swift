@@ -74,8 +74,11 @@ struct CLIRuntime {
     var makeAbort: @DJLinkActor () -> CLIAbort
     /// SIGINT·SIGTERM을 받아 중단 토큰을 세운다. 시험에서는 끈다.
     var installsSignalHandlers: Bool
-    /// NFS 모듈의 전역 설정(소켓 공장·경로 검사)을 이 실행 동안 바꾼다. 전역이라 시험에서는 끈다.
+    /// 액터와 독립된 감시 시계(제한 시간·강제 종료). nil이면 두지 않는다(시험).
     var independentScheduler: (any CLIIndependentScheduler)? = DispatchCLIScheduler()
+    /// OneLibrary를 임시 파일로 풀 때 쓰는 파일 시스템. CLI가 감싸서 쓴 파일을 끝날 때 지운다. 시험은 가짜를 넣는다.
+    var localFileSystem: any LocalDBFileSystem = LocalDBNativeFileSystem()
+    /// NFS 모듈의 전역 설정(소켓 공장·경로 검사)을 이 실행 동안 바꾼다. 전역이라 시험에서는 끈다.
     var configuresNFSGlobals: Bool
 
     static var live: CLIRuntime {
