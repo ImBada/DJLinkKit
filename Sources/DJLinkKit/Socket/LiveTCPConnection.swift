@@ -22,31 +22,46 @@ final class LiveTCPConnection: TCPConnection {
         requiredInterfaceName = name
     }
 
+    /// 인터페이스 이름을 찾는 동안의 대기. `destroy`가 바로 풀 수 있게 들고 있는다.
+    private struct InterfaceResolution {
+        var continuation: CheckedContinuation<NWInterface, any Error>
+        var monitor: NWPathMonitor
+        var timer: TimerHandle?
+    }
+    private var resolution: InterfaceResolution?
+    /// 인터페이스 해석을 기다리는 중인가(시험용).
+    var isResolvingInterface: Bool { resolution != nil }
+    /// 시험이 경로 감시를 시작하지 않고 대기 상태만 만들 때 끈다. 기본은 원본처럼 감시한다.
+    var startsPathMonitor = true
+
     private func resolveInterface(_ name: String) async throws -> NWInterface {
+        guard !ended else { throw DJLinkError("Socket closed") }
         let monitor = NWPathMonitor()
         return try await withCheckedThrowingContinuation { continuation in
-            var finished = false
-            let timer = clock.setTimeout(.seconds(3)) {
-                guard !finished else { return }
-                finished = true
-                monitor.cancel()
-                continuation.resume(throwing: DJLinkError("Network interface not found: \(name)"))
+            let timer = clock.setTimeout(.seconds(3)) { [self] in
+                finishResolving(.failure(DJLinkError("Network interface not found: \(name)")))
             }
+            resolution = InterfaceResolution(continuation: continuation, monitor: monitor, timer: timer)
             monitor.pathUpdateHandler = { path in
                 DJLinkActor.assumeIsolated {
-                    guard !finished else { return }
-                    finished = true
-                    self.clock.clearTimer(timer)
-                    monitor.cancel()
                     if let interface = path.availableInterfaces.first(where: { $0.name == name }) {
-                        continuation.resume(returning: interface)
+                        self.finishResolving(.success(interface))
                     } else {
-                        continuation.resume(throwing: DJLinkError("Network interface not found: \(name)"))
+                        self.finishResolving(.failure(DJLinkError("Network interface not found: \(name)")))
                     }
                 }
             }
-            monitor.start(queue: DJLinkActor.queue)
+            if startsPathMonitor { monitor.start(queue: DJLinkActor.queue) }
         }
+    }
+
+    /// 인터페이스 해석 대기를 한 번만 끝낸다. 타이머와 감시를 거둔다.
+    private func finishResolving(_ result: Result<NWInterface, any Error>) {
+        guard let pending = resolution else { return }
+        resolution = nil
+        clock.clearTimeout(pending.timer)
+        pending.monitor.cancel()
+        pending.continuation.resume(with: result)
     }
     private var connecting: CheckedContinuation<Void, any Error>?
     private var reads: [(size: Int?, continuation: CheckedContinuation<[UInt8]?, any Error>)] = []
@@ -144,6 +159,8 @@ final class LiveTCPConnection: TCPConnection {
         isOpen = false
         ended = true
         clock.clearTimeout(timer)
+        // CLI 안전을 위한 추가: 인터페이스를 찾는 중이면 destroy가 3초를 기다리지 않고 바로 푼다.
+        finishResolving(.failure(failure ?? DJLinkError("Socket closed")))
         if let connecting {
             connecting.resume(throwing: failure ?? DJLinkError("Socket closed"))
             self.connecting = nil

@@ -65,6 +65,9 @@
     미호출 시 원본처럼 라우팅한다.
     `setConnectGuard`는 인터페이스 해석을 기다린 뒤 실제 `NWConnection` 생성 직전에도 CLI 중단 플래그를 검사한다.
     기본 미설정은 검사하지 않는다.
+    `destroy`는 인터페이스 해석 대기(`NWPathMonitor`)도 바로 풀고 감시·타이머를 거둔다(3초 타이머를 기다리지 않는다).
+    해석 중에는 `destroy` 오류(없으면 "Socket closed")로 `connect`가 실패한다.
+    `startsPathMonitor`는 시험이 소켓·감시 없이 대기 상태만 만들려고 끄는 이음매이며 기본은 켜짐이다.
 
 - NFS 경로 시험 입력의 `Users/chris/...`를 `Users/example/...`로 바꿨다(개인 이름 정리, 경로 해석 결과의 모양은 같다).
 
