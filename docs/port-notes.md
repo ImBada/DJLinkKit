@@ -5,7 +5,10 @@
 
 ## 공통
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `djlink`의 중단 상태는 액터 밖의 잠금으로 보호하며 신호 큐와 독립 제한 시간 감시가 즉시 세운다. 두 번째 신호는 `_exit(130)`, 중단 후 3초 동안 정리가 끝나지 않으면 해당 실패 코드로 강제 종료한다. PDB 순환 쪽 사슬 등 라이브러리의 원본 동기 무한 루프는 그대로 유지한다. CLI 파일 쓰기·fsync·게시를 별도 큐에서 수행하고 쓰기 도중과 게시 직전에 중단을 검사한다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `djlink`의 중단 상태는 액터 밖의 잠금으로 보호하며 신호 큐와 독립 제한 시간 감시가 즉시 세운다.
+    두 번째 신호는 `_exit(130)`, 중단 후 3초 동안 정리가 끝나지 않으면 해당 실패 코드로 강제 종료한다.
+    PDB 순환 쪽 사슬 등 라이브러리의 원본 동기 무한 루프는 그대로 유지한다.
+    CLI 파일 쓰기·fsync·게시를 별도 큐에서 수행하고 쓰기 도중과 게시 직전에 중단을 검사한다.
 
 - 시간 지연은 Node 규칙대로 1ms 미만·2^31-1ms 초과면 1ms로 본다(`Duration.nodeTimerDelay`).
 - 원본 이벤트 처리기·타이머 콜백 안에서 잡지 않은 예외는 Node 프로세스를 죽인다. Swift에서는 그 자리에서 잡고 넘어간다(가이드 §4).
@@ -22,9 +25,13 @@
 
 ## 2단계 network
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `allowsDeviceId` 설정 시 Announcer는 번호 거부를 `rejectedDeviceId`에 남기고 모든 ready 대기자를 풀며 이후 ready도 즉시 끝낸다. `waitUntilReady()`는 거부를 던지고 네트워크는 `startupRejectedDeviceId`·`waitUntilReady()`로 이를 노출한다. 정책이 없으면 원본 ready 재호출 동작을 그대로 유지한다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `allowsDeviceId` 설정 시 Announcer는 번호 거부를 `rejectedDeviceId`에 남기고 모든 ready 대기자를 풀며 이후 ready도 즉시 끝낸다.
+    `waitUntilReady()`는 거부를 던지고 네트워크는 `startupRejectedDeviceId`·`waitUntilReady()`로 이를 노출한다.
+    정책이 없으면 원본 ready 재호출 동작을 그대로 유지한다.
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): Stagehand 연결에 `allowsDeviceId`·`announceTargetFilter`·`onDeviceIdRejected`가 설정되면 시작 전 명시적으로 거부한다. Stagehand 브로드캐스트와 heartbeat에 이 정책을 온전히 적용하지 못하기 때문이다. 안전 옵션이 없는 기본 Stagehand는 원본 동작을 유지한다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): Stagehand 연결에 `allowsDeviceId`·`announceTargetFilter`·`onDeviceIdRejected`가 설정되면 시작 전 명시적으로 거부한다.
+    Stagehand 브로드캐스트와 heartbeat에 이 정책을 온전히 적용하지 못하기 때문이다.
+    안전 옵션이 없는 기본 Stagehand는 원본 동작을 유지한다.
 
 - `network.control`: Control은 DJLinkKit에 기대는 별도 타깃(`DJLinkControl`)이라 network가 connect 때 만들 수 없다. `DJLinkControl`이 `ProlinkNetwork`를 확장해, 연결된 뒤 처음 읽을 때 그 연결의 beat·status 소켓과 가상 장치 참조로 만든다. 같은 연결에서는 같은 Control, 다음 connect에서는 새 Control이다. 연결 전에는 원본처럼 nil.
 - `db`·`localdb`·`remotedb`는 시험에서 가짜를 넣을 수 있게 서비스 프로토콜(`NetworkDatabase` 등) 형으로 돌려준다. 기본은 실제 클래스다.
@@ -33,7 +40,8 @@
 - `disconnect()`가 돌려주는 닫기 함수: 원본은 `return this.close`로 바인딩되지 않은 함수라 부르면 TypeError가 난다. Swift 클로저는 인스턴스에 묶여 있어 부르면 정상으로 닫힌다(바인딩 안 된 메서드 참조를 표현할 수 없다).
 - `disconnect()`의 remotedb 종료(`disconnectFromDevice`)는 Task로 돌아, 원본처럼 장치마다 remotedb→localdb가 번갈아 시작하지 않고 localdb를 모두 닫은 뒤 시작한다. 결과 상태는 같다.
 - 원본 버그 그대로: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다(fd가 남는다).
-- CLI 안전을 위한 추가(기본값은 원본 동작): 아래 인자를 주지 않으면 동작이 원본과 같다. `djlink`만 쓴다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): 아래 인자를 주지 않으면 동작이 원본과 같다.
+    `djlink`만 쓴다.
   - `UDPSocket.setBoundInterface(name:)`: 소켓을 인터페이스 하나에 묶는다(macOS `IP_BOUND_IF`). 부르지 않으면 묶지 않는다. 기본 구현은 던진다(지원하지 않는 소켓이 조용히 넘어가지 않게). `BSDUDPSocket`은 `if_nametoindex`와 `setsockopt`로 구현했고, 두 호출은 `bindSocketToInterface(fd:name:nameToIndex:setsockopt:)`로 바꿔 넣어 시험한다. `FakeUDPSocket`은 호출을 기록한다.
   - `NetworkConfig.allowsDeviceId`·`Announcer(allowsDeviceId:)`: 허용하지 않는 가상 CDJ 번호로는 announce하지 않는다. 처음 번호가 허용되지 않으면 `start()`가 던지고, 충돌 뒤 다시 고른 번호가 허용되지 않으면 그 번호로 보내기 전에 announcer를 멈추고 `onDeviceIdRejected`를 한 번 부른다(번호는 바꾸지 않는다).
   - CLI 소켓 경계는 선택한 서브넷 안의 IPv4 목적지만 허용한다(서브넷 브로드캐스트 포함). 범위 미확정·호스트 이름·범위 밖 주소는 UDP 송신과 TCP 연결 전에 거부한다. NFS 경로 훅도 장치 IP를 검사하므로 watch에서 뒤늦게 발견된 범위 밖 장치에 질의할 수 없다.
@@ -41,22 +49,37 @@
 
 ## 3단계 (remotedb·NFS)
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `RemoteDatabase(closesPortQueryConnection: true)`는 포트 응답을 받으면 즉시 조회 TCP를 닫으며 실패 경로에서도 닫는다. 기본 false는 연결을 유지한다. `TCPConnection.setCloseHandler`는 호출했을 때만 원격 FIN·destroy·연결 실패를 보고하며 CLI 장부에서 닫힌 연결을 즉시 제거한다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `RemoteDatabase(closesPortQueryConnection: true)`는 포트 응답을 받으면 즉시 조회 TCP를 닫으며 실패 경로에서도 닫는다.
+    기본 false는 연결을 유지한다.
+    `TCPConnection.setCloseHandler`는 호출했을 때만 원격 FIN·destroy·연결 실패를 보고하며 CLI 장부에서 닫힌 연결을 즉시 제거한다.
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `UDPSocket.cancelsPendingReads`는 기본 false이며 CLI 래퍼만 true다. RPC는 이 경우 `udpReadCancellable`로 닫기·취소·시간 초과 때 대기자를 실패시키고 구독·타이머를 거둔다. 재시도 대기도 닫기로 풀린다. `withRetry(sleep:)`의 기본 nil은 원본 시계 sleep이며 CLI RPC에서만 취소 가능한 대기를 주입한다. 원본 `udpRead`는 바꾸지 않는다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `UDPSocket.cancelsPendingReads`는 기본 false이며 CLI 래퍼만 true다.
+    RPC는 이 경우 `udpReadCancellable`로 닫기·취소·시간 초과 때 대기자를 실패시키고 구독·타이머를 거둔다.
+    재시도 대기도 닫기로 풀린다.
+    `withRetry(sleep:)`의 기본 nil은 원본 시계 sleep이며 CLI RPC에서만 취소 가능한 대기를 주입한다.
+    원본 `udpRead`는 바꾸지 않는다.
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다. 찾지 못하면 TCP 연결을 시작하지 않는다. `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다. 미호출 시 원본처럼 라우팅한다. `setConnectGuard`는 인터페이스 해석을 기다린 뒤 실제 `NWConnection` 생성 직전에도 CLI 중단 플래그를 검사한다. 기본 미설정은 검사하지 않는다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다.
+    찾지 못하면 TCP 연결을 시작하지 않는다.
+    `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다.
+    미호출 시 원본처럼 라우팅한다.
+    `setConnectGuard`는 인터페이스 해석을 기다린 뒤 실제 `NWConnection` 생성 직전에도 CLI 중단 플래그를 검사한다.
+    기본 미설정은 검사하지 않는다.
 
 - NFS 경로 시험 입력의 `Users/chris/...`를 `Users/example/...`로 바꿨다(개인 이름 정리, 경로 해석 결과의 모양은 같다).
 
 - 필드 형에 `RemoteDB` 접두사(`RemoteDBUInt32` 등)를 붙였다(표준 형과 이름이 겹친다).
 - 조회 결과는 `RemoteDBQueryResult` enum으로 묶었다. 정수 `Track.year`에 담기지 않는 값은 `.trackWithRawYear`로 보존한다.
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `configureNFSPathGuard(_:)`는 `fetchFile`·`fetchFileRange`·`getFileInfo`가 소켓을 만들기 전에 경로를 검사하는 훅이다(던지면 아무것도 보내지 않는다). `closeAllNFSClients()`는 캐시에 있는 모든 NFS 클라이언트의 RPC 소켓을 닫고 캐시를 비운다. 부르지 않으면 원본처럼 연결을 그대로 둔다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `configureNFSPathGuard(_:)`는 `fetchFile`·`fetchFileRange`·`getFileInfo`가 소켓을 만들기 전에 경로를 검사하는 훅이다(던지면 아무것도 보내지 않는다).
+    `closeAllNFSClients()`는 캐시에 있는 모든 NFS 클라이언트의 RPC 소켓을 닫고 캐시를 비운다.
+    부르지 않으면 원본처럼 연결을 그대로 둔다.
 
 ## 4단계 (localdb)
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `LocalDatabase(throwsOnMediaQueryFailure: true)`는 미디어 슬롯 질의 실패를 nil 대신 원래 오류로 전달한다. 기본 false는 원본처럼 nil이다. CLI metadata는 이 옵션을 켜서 요청한 조회 실패를 종료 코드 1로 보고한다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `LocalDatabase(throwsOnMediaQueryFailure: true)`는 미디어 슬롯 질의 실패를 nil 대신 원래 오류로 전달한다.
+    기본 false는 원본처럼 nil이다.
+    CLI metadata는 이 옵션을 켜서 요청한 조회 실패를 종료 코드 1로 보고한다.
 
 - PDB·ANLZ는 kaitai `.ksy`(EPL) 대신 DJCrate의 MIT 리더를 고쳐 원본(kaitai 생성 코드)이 읽는 결과와 같게 만들었다. 트랙 문자열은 원본 entity-creators가 쓰는 11칸만 읽고(`dateAdded`=10, `analyzeDate`=15), 잘못된 짧은 문자열의 text는 건너뛴다(id·name 표에서는 빈 이름). 문자열 디코딩은 [kaitai-struct 0.11.0 런타임](https://github.com/kaitai-io/kaitai_struct_javascript_runtime/blob/v0.11.0/KaitaiStream.ts)의 `bytesToStr`와 같다.
 - 메모리 ORM은 better-sqlite3 대신 SQLCipher C API로 같은 스키마·질의를 쓴다. undefined 바인딩은 [better-sqlite3-multiple-ciphers 12.11.1](https://github.com/m4heshd/better-sqlite3-multiple-ciphers/blob/v12.11.1/src/util/data.cpp)처럼 NULL이다(id 없는 PDB 재생 목록 항목은 SQLite가 번호를 매긴다, 무효한 날짜는 NULL → `new Date(null)`처럼 epoch).

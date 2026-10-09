@@ -15,7 +15,7 @@ private let safetyHelp = """
       - 가상 CDJ 번호 기본값은 7이다. 1~6은 --allow-player-id를 같이 줄 때만 쓴다. 번호가 겹쳐 1~6으로 옮겨 가야 하면 그 번호로 보내기 전에 멈추고 종료 코드 1로 끝난다.
       - 소켓은 고른 인터페이스에만 묶고, 그 인터페이스 서브넷 밖의 장치에는 보내거나 연결하지 않는다.
       - PIONEER/extracted, PIONEER/CDP, djprofile.nxs는 어떤 경로로도(메타데이터·파형·분석 조회 안의 NFS 읽기 포함) 읽지 않는다.
-      - Ctrl-C를 누르면 새 송신·파일 쓰기·NFS 요청을 만들지 않고 소켓을 닫는다.
+      - Ctrl-C를 누르면 독립 중단 플래그를 세우고 소켓을 닫는다. 두 번째 신호는 즉시 끝내고, 중단 뒤 3초 안에 정리가 안 되면 강제 종료한다.
       - 제어 명령은 --confirm "<장치 이름>"이 대상 장치 이름과 정확히 같을 때만 보낸다.
       - play·pause는 실기로 확인하기 전까지 거부한다(--unverified-playstate를 줘도 1~4번 장치 가운데 패킷이 구별되는 번호만).
     """
@@ -90,7 +90,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               --timeout SEC     명령 전체 제한 시간(1~3600, 기본 \(defaultMetadataTimeoutSeconds)). 넘으면 정리하고 종료 코드 1
             \(commonOptionsHelp)
 
-            요청한 파형·분석 조회가 실패하면(데이터가 없는 것과 다르다) 나머지를 출력한 뒤 종료 코드 1로 끝난다.
+            미디어 슬롯 조회 실패는 오류로 보고한다. 요청한 파형·분석 조회가 실패하면(데이터가 없는 것과 다르다) 나머지를 출력한 뒤 종료 코드 1로 끝난다.
             """
     case .fetch:
         return """
