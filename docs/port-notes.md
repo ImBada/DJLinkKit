@@ -70,3 +70,60 @@
 
 - `Control`에 시험용 `correlationByte` 인자를 더했다(기본값은 원본처럼 무작위).
 - 원본 버그 그대로: 재생 상태 패킷이 칸 번호(0–3)를 `device.id`와 견줘 id 4 이상이면 비트가 서지 않는다.
+
+
+## 8단계 (패시브)
+
+- 장치 id가 없는 announce는 원본에서 `undefined`이며, Swift는 기반 `Device.id`의 비옵셔널 `Int`에 맞춰 0으로 둔다(`PassiveDevices.swift`).
+- 원격 DB 조회는 Swift의 공용 `RemoteDBQueryResult?`를 반환한다(`PassiveRemoteDB.swift`, 3단계와 같은 결과 형).
+- 로컬 DB의 `get`·`getWithMedia`·`getWithoutMedia`는 공용 `DatabaseAdapter`를 직접 반환하고, 설정·조회 결과도 `DatabasePreference`·`DatabaseType`·`PlaylistQueryResult`를 쓴다.
+- preload의 미디어 캐시 조회·장치 확인·슬롯 락 생성은 Task 생성 전에 장치 순서·USB→SD 순서로 처리한다(`PassiveLocalDB.swift`의 `prepareGet` 계열).
+- preload의 락 획득과 비동기 로더 실행은 Swift Task에서 시작하므로 Node의 `async-mutex` 동기 락 획득·Promise 마이크로태스크와 실행 순서까지 같지는 않다.
+- 잘못된 버퍼 크기는 생성자가 `throws`가 아니므로 `start()`에서 `BufferRangeError`를 던진다(`PassivePcapAdapter.swift`).
+- 요청에 따라 크기 0도 거부하지만, 원본 `Buffer.alloc(0)`은 빈 버퍼를 허용한다.
+- 위치 파싱 예외는 공용 `EventHub`의 package 예외 전파 API를 통해 `emit('beat')`를 감싼 어댑터 catch로 올라가 error 이벤트가 되며, 뒤 beat 구독자는 호출하지 않는다.
+- 상태·장치 방출기는 원본에도 파싱 try/catch가 있어 malformed 패킷을 무시한다.
+- 캡처를 열 때 실패한 포인터는 Swift의 defer로 정리하고, selectable fd가 없으면 오류를 던진다.
+- cap Open은 일부 실패 때 포인터를 남기며 selectable fd 오류는 libuv assert에 맡긴다.
+- 실제 BPF 캡처는 시험 프로세스에서 금지하며, 이 수정의 시험은 가짜 백엔드만 사용한다.
+
+그대로 옮긴 원본 버그와 동작:
+
+- UDP 길이 이중 차감: cap 0.2.1 `lib/Decoders.js`의 UDP는 wire 길이에서 헤더 8바이트를 뺀 값을 반환하고, 원본 `src/passive/pcap-adapter.ts:213`이 다시 8을 뺀다.
+- 따라서 payload의 끝 8바이트가 잘리고, payload가 8바이트 이하면 방출되지 않으며, 표준 54바이트 announce는 46바이트로 잘려 source IP와 장치 번호 휴리스틱을 쓰는 short format 경로로 읽힌다.
+- `PassiveFlowTests.udpDoubleSubtraction`은 정상 wire 길이로 이 버그를 고정하며, 나중에 버그를 고칠 때 기대값을 바꿔야 한다.
+- libpcap 필터의 netmask: cap 0.2.1 `src/binding.cc:308–355`는 `pcap_lookupnet`의 mask 대신 net을 `pcap_compile`의 마지막 인자로 넘긴다.
+- lookupnet 실패 시 net·mask를 0으로 두고 원본과 같은 경고를 출력한다.
+- 캡처 읽기 오류: 원본은 `pcap_next_ex`를 쓰지 않고 `pcap_dispatch(..., 1, ...)`를 반복한다(`src/binding.cc:159–212`).
+- -1을 포함한 0 이하 반환값이면 현재 반복만 끝내고 캡처와 readable 감시는 유지하며, error 이벤트를 내거나 자동으로 닫지 않는다.
+- Swift도 같은 dispatch 반복을 쓰며, 인터페이스가 사라져도 오류 없이 캡처 중 상태가 남을 수 있다(1:1 이후 개선 후보).
+- truncated는 wire 길이와 caplen의 차이가 아니라 `caplen > buffer_length`일 때만 true다(`src/binding.cc:128–148`).
+- Ethernet은 MAC 뒤의 단일 `81 00` VLAN 태그만 건너뛰며, type/length 값이 1536 미만이면 type은 없다(`lib/Decoders.js:1–59`).
+
+### cap 0.2.1 의미 대응 출처·고지
+
+문서 변경을 이 파일로 제한한 요청에 따라 이번 의미 대응의 출처와 MIT 고지를 여기에 둔다.
+소스 파일을 포함하거나 실행하지 않고 npm tarball의 `lib/Decoders.js`·`src/binding.cc`를 읽어 동작을 확인했다.
+출처는 [npm cap 0.2.1 tarball](https://registry.npmjs.org/cap/-/cap-0.2.1.tgz)의 `mscdex-cap-74501f5/`이며, 허가 문구는 그 안의 `LICENSE`다.
+
+```text
+Copyright Brian White. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+```
