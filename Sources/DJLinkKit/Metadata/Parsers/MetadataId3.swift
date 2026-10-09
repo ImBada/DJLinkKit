@@ -143,8 +143,6 @@ extension MetadataConnect {
         let tagData = try await reader.read(10 + extendedHeaderSize, tagSize - extendedHeaderSize)
 
         var metadata = ExtractedMetadata()
-        // JS의 `Object.keys(metadata).length === 0`는 값이 undefined여도 키가 있으면 세지 않는다. 키가 생겼는지 따로 센다.
-        var hasKeys = false
         var frontCover: ArtworkResult?
         var anyArtwork: ArtworkResult?
 
@@ -185,28 +183,20 @@ extension MetadataConnect {
 
             // Extract metadata from text frames
             if matchesFrameId(normalizedId, FrameIds.title) {
-                hasKeys = true
                 if metadata.title == nil { metadata.title = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.artist) {
-                hasKeys = true
                 if metadata.artist == nil { metadata.artist = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.album) {
-                hasKeys = true
                 if metadata.album == nil { metadata.album = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.genre) {
-                hasKeys = true
                 if metadata.genre == nil { metadata.genre = try parseGenre(parseTextFrame(frameData)) }
             } else if matchesFrameId(normalizedId, FrameIds.label) {
-                hasKeys = true
                 if metadata.label == nil { metadata.label = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.year) {
-                hasKeys = true
                 if metadata.year == nil { metadata.year = try parseYear(parseTextFrame(frameData) ?? "") }
             } else if matchesFrameId(normalizedId, FrameIds.bpm) {
-                hasKeys = true
                 if metadata.bpm == nil { metadata.bpm = try parseBpm(parseTextFrame(frameData) ?? "") }
             } else if matchesFrameId(normalizedId, FrameIds.key) {
-                hasKeys = true
                 if metadata.key == nil { metadata.key = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.picture) {
                 if let artwork = try parseApicFrame(frameData) {
@@ -223,13 +213,14 @@ extension MetadataConnect {
 
         // Use front cover if available, otherwise any artwork
         if let artwork = frontCover ?? anyArtwork {
-            hasKeys = true
             metadata.artwork = artwork.data
             metadata.artworkMimeType = artwork.mimeType
         }
 
         // Return null if no metadata was found
-        if !hasKeys {
+        // PLAN §9: 원본은 `Object.keys(metadata).length === 0`이라 undefined 값의 키도 세어 값이 없어도 null이 아니었다.
+        // 실제 값이 하나도 없으면 nil이다.
+        if metadata == ExtractedMetadata() {
             return nil
         }
 

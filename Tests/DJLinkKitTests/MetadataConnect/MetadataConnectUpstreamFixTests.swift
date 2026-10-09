@@ -74,6 +74,32 @@ private func id3Tag(_ majorVersion: Int, _ frames: [[UInt8]]) -> [UInt8] {
     return header + body
 }
 
+// FLAC
+
+private func vorbisComment(_ fields: [String]) -> [UInt8] {
+    let vendor = [UInt8]("reference libFLAC", encoding: .utf8)
+    var parts: [[UInt8]] = [.alloc(4), vendor, .alloc(4)]
+    parts[0].writeUInt32LE(vendor.count, 0)
+    parts[2].writeUInt32LE(fields.count, 0)
+
+    for field in fields {
+        let encoded = [UInt8](field, encoding: .utf8)
+        var length = [UInt8].alloc(4)
+        length.writeUInt32LE(encoded.count, 0)
+        parts.append(length)
+        parts.append(encoded)
+    }
+
+    let body = [UInt8].concat(parts)
+    var blockHeader = [UInt8].alloc(4)
+    blockHeader[0] = 0x80 | 4 // last block, VORBIS_COMMENT
+    blockHeader[1] = UInt8((body.count >> 16) & 0xff)
+    blockHeader[2] = UInt8((body.count >> 8) & 0xff)
+    blockHeader[3] = UInt8(body.count & 0xff)
+
+    return [UInt8]("fLaC", encoding: .ascii) + blockHeader + body
+}
+
 // ----------------------------------------------------------------- 시험
 
 @Suite("metadata-connect 원본 버그 고침")
@@ -235,6 +261,81 @@ struct MetadataConnectUpstreamFixTests {
             #expect(metadata.year == 2020)
             #expect(metadata.bpm == 126)
             #expect(metadata.key == "Am")
+        }
+    }
+
+    @Suite("값이 모두 비어 있으면 null")
+    struct EmptyResult {
+        // 원본 metadata-connect/src/parsers/mp4.ts:315, id3.ts:245, flac.ts — `Object.keys(metadata).length === 0`은
+        // `metadata.title = undefined`로 생긴 키도 세어서 값이 하나도 없어도 null이 아니었다.
+        @Test("returns null when every mp4 atom is empty")
+        func mp4Empty() async throws {
+            let file = mp4File(textItem("\u{a9}nam", ""), textItem("\u{a9}ART", " \0 "), numberItem("gnre", 0), numberItem("tmpo", 0))
+
+            let metadata = try await MetadataConnect.extractFromMp4(MetadataConnect.createBufferReader(file, "m4a"))
+
+            #expect(metadata == nil)
+        }
+
+        @Test("returns null when an mp4 date has no year")
+        func mp4NoYear() async throws {
+            let file = mp4File(textItem("\u{a9}day", "unknown"))
+
+            let metadata = try await MetadataConnect.extractFromMp4(MetadataConnect.createBufferReader(file, "m4a"))
+
+            #expect(metadata == nil)
+        }
+
+        @Test("keeps only the real values of an mp4 that also has empty atoms")
+        func mp4Mixed() async throws {
+            let file = mp4File(textItem("\u{a9}nam", ""), textItem("\u{a9}ART", "Artist"))
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp4(MetadataConnect.createBufferReader(file, "m4a")))
+
+            #expect(metadata == MetadataConnect.ExtractedMetadata(artist: "Artist"))
+        }
+
+        @Test("returns null when every ID3 text frame is empty or unparsable")
+        func id3Empty() async throws {
+            let file = id3Tag(
+                3,
+                [
+                    id3v23Frame("TIT2", ""),
+                    id3v23Frame("TYER", "unknown"),
+                    id3v23Frame("TBPM", "fast"),
+                    id3v23Frame("TCON", ""),
+                ])
+
+            let metadata = try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3"))
+
+            #expect(metadata == nil)
+        }
+
+        @Test("keeps only the real values of an ID3 tag that also has empty frames")
+        func id3Mixed() async throws {
+            let file = id3Tag(3, [id3v23Frame("TIT2", ""), id3v23Frame("TPE1", "Artist")])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata == MetadataConnect.ExtractedMetadata(artist: "Artist"))
+        }
+
+        @Test("returns null when the Vorbis comments hold no known field")
+        func flacEmpty() async throws {
+            let file = vorbisComment(["ENCODER=reference libFLAC", "TITLE=", "DATE=unknown"])
+
+            let metadata = try await MetadataConnect.extractFromFlac(MetadataConnect.createBufferReader(file, "flac"))
+
+            #expect(metadata == nil)
+        }
+
+        @Test("keeps only the real values of Vorbis comments that also have empty fields")
+        func flacMixed() async throws {
+            let file = vorbisComment(["TITLE=", "ARTIST=Artist"])
+
+            let metadata = try #require(try await MetadataConnect.extractFromFlac(MetadataConnect.createBufferReader(file, "flac")))
+
+            #expect(metadata == MetadataConnect.ExtractedMetadata(artist: "Artist"))
         }
     }
 }

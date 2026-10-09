@@ -134,8 +134,6 @@ extension MetadataConnect {
         }
 
         var metadata = ExtractedMetadata()
-        // JS의 `Object.keys(metadata).length === 0`는 값이 undefined여도 키가 있으면 세지 않는다. 키가 생겼는지 따로 센다.
-        var hasKeys = false
         var frontCover: ArtworkResult?
         var anyArtwork: ArtworkResult?
 
@@ -159,7 +157,6 @@ extension MetadataConnect {
                 let comments = try parseVorbisCommentBlock(commentData)
 
                 // Extract metadata from Vorbis comments
-                hasKeys = true
                 if metadata.title == nil { metadata.title = getFieldValue(comments, VorbisFields.title) }
                 if metadata.artist == nil { metadata.artist = getFieldValue(comments, VorbisFields.artist) }
                 if metadata.album == nil { metadata.album = getFieldValue(comments, VorbisFields.album) }
@@ -193,13 +190,14 @@ extension MetadataConnect {
 
         // Use front cover if available, otherwise any artwork
         if let artwork = frontCover ?? anyArtwork {
-            hasKeys = true
             metadata.artwork = artwork.data
             metadata.artworkMimeType = artwork.mimeType
         }
 
         // Return null if no metadata was found
-        if !hasKeys {
+        // PLAN §9: 원본은 `Object.keys(metadata).length === 0`이라 undefined 값의 키도 세어 값이 없어도 null이 아니었다.
+        // 실제 값이 하나도 없으면 nil이다.
+        if metadata == ExtractedMetadata() {
             return nil
         }
 
