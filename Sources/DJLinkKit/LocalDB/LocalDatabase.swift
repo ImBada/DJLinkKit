@@ -113,11 +113,10 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
     }
     public func disconnectForDevice(_ device: Device) { handleDeviceRemoved(device) }
     private func handleDeviceRemoved(_ device: Device) {
-        if let db = dbs.first(where: { $0.media.deviceId == device.id }) {
+        for db in dbs where db.media.deviceId == device.id {
             closeLoaded(db.loaded)
             if let alternate = db.alternate { closeLoaded(alternate) }
         }
-        // 원본처럼 첫 항목만 닫고 같은 장치의 모든 항목을 지운다.
         dbs.removeAll { $0.media.deviceId == device.id }
     }
     private func closeLoaded(_ loaded: LoadedAdapter) {

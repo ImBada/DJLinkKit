@@ -1,3 +1,4 @@
+import DJLinkTestSupport
 import Foundation
 import Testing
 
@@ -143,5 +144,55 @@ struct LocalDBUpstreamFixTests {
         let tables = try readLocalDBPdb(Array(built.data))
         let rows = try #require(tables.first { $0.type == table }?.rows)
         #expect(try rows.map { try $0.readUInt32LE(0) } == [1])
+    }
+
+    @Test("장치를 제거하면 모든 매체의 활성·대체 DB를 한 번씩 닫는다")
+    @DJLinkActor func deviceRemoval() async throws {
+        let devices = LocalDBFakeDeviceSource()
+        var other = localDBTestCDJ
+        other.id = 4
+        devices.devices[other.id] = other
+        let status = LocalDBFakeMediaSlotSource()
+        let fs = LocalDBFakeFileSystem()
+        let clock = TestClock()
+        var adapters: [LocalDBFakeAdapter] = []
+        func makeAdapter(_ type: DatabaseType) -> LocalDBFakeAdapter {
+            let adapter = LocalDBFakeAdapter(type: type, rows: [])
+            adapters.append(adapter)
+            return adapter
+        }
+        let dependencies = LocalDBDependencies(
+            fetchFile: { _ in [] }, fileSystem: fs,
+            makeOneLibraryAdapter: { _ in makeAdapter(.oneLibrary) },
+            makeMetadataORM: { makeAdapter(.pdb) }, hydrateDatabase: { _ in })
+        let local = LocalDatabase(
+            hostDevice: localDBTestHost, deviceManager: devices, statusEmitter: status,
+            dependencies: dependencies, clock: clock)
+        // 같은 장치의 USB·SD와 교체된 USB 매체를 캐시하고 각각 대체 DB까지 연다.
+        for media in [
+            localDBTestMedia(), localDBTestMedia(slot: .sd), localDBTestMedia(name: "교체한 시험 매체"),
+            localDBTestMedia(deviceId: other.id),
+        ] {
+            status.media = media
+            clock.advance(ms: 1)
+            _ = try await local.findTrack(media.deviceId, media.slot, 1)
+        }
+        #expect(adapters.count == 8)
+        #expect(fs.writes.count == 4)
+        let removed = Array(adapters.prefix(6))
+        let retained = Array(adapters.suffix(2))
+        for handler in devices.handlers { handler(localDBTestCDJ) }
+        #expect(removed.allSatisfy { $0.closeCalls == 1 })
+        #expect(retained.allSatisfy { $0.closeCalls == 0 })
+        #expect(fs.unlinks == fs.writes.prefix(3).map(\.0))
+        #expect(local.getDatabaseType(3, .usb) == nil)
+        #expect(local.getDatabaseType(3, .sd) == nil)
+        #expect(local.getDatabaseType(other.id, .usb) == .oneLibrary)
+        local.disconnectForDevice(localDBTestCDJ)
+        #expect(removed.allSatisfy { $0.closeCalls == 1 })
+        #expect(fs.unlinks.count == 3)
+        local.disconnectForDevice(other)
+        #expect(retained.allSatisfy { $0.closeCalls == 1 })
+        #expect(fs.unlinks == fs.writes.map(\.0))
     }
 }
