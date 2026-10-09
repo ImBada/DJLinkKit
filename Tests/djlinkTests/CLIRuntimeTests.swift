@@ -620,6 +620,7 @@ struct CLIRuntimeNFSGuardTests {
     func databaseFetch() async throws {
         let h = CLIHarness()
         let session = h.makeSession()
+        try session.lock(session.resolveScope(named: "en7"))
         let fetch = session.guardedDBDependencies().fetchFile
         for path in ["PIONEER/extracted/a", "PIONEER/CDP/b", "PIONEER/djprofile.nxs", ".PIONEER/extracted/c"] {
             await #expect(throws: CLIRuntimeError.self, "\(path)") { _ = try await fetch(device, .usb, path, nil, nil) }
@@ -634,6 +635,7 @@ struct CLIRuntimeNFSGuardTests {
     func localDatabaseFetch() async throws {
         let h = CLIHarness()
         let session = h.makeSession()
+        try session.lock(session.resolveScope(named: "en7"))
         let fetch = session.guardedLocalDBDependencies().fetchFile
         await #expect(throws: CLIRuntimeError.self) {
             _ = try await fetch(LocalDBFetchFileOptions(device: device, slot: .usb, path: "PIONEER/extracted/x"))
@@ -647,6 +649,7 @@ struct CLIRuntimeNFSGuardTests {
     func artworkSource() async throws {
         let h = CLIHarness()
         let session = h.makeSession()
+        try session.lock(session.resolveScope(named: "en7"))
         let source = CLIGuardedArtworkSource(session: session)
         await #expect(throws: CLIRuntimeError.self) {
             _ = try await source.getFileInfo(device: device, slot: .usb, path: "PIONEER/CDP/x")

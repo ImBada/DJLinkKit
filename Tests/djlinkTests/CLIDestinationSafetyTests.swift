@@ -37,6 +37,28 @@ struct CLIDestinationSafetyTests {
         await registry.closeAll()
     }
 
+    @Test("watch waits for a late outside device but the socket boundary prevents its query")
+    func lateWatchDevice() async throws {
+        let h = CLIHarness()
+        let session = h.makeSession()
+        let network = try await session.openNetwork(options: CLICommonOptions(iface: "en7"))
+        let known = try cdj(1, "192.168.1.20")
+        try h.announce(known)
+        try await session.join(options: CLICommonOptions(iface: "en7"), knownDevice: known)
+        let db = try #require(network.db)
+        let change = Task {
+            await session.handleTrackChange(makeState(trackDeviceId: 2), db: db, downloadDir: nil)
+        }
+        await h.settle()
+        let before = h.totalSent
+        try h.announce(cdj(2, "10.0.0.20"))
+        await change.value
+        #expect(h.totalSent == before)
+        #expect(h.nfs.requestCount == 0)
+        #expect(h.output.errorLines.contains { $0.contains("서브넷 밖") })
+        await session.cleanup()
+    }
+
     @Test("NFS rejects an outside device before the fake reader is called")
     func nfsDeviceGuard() async throws {
         let h = CLIHarness()

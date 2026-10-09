@@ -256,8 +256,8 @@ final class CLISession {
 
     /// 모든 NFS 읽기가 거치는 검사. 중단됐거나 읽지 않는 경로면 던진다.
     func guardNFS(_ path: String, device: Device? = nil) throws {
-        if let device { try sockets.requireDestination(device.ip.address) }
         try abort.check()
+        if let device { try sockets.requireDestination(device.ip.address) }
         if let violation = checkNeverRead(path) { throw CLIRuntimeError(violation.message) }
     }
 
