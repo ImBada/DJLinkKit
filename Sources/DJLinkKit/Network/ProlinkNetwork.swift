@@ -21,6 +21,11 @@ private enum NetworkAnnouncer {
         }
     }
 
+    @DJLinkActor var rejectedDeviceId: DeviceID? {
+        if case .active(let service) = self { return service.rejectedDeviceId }
+        return nil
+    }
+
     @DJLinkActor var ready: Void {
         get async {
             switch self {
@@ -218,6 +223,17 @@ public final class ProlinkNetwork {
     public var db: (any NetworkDatabase)? { connection?.database }
     public var localdb: (any NetworkLocalDatabase)? { connection?.localdb }
     public var remotedb: (any NetworkRemoteDatabase)? { connection?.remotedb }
+
+    /// CLI 안전 정책의 startup 번호 거부 상태.
+    public var startupRejectedDeviceId: DeviceID? { connection?.announcer.rejectedDeviceId }
+
+    /// startupReady가 끝난 뒤 번호 거부를 오류로 구별한다.
+    public func waitUntilReady() async throws {
+        await startupReady
+        if let startupRejectedDeviceId {
+            throw DJLinkError("Device ID \(startupRejectedDeviceId) is not allowed")
+        }
+    }
 
     public var startupReady: Void {
         get async {

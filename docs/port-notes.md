@@ -22,6 +22,8 @@
 
 ## 2단계 network
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): `allowsDeviceId` 설정 시 Announcer는 번호 거부를 `rejectedDeviceId`에 남기고 모든 ready 대기자를 풀며 이후 ready도 즉시 끝낸다. `waitUntilReady()`는 거부를 던지고 네트워크는 `startupRejectedDeviceId`·`waitUntilReady()`로 이를 노출한다. 정책이 없으면 원본 ready 재호출 동작을 그대로 유지한다.
+
 - CLI 안전을 위한 추가(기본값은 원본 동작): Stagehand 연결에 `allowsDeviceId`·`announceTargetFilter`·`onDeviceIdRejected`가 설정되면 시작 전 명시적으로 거부한다. Stagehand 브로드캐스트와 heartbeat에 이 정책을 온전히 적용하지 못하기 때문이다. 안전 옵션이 없는 기본 Stagehand는 원본 동작을 유지한다.
 
 - `network.control`: Control은 DJLinkKit에 기대는 별도 타깃(`DJLinkControl`)이라 network가 connect 때 만들 수 없다. `DJLinkControl`이 `ProlinkNetwork`를 확장해, 연결된 뒤 처음 읽을 때 그 연결의 beat·status 소켓과 가상 장치 참조로 만든다. 같은 연결에서는 같은 Control, 다음 connect에서는 새 Control이다. 연결 전에는 원본처럼 nil.

@@ -306,6 +306,28 @@ public final class Announcer {
     private let logger: any Logger
     /// Callback invoked when the full startup protocol completes
     private var onStartupComplete: (@DJLinkActor () -> Void)?
+    /// CLI 안전 정책이 거부한 번호. 기본 정책 nil에서는 항상 nil이다.
+    public private(set) var rejectedDeviceId: DeviceID?
+    private var policyReadyWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func finishPolicyWaiters() {
+        let waiters = policyReadyWaiters
+        policyReadyWaiters = []
+        for waiter in waiters { waiter.resume() }
+    }
+
+    private func reject(_ id: DeviceID) {
+        rejectedDeviceId = id
+        stop()
+        finishPolicyWaiters()
+        onDeviceIdRejected?(id)
+    }
+
+    /// 안전 정책 거부를 오류로 구별하며 startup이 끝날 때까지 기다린다.
+    public func waitUntilReady() async throws {
+        await ready
+        if let rejectedDeviceId { throw DJLinkError("Device ID \(rejectedDeviceId) is not allowed") }
+    }
     private let clock: any DJLinkClock
     /// CLI 안전을 위한 추가(기본값 nil은 원본 동작). 허용하지 않는 번호로는 announce하지 않는다.
     private let allowsDeviceId: (@Sendable (DeviceID) -> Bool)?
@@ -346,6 +368,7 @@ public final class Announcer {
     /// 원본 getter처럼 부를 때마다 기다리는 쪽을 새로 걸고 앞의 것을 덮어쓴다(마지막 것만 풀린다).
     public var ready: Void {
         get async {
+            if rejectedDeviceId != nil { return }
             if !fullStartup {
                 return
             }
@@ -353,7 +376,11 @@ public final class Announcer {
                 return
             }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                onStartupComplete = { continuation.resume() }
+                if allowsDeviceId != nil {
+                    policyReadyWaiters.append(continuation)
+                } else {
+                    onStartupComplete = { continuation.resume() }
+                }
             }
         }
     }
@@ -362,6 +389,7 @@ public final class Announcer {
     public func start() throws {
         // CLI 안전을 위한 추가: 처음 번호도 허용하지 않으면 아무것도 보내지 않는다.
         if let allowsDeviceId, !allowsDeviceId(vcdj.id) {
+            reject(vcdj.id)
             throw DJLinkError("Device ID \(vcdj.id) is not allowed")
         }
         armConflictListener()
@@ -433,8 +461,7 @@ public final class Announcer {
         // CLI 안전을 위한 추가: 허용하지 않는 번호로 옮겨 가지 않는다. 그 번호로 announce하기 전에 멈춘다.
         if let allowsDeviceId, !allowsDeviceId(newId) {
             logger.error("Device ID \(newId) is not allowed. Stopping the announcer.")
-            stop()
-            onDeviceIdRejected?(newId)
+            reject(newId)
             return
         }
 
@@ -516,6 +543,7 @@ public final class Announcer {
         case .keepAlive:
             // Transition to keep-alive mode
             try startKeepAlive()
+            finishPolicyWaiters()
             onStartupComplete?()
             onStartupComplete = nil
             return
