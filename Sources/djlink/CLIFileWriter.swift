@@ -21,7 +21,14 @@ protocol CLIFileWriter: Sendable {
     func createDirectory(atPath path: String) throws
     /// `path`에 `data`를 쓴다. 이미 있으면 `CLIFileExistsError`를 던지고 아무것도 바꾸지 않는다.
     /// 중간에 실패하면 반쯤 쓴 파일을 남기지 않는다.
-    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String) throws
+    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String, checkCancellation: @Sendable () throws -> Void)
+        throws
+}
+
+extension CLIFileWriter {
+    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String) throws {
+        try publishWithoutOverwriting(data, toPath: path, checkCancellation: {})
+    }
 }
 
 /// POSIX 호출로 쓴다. `.atomic`과 `.withoutOverwriting`은 같이 쓸 수 없어서(NSData.h),
@@ -47,7 +54,10 @@ struct POSIXFileWriter: CLIFileWriter {
         }
     }
 
-    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String) throws {
+    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String, checkCancellation: @Sendable () throws -> Void)
+        throws
+    {
+        try checkCancellation()
         // 이미 있으면 임시 파일도 만들지 않는다. 그 사이에 생기는 경우는 아래 `link`/`O_EXCL`이 막는다.
         if fileExists(atPath: path) { throw CLIFileExistsError(path: path) }
         let directory = (path as NSString).deletingLastPathComponent
@@ -58,7 +68,7 @@ struct POSIXFileWriter: CLIFileWriter {
         // 게시에 성공해도 임시 이름은 지운다(하드 링크라 게시한 파일은 남는다).
         defer { unlink(temporary) }
         do {
-            try Self.writeAll(fd, data, path: temporary)
+            try Self.writeAll(fd, data, path: temporary, checkCancellation: checkCancellation)
             guard fsync(fd) == 0 else { throw Self.error("임시 파일을 디스크에 쓰지 못했다", temporary) }
         } catch {
             close(fd)
@@ -66,26 +76,31 @@ struct POSIXFileWriter: CLIFileWriter {
         }
         guard close(fd) == 0 else { throw Self.error("임시 파일을 닫지 못했다", temporary) }
 
+        try checkCancellation()
         if link(temporary, path) == 0 { return }
         switch errno {
         case EEXIST:
             throw CLIFileExistsError(path: path)
         case ENOTSUP, EPERM, ENOSYS, EXDEV:
             // 하드 링크를 지원하지 않는 파일 시스템.
-            try Self.createExclusively(data, path: path)
+            try Self.createExclusively(data, path: path, checkCancellation: checkCancellation)
         default:
             throw Self.error("파일을 게시하지 못했다", path)
         }
     }
 
-    private static func createExclusively(_ data: [UInt8], path: String) throws {
+    private static func createExclusively(_ data: [UInt8], path: String, checkCancellation: @Sendable () throws -> Void)
+        throws
+    {
+        try checkCancellation()
         let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o644)
         guard fd >= 0 else {
             if errno == EEXIST || errno == ELOOP { throw CLIFileExistsError(path: path) }
             throw error("파일을 만들지 못했다", path)
         }
         do {
-            try writeAll(fd, data, path: path)
+            try writeAll(fd, data, path: path, checkCancellation: checkCancellation)
+            try checkCancellation()
         } catch {
             // 이 호출이 만든 파일이므로 지워도 된다.
             close(fd)
@@ -98,9 +113,12 @@ struct POSIXFileWriter: CLIFileWriter {
         }
     }
 
-    private static func writeAll(_ fd: Int32, _ data: [UInt8], path: String) throws {
+    private static func writeAll(
+        _ fd: Int32, _ data: [UInt8], path: String, checkCancellation: @Sendable () throws -> Void
+    ) throws {
         var offset = 0
         while offset < data.count {
+            try checkCancellation()
             let written = data.withUnsafeBytes { raw in
                 write(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset)
             }
@@ -108,6 +126,7 @@ struct POSIXFileWriter: CLIFileWriter {
                 if errno == EINTR { continue }
                 throw error("파일에 쓰지 못했다", path)
             }
+            if written == 0 { throw CLIFileError(message: "파일 쓰기가 진행되지 않았다: \(path)") }
             offset += written
         }
     }

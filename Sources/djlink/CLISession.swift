@@ -19,6 +19,7 @@ final class CLISession {
     var interruptReport: (@DJLinkActor () -> Void)?
 
     private var deadline: TimerHandle?
+    private let watchdog: CLIWatchdog?
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var announcingStopped = false
     private var cleanedUp = false
@@ -28,6 +29,7 @@ final class CLISession {
         self.runtime = runtime
         self.output = output
         self.abort = abort
+        self.watchdog = runtime.independentScheduler.map { CLIWatchdog(abort: abort, scheduler: $0) }
         self.sockets = CLISocketRegistry(inner: runtime.socketFactory, abort: abort)
         // 중단되는 순간 동기로 참여부터 멈춘다(announce 타이머가 더 돌지 않게).
         abort.onAbort { [weak self] in self?.stopAnnouncing() }
@@ -37,6 +39,7 @@ final class CLISession {
 
     /// 명령 전체 제한 시간. 넘으면 중단 토큰을 실패로 세워 남은 작업과 소켓을 정리하게 한다.
     func setDeadline(seconds: Int) {
+        watchdog?.setDeadline(seconds: seconds)
         runtime.clock.clearTimeout(deadline)
         deadline = runtime.clock.setTimeout(.seconds(seconds)) { [self] in
             abort.fail("제한 시간 \(seconds)초를 넘었다. 남은 작업과 소켓을 정리하고 끝낸다(--timeout으로 바꾼다)")
@@ -50,6 +53,24 @@ final class CLISession {
         tasks[id] = Task { @DJLinkActor [self] in
             await body()
             tasks.removeValue(forKey: id)
+        }
+    }
+
+    /// 파일 쓰기·fsync·게시가 DJLinkActor를 점유하지 않게 별도 큐에서 한다.
+    func publishFile(_ data: [UInt8], path: String, directory: String? = nil) async throws {
+        let files = runtime.files
+        let abort = abort
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            DispatchQueue.global(qos: .utility).async {
+                do {
+                    try abort.check()
+                    if let directory { try files.createDirectory(atPath: directory) }
+                    try files.publishWithoutOverwriting(data, toPath: path, checkCancellation: { try abort.check() })
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
     }
 
@@ -331,6 +352,7 @@ final class CLISession {
         }
         if let network { try? await network.close() }
         await sockets.closeAll()
+        watchdog?.complete()
     }
 }
 

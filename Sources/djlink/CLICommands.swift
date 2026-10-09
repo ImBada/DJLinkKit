@@ -197,9 +197,8 @@ extension CLISession {
             let target = (downloadDir as NSString).appendingPathComponent(name)
             // 파일 쓰기 직전에 확인한다.
             try abort.check()
-            try runtime.files.createDirectory(atPath: downloadDir)
             do {
-                try runtime.files.publishWithoutOverwriting(buf, toPath: target)
+                try await publishFile(buf, path: target, directory: downloadDir)
                 output.writeLine("Copied \(name)")
             } catch is CLIFileExistsError {
                 output.log(.warn, "이미 있어 덮어쓰지 않는다: \(target)")
@@ -326,7 +325,7 @@ extension CLISession {
         // 파일 쓰기 직전에 확인한다.
         try abort.check()
         do {
-            try runtime.files.publishWithoutOverwriting(bytes, toPath: target.out)
+            try await publishFile(bytes, path: target.out)
         } catch is CLIFileExistsError {
             throw CLIRuntimeError("\(target.out)이 이미 있다. 덮어쓰지 않는다")
         }

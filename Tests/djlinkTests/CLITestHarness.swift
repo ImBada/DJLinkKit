@@ -65,7 +65,10 @@ final class RecordingFileWriter: CLIFileWriter {
 
     func createDirectory(atPath path: String) throws { state.withLock { $0.directories.append(path) } }
 
-    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String) throws {
+    func publishWithoutOverwriting(_ data: [UInt8], toPath path: String, checkCancellation: @Sendable () throws -> Void)
+        throws
+    {
+        try checkCancellation()
         try state.withLock { state in
             if let error = state.publishError { throw error }
             if state.existing.contains(path) { throw CLIFileExistsError(path: path) }
@@ -201,6 +204,7 @@ final class CLIHarness {
         runtime.nfs = nfs
         let abort = self.abort
         runtime.makeAbort = { abort }
+        runtime.independentScheduler = nil
         runtime.installsSignalHandlers = false
         runtime.configuresNFSGlobals = false
         let backend = self.backend

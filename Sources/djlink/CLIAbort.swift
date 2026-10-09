@@ -1,6 +1,8 @@
 import DJLinkKit
+import Darwin
 import Dispatch
 import Foundation
+import Synchronization
 
 // 중단 토큰. Ctrl-C·SIGTERM, 제한 시간 초과, 번호 거부 같은 "여기서 끝낸다"를 한 곳에 모은다.
 // 부작용(참여·송신·파일 쓰기·NFS 요청)은 만들기 직전에 `check()`로 확인한다.
@@ -40,18 +42,51 @@ final class CLIAbort {
         case failed(String)
     }
 
-    private(set) var reason: Reason?
+    private struct State {
+        var reason: Reason?
+        var observers: [@Sendable () -> Void] = []
+    }
+    private nonisolated let state = Mutex(State())
+    nonisolated var reason: Reason? { state.withLock { $0.reason } }
     private var handlers: [(id: Int, handler: @DJLinkActor () -> Void)] = []
     private var nextId = 0
 
-    init() {}
+    nonisolated init() {}
 
-    var isAborted: Bool { reason != nil }
+    nonisolated var isAborted: Bool { reason != nil }
 
     /// 처음 부른 이유만 남는다. 걸어 둔 처리기를 한 번씩 부른다.
     func abort(_ reason: Reason) {
-        guard self.reason == nil else { return }
-        self.reason = reason
+        guard record(reason) else { return }
+        notifyHandlers()
+    }
+
+    /// 액터가 동기 작업에 묶여 있어도 즉시 중단 플래그를 세운다.
+    nonisolated func requestAbort(_ reason: Reason) {
+        guard record(reason) else { return }
+        Task { @DJLinkActor in self.notifyHandlers() }
+    }
+
+    private nonisolated func record(_ reason: Reason) -> Bool {
+        let observers: [@Sendable () -> Void]? = state.withLock { state in
+            guard state.reason == nil else { return nil }
+            state.reason = reason
+            return state.observers
+        }
+        guard let observers else { return false }
+        for observer in observers { observer() }
+        return true
+    }
+
+    nonisolated func observeRequest(_ observer: @escaping @Sendable () -> Void) {
+        let alreadyAborted = state.withLock { state in
+            state.observers.append(observer)
+            return state.reason != nil
+        }
+        if alreadyAborted { observer() }
+    }
+
+    private func notifyHandlers() {
         let pending = handlers
         handlers = []
         for entry in pending { entry.handler() }
@@ -62,7 +97,7 @@ final class CLIAbort {
     func fail(_ message: String) { abort(.failed(message)) }
 
     /// 부작용을 만들기 직전에 부른다. 이미 중단됐으면 던진다.
-    func check() throws {
+    nonisolated func check() throws {
         if isAborted { throw CLIAborted() }
     }
 
@@ -142,33 +177,55 @@ final class CLIWaiter<Value: Sendable> {
     }
 }
 
-/// SIGINT·SIGTERM을 받아 토큰을 중단한다. 두 번째 신호는 정리가 멈춘 것으로 보고 바로 끝낸다.
-final class CLISignalHandler {
-    private var sources: [any DispatchSourceSignal] = []
+/// 신호 소스를 바꿔 넣어 실제 프로세스 신호 없이 시험한다.
+protocol CLISignalSource: Sendable {
+    func cancel()
+}
 
-    init(abort: CLIAbort) {
-        for number in [SIGINT, SIGTERM] {
-            signal(number, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
-            source.setEventHandler {
-                Task { @DJLinkActor in
-                    if abort.isAborted {
-                        exit(CLIExitCode.interrupted)
-                    } else {
-                        abort.interrupt()
-                    }
+final class DispatchCLISignalSource: CLISignalSource, @unchecked Sendable {
+    private let source: any DispatchSourceSignal
+    private let number: Int32
+
+    init(number: Int32, handler: @escaping @Sendable (UInt) -> Void) {
+        self.number = number
+        signal(number, SIG_IGN)
+        source = DispatchSource.makeSignalSource(signal: number, queue: .global(qos: .userInitiated))
+        let source = source
+        source.setEventHandler { handler(source.data) }
+        source.resume()
+    }
+
+    func cancel() {
+        source.cancel()
+        signal(number, SIG_DFL)
+    }
+}
+
+/// 신호 큐에서 플래그를 세운다. 두 번째 신호는 액터와 무관하게 즉시 끝낸다.
+final class CLISignalHandler: Sendable {
+    private let sources: [any CLISignalSource]
+
+    init(
+        abort: CLIAbort,
+        makeSource: (Int32, @escaping @Sendable (UInt) -> Void) -> any CLISignalSource = {
+            DispatchCLISignalSource(number: $0, handler: $1)
+        },
+        terminate: @escaping @Sendable (Int32) -> Void = { _exit($0) }
+    ) {
+        let count = Mutex<UInt>(0)
+        sources = [SIGINT, SIGTERM].map { number in
+            makeSource(number) { events in
+                let total = count.withLock { count in
+                    count += max(1, events)
+                    return count
                 }
+                abort.requestAbort(.interrupted)
+                if total >= 2 { terminate(CLIExitCode.interrupted) }
             }
-            source.resume()
-            sources.append(source)
         }
     }
 
-    /// 신호 처리를 원래대로 돌린다.
     func remove() {
         for source in sources { source.cancel() }
-        sources = []
-        signal(SIGINT, SIG_DFL)
-        signal(SIGTERM, SIG_DFL)
     }
 }

@@ -75,6 +75,7 @@ struct CLIRuntime {
     /// SIGINT·SIGTERM을 받아 중단 토큰을 세운다. 시험에서는 끈다.
     var installsSignalHandlers: Bool
     /// NFS 모듈의 전역 설정(소켓 공장·경로 검사)을 이 실행 동안 바꾼다. 전역이라 시험에서는 끈다.
+    var independentScheduler: (any CLIIndependentScheduler)? = DispatchCLIScheduler()
     var configuresNFSGlobals: Bool
 
     static var live: CLIRuntime {
