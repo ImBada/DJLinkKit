@@ -304,22 +304,21 @@ public final class Announcer {
     private let iface: NetworkInterfaceInfo
     /// Logger instance for diagnostic output
     private let logger: any Logger
-    /// Callback invoked when the full startup protocol completes
-    private var onStartupComplete: (@DJLinkActor () -> Void)?
+    /// 시작 절차가 끝나거나 번호 정책이 거부할 때 함께 풀 ready 대기자들.
+    private var startupWaiters: [CheckedContinuation<Void, Never>] = []
     /// CLI 안전 정책이 거부한 번호. 기본 정책 nil에서는 항상 nil이다.
     public private(set) var rejectedDeviceId: DeviceID?
-    private var policyReadyWaiters: [CheckedContinuation<Void, Never>] = []
 
-    private func finishPolicyWaiters() {
-        let waiters = policyReadyWaiters
-        policyReadyWaiters = []
+    private func finishStartupWaiters() {
+        let waiters = startupWaiters
+        startupWaiters.removeAll()
         for waiter in waiters { waiter.resume() }
     }
 
     private func reject(_ id: DeviceID) {
         rejectedDeviceId = id
         stop()
-        finishPolicyWaiters()
+        finishStartupWaiters()
         onDeviceIdRejected?(id)
     }
 
@@ -365,7 +364,7 @@ public final class Announcer {
     /// Returns a promise that resolves when the startup protocol completes.
     /// Resolves immediately if fullStartup is disabled.
     ///
-    /// 원본 getter처럼 부를 때마다 기다리는 쪽을 새로 걸고 앞의 것을 덮어쓴다(마지막 것만 풀린다).
+    /// PLAN §9: 반복해서 읽어도 앞 ready 대기자를 덮어쓰지 않는다.
     public var ready: Void {
         get async {
             if rejectedDeviceId != nil { return }
@@ -376,11 +375,7 @@ public final class Announcer {
                 return
             }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                if allowsDeviceId != nil {
-                    policyReadyWaiters.append(continuation)
-                } else {
-                    onStartupComplete = { continuation.resume() }
-                }
+                startupWaiters.append(continuation)
             }
         }
     }
@@ -543,9 +538,7 @@ public final class Announcer {
         case .keepAlive:
             // Transition to keep-alive mode
             try startKeepAlive()
-            finishPolicyWaiters()
-            onStartupComplete?()
-            onStartupComplete = nil
+            finishStartupWaiters()
             return
         }
 
