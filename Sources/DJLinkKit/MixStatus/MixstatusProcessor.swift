@@ -73,7 +73,9 @@ extension MixstatusConfig {
         if let mode = config.mode { self.mode = mode }
         if let timeBetweenSets = config.timeBetweenSets { self.timeBetweenSets = timeBetweenSets }
         if let useOnAirStatus = config.useOnAirStatus { self.useOnAirStatus = useOnAirStatus }
-        if let allowedInterruptBeats = config.allowedInterruptBeats { self.allowedInterruptBeats = allowedInterruptBeats }
+        if let allowedInterruptBeats = config.allowedInterruptBeats {
+            self.allowedInterruptBeats = allowedInterruptBeats
+        }
         if let beatsUntilReported = config.beatsUntilReported { self.beatsUntilReported = beatsUntilReported }
     }
 }
@@ -288,6 +290,12 @@ public final class MixstatusProcessor: EventEmitting {
             return
         }
 
+        // PLAN §9: 원본은 이 취소가 중복 판정 뒤에 있어, 같은 곡을 다시 틀면 재생 중에 setEnded가 났다.
+        // 중복이어도 데크가 다시 라이브로 돌아왔으므로 세트 종료 대기는 취소한다.
+        if let cancelSetEnding {
+            cancelSetEnding()
+        }
+
         // Suppress duplicate nowPlaying for the same track on the same deck. This
         // can happen when a DJ cues mid-track and resumes (Cued/Loading/Ended are
         // all stoppingStates that drop the deck from livePlayers, so the next play
@@ -300,10 +308,6 @@ public final class MixstatusProcessor: EventEmitting {
         if !isSetActive {
             isSetActive = true
             emitter.emit(.setStarted, ())
-        }
-
-        if let cancelSetEnding {
-            cancelSetEnding()
         }
 
         livePlayers.insert(deviceId)
