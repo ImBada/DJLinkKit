@@ -1,4 +1,5 @@
 import DJLinkKit
+import Dispatch
 import Foundation
 import Synchronization
 import Testing
@@ -39,9 +40,11 @@ final class ManualCLISignalSource: CLISignalSource {
     func emit(_ count: UInt = 1) { handler(count) }
 }
 
-private struct InterruptingFileWriter: CLIFileWriter {
+private final class InterruptingFileWriter: CLIFileWriter {
     let abort: CLIAbort
-    let publications: Mutex<Int>
+    let publications = Mutex<Int>(0)
+
+    init(abort: CLIAbort) { self.abort = abort }
 
     func fileExists(atPath path: String) -> Bool { false }
     func createDirectory(atPath path: String) throws {}
@@ -76,6 +79,46 @@ struct CLIIndependentAbortTests {
         #expect(exits.withLock { $0 } == [130])
         handler.remove()
         #expect(sources.allSatisfy { $0.cancelled.withLock { $0 } })
+    }
+
+    @Test("signals and timeout force exit even while the DJLinkActor queue is blocked")
+    func blockedActor() {
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        DJLinkActor.queue.async {
+            entered.signal()
+            _ = release.wait(timeout: .now() + 5)
+        }
+        defer { release.signal() }
+        #expect(entered.wait(timeout: .now() + 5) == .success)
+        let abort = CLIAbort()
+        let clock = ManualCLIScheduler()
+        let exits = Mutex<[Int32]>([])
+        let watchdog = CLIWatchdog(
+            abort: abort, scheduler: clock,
+            terminate: { code in
+                exits.withLock { $0.append(code) }
+            })
+        watchdog.setDeadline(seconds: 15)
+        clock.fire(seconds: 15)
+        #expect(abort.isAborted)
+        clock.fire(seconds: 3)
+        #expect(exits.withLock { $0 } == [1])
+        watchdog.complete()
+        var sources: [ManualCLISignalSource] = []
+        let interrupted = CLIAbort()
+        let handler = CLISignalHandler(
+            abort: interrupted,
+            makeSource: { _, action in
+                let source = ManualCLISignalSource(action)
+                sources.append(source)
+                return source
+            }, terminate: { code in exits.withLock { $0.append(code) } })
+        sources[0].emit()
+        #expect(interrupted.reason == .interrupted)
+        sources[0].emit()
+        #expect(exits.withLock { $0 } == [1, 130])
+        handler.remove()
     }
 
     @Test("coalesced signals also trigger immediate exit")
@@ -138,14 +181,14 @@ struct CLIIndependentAbortTests {
     @DJLinkActor
     func noPublication() async throws {
         let h = CLIHarness()
-        let publications = Mutex<Int>(0)
+        let writer = InterruptingFileWriter(abort: h.abort)
         var runtime = h.makeRuntime()
-        runtime.files = InterruptingFileWriter(abort: h.abort, publications: publications)
+        runtime.files = writer
         let session = CLISession(runtime: runtime, output: h.output, abort: h.abort)
         await #expect(throws: CLIAborted.self) {
             try await session.publishFile([1, 2], path: "/fake/out")
         }
-        #expect(publications.withLock { $0 } == 0)
+        #expect(writer.publications.withLock { $0 } == 0)
         await session.cleanup()
     }
 }
