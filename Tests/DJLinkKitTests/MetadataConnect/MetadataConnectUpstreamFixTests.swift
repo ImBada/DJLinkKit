@@ -74,6 +74,25 @@ private func id3Tag(_ majorVersion: Int, _ frames: [[UInt8]]) -> [UInt8] {
     return header + body
 }
 
+/// APIC 프레임(v2.3): 인코딩 바이트, MIME(latin1)+0, 그림 종류, 설명(인코딩대로)+끝 표시, 이미지.
+private func apicFrame(encodingByte: UInt8, description: [UInt8], terminator: [UInt8], image: [UInt8]) -> [UInt8] {
+    let body = [UInt8].concat([
+        [encodingByte],
+        [UInt8]("image/jpeg\0", encoding: .latin1),
+        [3],
+        description,
+        terminator,
+        image,
+    ])
+    var header = [UInt8].alloc(10)
+    header.set([UInt8]("APIC", encoding: .ascii), 0)
+    header.writeUInt32BE(body.count, 4)
+    return header + body
+}
+
+/// 시험용 JPEG 머리말(첫 세 바이트만 실제 JPEG와 같다).
+private let fakeJpeg: [UInt8] = [0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]
+
 // FLAC
 
 private func vorbisComment(_ fields: [String]) -> [UInt8] {
@@ -336,6 +355,42 @@ struct MetadataConnectUpstreamFixTests {
             let metadata = try #require(try await MetadataConnect.extractFromFlac(MetadataConnect.createBufferReader(file, "flac")))
 
             #expect(metadata == MetadataConnect.ExtractedMetadata(artist: "Artist"))
+        }
+    }
+
+    @Suite("APIC 설명 문자열의 BOM")
+    struct ApicBom {
+        // 원본 metadata-connect/src/parsers/id3.ts:52 — BOM을 인코딩 바이트 바로 뒤(MIME 문자열 자리)에서 찾았다.
+        // BOM은 설명 문자열 앞에 있다. 설명은 읽은 뒤 버려지고 끝 표시 찾기는 바이트 순서와 상관없어서,
+        // 결과가 달라지는 입력은 없다. 아래 시험은 고치기 전후 모두 통과하는 확인용이다.
+        @Test("reads the picture after a UTF-16 description with a little-endian BOM")
+        func littleEndianBom() async throws {
+            let description: [UInt8] = [0xff, 0xfe, 0x43, 0x00, 0x6f, 0x00, 0x76, 0x00]
+            let file = id3Tag(3, [apicFrame(encodingByte: 1, description: description, terminator: [0, 0], image: fakeJpeg)])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.artwork == fakeJpeg)
+            #expect(metadata.artworkMimeType == .jpeg)
+        }
+
+        @Test("reads the picture after a UTF-16 description with a big-endian BOM")
+        func bigEndianBom() async throws {
+            let description: [UInt8] = [0xfe, 0xff, 0x00, 0x43, 0x00, 0x6f, 0x00, 0x76]
+            let file = id3Tag(3, [apicFrame(encodingByte: 1, description: description, terminator: [0, 0], image: fakeJpeg)])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.artwork == fakeJpeg)
+        }
+
+        @Test("reads the picture after an empty UTF-16 description that only has a BOM")
+        func bomOnlyDescription() async throws {
+            let file = id3Tag(3, [apicFrame(encodingByte: 1, description: [0xff, 0xfe], terminator: [0, 0], image: fakeJpeg)])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.artwork == fakeJpeg)
         }
     }
 }

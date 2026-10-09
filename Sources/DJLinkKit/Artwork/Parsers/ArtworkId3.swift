@@ -76,15 +76,6 @@ private func parseApicFrame(_ data: [UInt8]) throws -> ExtractedArtwork? {
     offset += 1
     var encoding = getTextEncoding(encodingByte)
 
-    if encodingByte == 1 && data.count > offset + 2 {
-        let bom = try data.readUInt16BE(offset)
-        if bom == 0xfeff {
-            encoding = .utf16be
-        } else if bom == 0xfffe {
-            encoding = .utf16le
-        }
-    }
-
     let mimeResult = readNullTerminatedString(data, offset, .latin1)
     let mimeType = mimeResult.value
     offset += mimeResult.bytesConsumed
@@ -97,6 +88,16 @@ private func parseApicFrame(_ data: [UInt8]) throws -> ExtractedArtwork? {
     offset += 1
     if offset >= data.count {
         return nil
+    }
+
+    // PLAN §9: 원본은 인코딩 바이트 바로 뒤(MIME 문자열)에서 BOM을 찾았다. BOM은 설명 문자열 앞에 있다.
+    if encodingByte == 1 && data.count > offset + 2 {
+        let bom = try data.readUInt16BE(offset)
+        if bom == 0xfeff {
+            encoding = .utf16be
+        } else if bom == 0xfffe {
+            encoding = .utf16le
+        }
     }
 
     let descResult = readNullTerminatedString(data, offset, encoding)

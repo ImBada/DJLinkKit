@@ -31,6 +31,34 @@ private func mp4WithCover(_ imageData: [UInt8], covrName: [UInt8]) -> [UInt8] {
     return ftyp + moov
 }
 
+/// APIC 프레임(v2.3): 인코딩 바이트, MIME(latin1)+0, 그림 종류, 설명(인코딩대로)+끝 표시, 이미지.
+private func apicFrame(encodingByte: UInt8, description: [UInt8], terminator: [UInt8], image: [UInt8]) -> [UInt8] {
+    let body = [UInt8].concat([
+        [encodingByte],
+        [UInt8]("image/jpeg\0", encoding: .latin1),
+        [3],
+        description,
+        terminator,
+        image,
+    ])
+    var header = [UInt8].alloc(10)
+    header.set([UInt8]("APIC", encoding: .ascii), 0)
+    header.writeUInt32BE(body.count, 4)
+    return header + body
+}
+
+private func id3Tag(_ majorVersion: Int, _ frames: [[UInt8]]) -> [UInt8] {
+    let body = [UInt8].concat(frames)
+    var header = [UInt8].alloc(10)
+    header.set([UInt8]("ID3", encoding: .ascii), 0)
+    header[3] = UInt8(majorVersion)
+    header[6] = UInt8((body.count >> 21) & 0x7f)
+    header[7] = UInt8((body.count >> 14) & 0x7f)
+    header[8] = UInt8((body.count >> 7) & 0x7f)
+    header[9] = UInt8(body.count & 0x7f)
+    return header + body
+}
+
 // ----------------------------------------------------------------- 시험
 
 @Suite("artwork 원본 버그 고침")
@@ -53,6 +81,32 @@ struct ArtworkUpstreamFixTests {
             let file = mp4WithCover(TINY_JPEG, covrName: [UInt8]("covr", encoding: .latin1))
 
             let result = try await extractFromMp4(createBufferReader(file, "m4a"))
+
+            #expect(try #require(result).data.bytesEqual(TINY_JPEG))
+        }
+    }
+
+    @Suite("APIC 설명 문자열의 BOM")
+    struct ApicBom {
+        // 원본 alphatheta-connect/src/artwork/parsers/id3.ts:80 — BOM을 인코딩 바이트 바로 뒤(MIME 문자열 자리)에서 찾았다.
+        // BOM은 설명 문자열 앞에 있다. 설명은 읽은 뒤 버려지고 끝 표시 찾기는 바이트 순서와 상관없어서,
+        // 결과가 달라지는 입력은 없다. 아래 시험은 고치기 전후 모두 통과하는 확인용이다.
+        @Test("reads the picture after a UTF-16 description with a little-endian BOM")
+        func littleEndianBom() async throws {
+            let description: [UInt8] = [0xff, 0xfe, 0x43, 0x00, 0x6f, 0x00, 0x76, 0x00]
+            let file = id3Tag(3, [apicFrame(encodingByte: 1, description: description, terminator: [0, 0], image: TINY_JPEG)])
+
+            let result = try await extractFromMp3(createBufferReader(file, "mp3"))
+
+            #expect(try #require(result).data.bytesEqual(TINY_JPEG))
+        }
+
+        @Test("reads the picture after a UTF-16 description with a big-endian BOM")
+        func bigEndianBom() async throws {
+            let description: [UInt8] = [0xfe, 0xff, 0x00, 0x43, 0x00, 0x6f, 0x00, 0x76]
+            let file = id3Tag(3, [apicFrame(encodingByte: 1, description: description, terminator: [0, 0], image: TINY_JPEG)])
+
+            let result = try await extractFromMp3(createBufferReader(file, "mp3"))
 
             #expect(try #require(result).data.bytesEqual(TINY_JPEG))
         }
