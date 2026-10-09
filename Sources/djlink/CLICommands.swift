@@ -307,7 +307,7 @@ extension CLISession {
             try lockInterface(for: device)
         }
         output.log(.await, "Fetching \(target.path) from device \(device.id) \(target.slot)")
-        try guardNFS(target.path)
+        try guardNFS(target.path, device: device)
         final class ProgressSteps {
             var lastStep = -1
         }

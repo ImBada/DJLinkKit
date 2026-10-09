@@ -699,6 +699,7 @@ struct CLISocketRegistryTests {
         let registry = CLISocketRegistry(inner: fake, abort: CLIAbort())
         _ = try registry.createUDPSocket(reuseAddr: true)
         try registry.bindInterface(name: "en7")
+        registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
         _ = try registry.createUDPSocket(reuseAddr: true)
         #expect(fake.udpSockets.map(\.boundInterfaces) == [["en7"], ["en7"]])
         #expect(registry.boundInterfaceName == "en7")
@@ -710,7 +711,10 @@ struct CLISocketRegistryTests {
         let registry = CLISocketRegistry(inner: fake, abort: CLIAbort())
         _ = try registry.createUDPSocket(reuseAddr: true)
         fake.udpSockets[0].boundInterfaceError = DJLinkError("IP_BOUND_IF failed")
-        #expect(throws: DJLinkError("IP_BOUND_IF failed")) { try registry.bindInterface(name: "en7") }
+        #expect(throws: DJLinkError("IP_BOUND_IF failed")) {
+            try registry.bindInterface(name: "en7")
+            registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
+        }
         fake.udpSockets[0].boundInterfaceError = nil
         await registry.closeAll()
         #expect(fake.udpSockets[0].isClosed)
@@ -721,6 +725,7 @@ struct CLISocketRegistryTests {
         let fake = FakeSocketFactory()
         let abort = CLIAbort()
         let registry = CLISocketRegistry(inner: fake, abort: abort)
+        registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
         let socket = try registry.createUDPSocket(reuseAddr: true)
         socket.send([1], port: 50000, address: "192.168.1.20")
         #expect(fake.udpSockets[0].sent.count == 1)
@@ -738,6 +743,7 @@ struct CLISocketRegistryTests {
         fake.makeTCPConnection = { tcp }
         let abort = CLIAbort()
         let registry = CLISocketRegistry(inner: fake, abort: abort)
+        registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
         let connection = try registry.createTCPConnection()
         try await connection.connect(port: 12523, host: "192.168.1.20")
         try await connection.write([1])

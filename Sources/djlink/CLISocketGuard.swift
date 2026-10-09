@@ -11,11 +11,13 @@ import Foundation
 final class GuardedUDPSocket: UDPSocket {
     let inner: any UDPSocket
     private let abort: CLIAbort
+    private let requireDestination: @DJLinkActor (String) throws -> Void
     private(set) var isCloseRequested = false
 
-    init(_ inner: any UDPSocket, abort: CLIAbort) {
+    init(_ inner: any UDPSocket, abort: CLIAbort, requireDestination: @escaping @DJLinkActor (String) throws -> Void) {
         self.inner = inner
         self.abort = abort
+        self.requireDestination = requireDestination
     }
 
     @discardableResult
@@ -53,6 +55,13 @@ final class GuardedUDPSocket: UDPSocket {
             Task { @DJLinkActor in callback(error, 0) }
             return
         }
+        do {
+            try requireDestination(address)
+            try abort.check()
+        } catch {
+            if let callback { callback(error, 0) }
+            return
+        }
         inner.send(msg, port: port, address: address, callback: callback)
     }
 
@@ -76,14 +85,19 @@ final class GuardedUDPSocket: UDPSocket {
 final class GuardedTCPConnection: TCPConnection {
     let inner: any TCPConnection
     private let abort: CLIAbort
+    private let requireDestination: @DJLinkActor (String) throws -> Void
 
-    init(_ inner: any TCPConnection, abort: CLIAbort) {
+    init(
+        _ inner: any TCPConnection, abort: CLIAbort, requireDestination: @escaping @DJLinkActor (String) throws -> Void
+    ) {
         self.inner = inner
         self.abort = abort
+        self.requireDestination = requireDestination
     }
 
     func connect(port: Int, host: String) async throws {
         try abort.check()
+        try requireDestination(host)
         try await inner.connect(port: port, host: host)
     }
 
@@ -114,6 +128,13 @@ final class CLISocketRegistry: SocketFactory {
     private var tcpConnections: [GuardedTCPConnection] = []
     /// 묶은 인터페이스 이름. 정해지면 이미 만든 UDP 소켓과 앞으로 만들 UDP 소켓이 모두 묶인다.
     private(set) var boundInterfaceName: String?
+    var scope: CLINetworkScope?
+
+    func requireDestination(_ address: String) throws {
+        guard let scope, let ip = try? Address4(address), ip.subnetMask == 32, scope.contains(ip) else {
+            throw CLIRuntimeError("목적지 \(address)는 선택한 인터페이스의 서브넷 밖이거나 범위가 정해지지 않았다")
+        }
+    }
 
     init(inner: any SocketFactory, abort: CLIAbort) {
         self.inner = inner
@@ -124,7 +145,12 @@ final class CLISocketRegistry: SocketFactory {
 
     func createUDPSocket(reuseAddr: Bool) throws -> any UDPSocket {
         try abort.check()
-        let socket = GuardedUDPSocket(try inner.createUDPSocket(reuseAddr: reuseAddr), abort: abort)
+        let socket = GuardedUDPSocket(
+            try inner.createUDPSocket(reuseAddr: reuseAddr), abort: abort,
+            requireDestination: { [weak self] in
+                guard let self else { throw CLIAborted() }
+                try self.requireDestination($0)
+            })
         // 장부에 먼저 올려 묶기가 실패해도 끝날 때 닫힌다.
         udpSockets.append(socket)
         if let boundInterfaceName { try socket.setBoundInterface(name: boundInterfaceName) }
@@ -133,7 +159,12 @@ final class CLISocketRegistry: SocketFactory {
 
     func createTCPConnection() throws -> any TCPConnection {
         try abort.check()
-        let connection = GuardedTCPConnection(try inner.createTCPConnection(), abort: abort)
+        let connection = GuardedTCPConnection(
+            try inner.createTCPConnection(), abort: abort,
+            requireDestination: { [weak self] in
+                guard let self else { throw CLIAborted() }
+                try self.requireDestination($0)
+            })
         tcpConnections.append(connection)
         if let boundInterfaceName { try connection.setRequiredInterface(name: boundInterfaceName) }
         return connection

@@ -10,14 +10,21 @@ struct CLITCPSafetyTests {
     @Test("both port query and DB connections require the selected interface")
     func bothConnections() async throws {
         let factory = FakeSocketFactory()
+        var connections: [FakeTCPConnection] = []
+        factory.makeTCPConnection = {
+            let connection = FakeTCPConnection()
+            connections.append(connection)
+            return connection
+        }
         let registry = CLISocketRegistry(inner: factory, abort: CLIAbort())
         try registry.bindInterface(name: "en7")
+        registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
         for port in [12523, 1051] {
             let connection = try registry.createTCPConnection()
             try await connection.connect(port: port, host: "192.168.1.20")
         }
-        #expect(factory.tcpConnections.count == 2)
-        #expect(factory.tcpConnections.allSatisfy { $0.requiredInterfaces == ["en7"] })
+        #expect(connections.count == 2)
+        #expect(connections.allSatisfy { $0.requiredInterfaces == ["en7"] })
         await registry.closeAll()
     }
 

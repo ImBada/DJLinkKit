@@ -77,6 +77,7 @@ final class CLISession {
         }
         try sockets.bindInterface(name: scope.name)
         self.scope = scope
+        sockets.scope = scope
         output.log(.info, "Interface \(scope.description): 소켓을 묶었고 이 서브넷의 장치하고만 통신한다")
     }
 
@@ -233,7 +234,8 @@ final class CLISession {
     // MARK: NFS 경로 검사
 
     /// 모든 NFS 읽기가 거치는 검사. 중단됐거나 읽지 않는 경로면 던진다.
-    func guardNFS(_ path: String) throws {
+    func guardNFS(_ path: String, device: Device? = nil) throws {
+        if let device { try sockets.requireDestination(device.ip.address) }
         try abort.check()
         if let violation = checkNeverRead(path) { throw CLIRuntimeError(violation.message) }
     }
@@ -242,7 +244,7 @@ final class CLISession {
         guard runtime.configuresNFSGlobals, !configuredNFS else { return }
         configuredNFS = true
         configureNFSDependencies(socketFactory: sockets, clock: runtime.clock)
-        configureNFSPathGuard { [self] _, _, path in try guardNFS(path) }
+        configureNFSPathGuard { [self] device, _, path in try guardNFS(path, device: device) }
     }
 
     private func guardedNetworkDependencies() -> NetworkDependencies {
@@ -262,12 +264,12 @@ final class CLISession {
     func guardedDBDependencies() -> DBDependencies {
         DBDependencies(
             fetchFile: { [self] device, slot, path, progress, chunkSize in
-                try guardNFS(path)
+                try guardNFS(path, device: device)
                 return try await runtime.nfs.fetchFile(
                     device: device, slot: slot, path: path, onProgress: progress, chunkSize: chunkSize)
             },
             extractArtworkFromDevice: { [self] device, slot, path, logger in
-                try guardNFS(path)
+                try guardNFS(path, device: device)
                 return try await DJLinkKit.extractArtworkFromDevice(
                     device, slot, path, logger, source: CLIGuardedArtworkSource(session: self))
             })
@@ -276,7 +278,7 @@ final class CLISession {
     func guardedLocalDBDependencies() -> LocalDBDependencies {
         LocalDBDependencies(
             fetchFile: { [self] options in
-                try guardNFS(options.path)
+                try guardNFS(options.path, device: options.device)
                 var onProgress: (@DJLinkActor (FetchProgress) -> Void)?
                 if let callback = options.onProgress {
                     onProgress = { callback(LocalDBFetchProgress(read: $0.read, total: $0.total)) }
@@ -338,13 +340,13 @@ struct CLIGuardedArtworkSource: ArtworkNFSFileSource {
 
     func fetchFileRange(device: Device, slot: MediaSlot, path: String, offset: Int, length: Int) async throws -> [UInt8]
     {
-        try await session.guardNFS(path)
+        try await session.guardNFS(path, device: device)
         return try await session.runtime.nfs.fetchFileRange(
             device: device, slot: slot, path: path, offset: offset, length: length)
     }
 
     func getFileInfo(device: Device, slot: MediaSlot, path: String) async throws -> ArtworkNFSFileInfo {
-        try await session.guardNFS(path)
+        try await session.guardNFS(path, device: device)
         return ArtworkNFSFileInfo(size: try await session.runtime.nfs.fileSize(device: device, slot: slot, path: path))
     }
 }

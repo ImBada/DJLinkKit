@@ -30,6 +30,7 @@
 - CLI 안전을 위한 추가(기본값은 원본 동작): 아래 인자를 주지 않으면 동작이 원본과 같다. `djlink`만 쓴다.
   - `UDPSocket.setBoundInterface(name:)`: 소켓을 인터페이스 하나에 묶는다(macOS `IP_BOUND_IF`). 부르지 않으면 묶지 않는다. 기본 구현은 던진다(지원하지 않는 소켓이 조용히 넘어가지 않게). `BSDUDPSocket`은 `if_nametoindex`와 `setsockopt`로 구현했고, 두 호출은 `bindSocketToInterface(fd:name:nameToIndex:setsockopt:)`로 바꿔 넣어 시험한다. `FakeUDPSocket`은 호출을 기록한다.
   - `NetworkConfig.allowsDeviceId`·`Announcer(allowsDeviceId:)`: 허용하지 않는 가상 CDJ 번호로는 announce하지 않는다. 처음 번호가 허용되지 않으면 `start()`가 던지고, 충돌 뒤 다시 고른 번호가 허용되지 않으면 그 번호로 보내기 전에 announcer를 멈추고 `onDeviceIdRejected`를 한 번 부른다(번호는 바꾸지 않는다).
+  - CLI 소켓 경계는 선택한 서브넷 안의 IPv4 목적지만 허용한다(서브넷 브로드캐스트 포함). 범위 미확정·호스트 이름·범위 밖 주소는 UDP 송신과 TCP 연결 전에 거부한다. NFS 경로 훅도 장치 IP를 검사하므로 watch에서 뒤늦게 발견된 범위 밖 장치에 질의할 수 없다.
   - `NetworkConfig.announceTargetFilter`·`Announcer(announceTargetFilter:)`: announcer가 패킷을 보낼 장치를 고른다. 없으면 발견한 모든 장치다.
 
 ## 3단계 (remotedb·NFS)
