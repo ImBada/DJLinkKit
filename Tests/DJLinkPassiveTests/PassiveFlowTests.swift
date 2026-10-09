@@ -194,6 +194,8 @@ struct PassiveFlowTests {
         adapter.on(.beat) { _ in laterBeats += 1 }
         var malformed = [UInt8](repeating: 0, count: 0x21)
         malformed.replaceSubrange(0..<10, with: PROLINK_HEADER)
+        // PLAN §9: 위치 파서가 종류 바이트(0x0b)를 보게 고쳐서, 해석 오류 경로를 타려면 위치 패킷 종류여야 한다.
+        malformed[10] = 0x0b
         try adapter.start()
         backend.packet?(frame(malformed, port: BEAT_PORT), false)
         #expect(errors.count == 1 && errors.first is BufferRangeError)
@@ -307,6 +309,7 @@ struct PassiveFlowTests {
         emitter.on(.position) { seen.append($0) }
         var payload = [UInt8](repeating: 0, count: 0x34)
         payload.replaceSubrange(0..<10, with: PROLINK_HEADER)
+        payload[0x0a] = 0x0b
         payload[0x21] = 1
         payload.writeUInt16BE(0x0c, 0x22)
         payload.writeUInt32BE(180, 0x24)

@@ -75,7 +75,8 @@ public func mediaSlotFromPacket(_ packet: [UInt8]) throws -> MediaSlotInfo? {
         return nil
     }
 
-    let name = packet
+    let name =
+        packet
         .subarray(0x2c, 0x2c + 40)
         .toString()
         .replacingOccurrences(of: "\0", with: "")
@@ -137,6 +138,11 @@ private func calcPitch(_ pitch: [UInt8]) throws -> Double {
 /// 원본처럼 0x21~0x23 길이 패킷은 `readUInt16BE(0x22)`에서 RangeError를 던진다.
 public func positionFromPacket(_ packet: [UInt8]) throws -> CDJStatus.PositionState? {
     if packet.indexOf(PROLINK_HEADER) != 0 {
+        return nil
+    }
+
+    // PLAN §9: 같은 포트의 비트 패킷(0x28)을 위치로 읽지 않는다.
+    if packet.at(0x0a) != 0x0b {
         return nil
     }
 
@@ -250,7 +256,8 @@ public func mixerStateFromPacket(_ packet: [UInt8]) -> CDJStatus.MixerState? {
         return nil
     }
 
-    let deviceName = packet
+    let deviceName =
+        packet
         .subarray(11, 30)
         .toString()
         .replacingOccurrences(of: "\0", with: "")
@@ -313,10 +320,11 @@ public func vuFromPacket(_ packet: [UInt8]) -> CDJStatus.VUState? {
         for i in 0..<15 {
             let frameOffset = chOffset + i * 4
             // 길이를 584 이상으로 확인했으므로 읽기는 실패하지 않는다.
-            frames.append(CDJStatus.VUFrame(
-                left: (try? packet.readUInt16BE(frameOffset)) ?? 0,
-                right: (try? packet.readUInt16BE(frameOffset + 2)) ?? 0
-            ))
+            frames.append(
+                CDJStatus.VUFrame(
+                    left: (try? packet.readUInt16BE(frameOffset)) ?? 0,
+                    right: (try? packet.readUInt16BE(frameOffset + 2)) ?? 0
+                ))
         }
         channels[ch] = frames
     }
