@@ -27,12 +27,12 @@ private final class FlowPcapBackend: PcapBackend {
     func close() { closeCount += 1 }
 }
 @DJLinkActor
-private final class FlowLocalDBAdapter: PassiveLocalDBAdapter {
-    let type: PassiveLocalDBType
+private final class FlowLocalDBAdapter: DatabaseAdapter {
+    let type: DatabaseType
     var closes = 0
-    init(_ type: PassiveLocalDBType) { self.type = type }
-    func findTrack(id: Int) throws -> Track? { nil }
-    func findPlaylist(playlistId: Int?) throws -> PassiveLocalDBPlaylistQueryResult {
+    init(_ type: DatabaseType) { self.type = type }
+    func findTrack(_ id: Int) throws -> Track? { nil }
+    func findPlaylist(_ playlistId: Int?) throws -> PlaylistQueryResult {
         .init(folders: [], playlists: [], trackEntries: [])
     }
     func close() { closes += 1 }
@@ -42,19 +42,19 @@ private final class FlowLocalDBBackend: PassiveLocalDBBackend {
     var adapters: [FlowLocalDBAdapter] = []
     var hydrated: [[UInt8]] = []
     var tempFiles: [String] = []
-    func makeMetadataORM() throws -> any PassiveLocalDBAdapter {
+    func makeMetadataORM() throws -> any DatabaseAdapter {
         let adapter = FlowLocalDBAdapter(.pdb)
         adapters.append(adapter)
         return adapter
     }
     func hydrateDatabase(
-        orm: any PassiveLocalDBAdapter, pdbData: [UInt8], span: TelemetrySpan,
+        orm: any DatabaseAdapter, pdbData: [UInt8], span: TelemetrySpan,
         onProgress: @escaping @DJLinkActor (PassiveLocalDBHydrationProgress) -> Void
     ) async throws {
         hydrated.append(pdbData)
         onProgress(.init(table: "tracks", total: 1, complete: 1))
     }
-    func makeOneLibraryAdapter(tempFile: String) throws -> any PassiveLocalDBAdapter {
+    func makeOneLibraryAdapter(tempFile: String) throws -> any DatabaseAdapter {
         tempFiles.append(tempFile)
         let adapter = FlowLocalDBAdapter(.oneLibrary)
         adapters.append(adapter)
@@ -372,6 +372,36 @@ struct PassiveFlowTests {
         localdb.stop()
         status.emitter.emit(.mediaSlot, media())
         #expect(localdb.getAllCachedMedia().isEmpty)
+    }
+    @Test("preload prepares both slot lookups before loaders can change cached media")
+    func preloadOrder() async throws {
+        let adapter = PcapAdapter(config: .init(iface: "en0"), backend: FlowPcapBackend())
+        let manager = PassiveDeviceManager(adapter, clock: TestClock())
+        let status = PassiveStatusEmitter(adapter)
+        adapter.emitter.emit(
+            .announce, .init(packet: announce(1), info: .init(payload: [], srcAddr: "10.0.0.1")))
+        let backend = FlowLocalDBBackend()
+        var slots: [MediaSlot] = []
+        let localdb = PassiveLocalDatabase(
+            manager, status, preference: .pdb, backend: backend,
+            fileSystem: FlowLocalDBFileSystem(),
+            fetcher: { _, slot, _, _, _ in
+                slots.append(slot)
+                // 로더가 시작된 뒤 들어온 방송은 preload에서 이미 선택한 무미디어 경로를 바꾸지 않는다.
+                status.emitter.emit(.mediaSlot, media(1, .usb, type: .unanalyzed))
+                status.emitter.emit(.mediaSlot, media(1, .sd, type: .unanalyzed))
+                return [1, 2, 3]
+            })
+        try await localdb.preload()
+        #expect(slots.count == 2 && slots.contains(.usb) && slots.contains(.sd))
+        #expect(backend.hydrated == [[1, 2, 3], [1, 2, 3]])
+        let db: (any DatabaseAdapter)? = await localdb.getWithoutMedia(mockDevice(), .usb)
+        #expect(db === backend.adapters.first)
+        let playlist: PlaylistQueryResult? = try db?.findPlaylist(nil)
+        #expect(playlist == PlaylistQueryResult())
+        localdb.stop()
+        status.stop()
+        manager.stop()
     }
     @Test("automatic database preference opens OneLibrary temp file and cleans it on stop")
     func oneLibrary() async throws {

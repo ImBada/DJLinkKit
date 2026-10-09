@@ -4,10 +4,10 @@ public struct PassiveNetworkConfig: Equatable, Sendable {
     public var iface: String
     public var bufferSize: Int?
     public var deviceTimeout: Double?
-    public var databasePreference: PassiveLocalDBPreference?
+    public var databasePreference: DatabasePreference?
     public init(
         iface: String, bufferSize: Int? = nil, deviceTimeout: Double? = nil,
-        databasePreference: PassiveLocalDBPreference? = nil
+        databasePreference: DatabasePreference? = nil
     ) {
         self.iface = iface
         self.bufferSize = bufferSize

@@ -2,26 +2,6 @@ import CryptoKit
 import DJLinkKit
 import Foundation
 
-/// 4단계의 DatabasePreference·DatabaseType에 연결할 seam.
-public enum PassiveLocalDBPreference: String, Sendable { case auto, oneLibrary, pdb }
-public enum PassiveLocalDBType: String, Sendable { case oneLibrary, pdb }
-public struct PassiveLocalDBPlaylistQueryResult: Equatable, Sendable {
-    public var folders: [Playlist]
-    public var playlists: [Playlist]
-    public var trackEntries: [PlaylistEntryWithFKs]
-    public init(folders: [Playlist], playlists: [Playlist], trackEntries: [PlaylistEntryWithFKs]) {
-        self.folders = folders
-        self.playlists = playlists
-        self.trackEntries = trackEntries
-    }
-}
-@DJLinkActor
-public protocol PassiveLocalDBAdapter: AnyObject {
-    var type: PassiveLocalDBType { get }
-    func findTrack(id: Int) throws -> Track?
-    func findPlaylist(playlistId: Int?) throws -> PassiveLocalDBPlaylistQueryResult
-    func close()
-}
 public struct PassiveLocalDBHydrationProgress: Equatable, Sendable {
     public var table: String
     public var total: Int
@@ -32,14 +12,14 @@ public struct PassiveLocalDBHydrationProgress: Equatable, Sendable {
         self.complete = complete
     }
 }
-/// 실제 MetadataORM·hydrator·OneLibraryAdapter만 4단계 뒤에 둔다.
+/// 공용 DatabaseAdapter를 기준으로 실제 구현과 시험용 백엔드를 주입한다.
 @DJLinkActor
 public protocol PassiveLocalDBBackend: AnyObject {
-    func makeMetadataORM() throws -> any PassiveLocalDBAdapter
+    func makeMetadataORM() throws -> any DatabaseAdapter
     func hydrateDatabase(
-        orm: any PassiveLocalDBAdapter, pdbData: [UInt8], span: TelemetrySpan,
+        orm: any DatabaseAdapter, pdbData: [UInt8], span: TelemetrySpan,
         onProgress: @escaping @DJLinkActor (PassiveLocalDBHydrationProgress) -> Void) async throws
-    func makeOneLibraryAdapter(tempFile: String) throws -> any PassiveLocalDBAdapter
+    func makeOneLibraryAdapter(tempFile: String) throws -> any DatabaseAdapter
 }
 public typealias PassiveLocalDBFileFetcher =
     @DJLinkActor (Device, MediaSlot, String, TelemetrySpan, @escaping @DJLinkActor (FetchProgress) -> Void) async throws
@@ -80,7 +60,7 @@ public struct PassiveLocalDBHydrationDoneOpts: Sendable {
 private struct DatabaseItem {
     var id: String
     var media: MediaSlotInfo
-    var adapter: any PassiveLocalDBAdapter
+    var adapter: any DatabaseAdapter
     var tempFile: String?
 }
 func getMediaId(_ info: MediaSlotInfo) -> String {
@@ -109,7 +89,7 @@ public final class PassiveLocalDatabase: EventEmitting {
     private var dbs: [DatabaseItem] = []
     private var mediaCache: [String: MediaSlotInfo] = [:]
     private var mediaOrder: [String] = []
-    public var preference: PassiveLocalDBPreference
+    public var preference: DatabasePreference
     private let backend: (any PassiveLocalDBBackend)?
     private let fetcher: PassiveLocalDBFileFetcher
     private let fileSystem: any PassiveLocalDBFileSystem
@@ -119,7 +99,7 @@ public final class PassiveLocalDatabase: EventEmitting {
     private var mediaSubscription: EventSubscription?
     public init(
         _ deviceManager: PassiveDeviceManager, _ statusEmitter: PassiveStatusEmitter,
-        preference: PassiveLocalDBPreference = .auto, backend: (any PassiveLocalDBBackend)? = nil,
+        preference: DatabasePreference = .auto, backend: (any PassiveLocalDBBackend)? = nil,
         platform: String = PassivePlatform.current, clock: any DJLinkClock = SystemClock.shared,
         fileSystem: any PassiveLocalDBFileSystem = PassiveLocalDBSystemFileSystem(),
         fetcher: @escaping PassiveLocalDBFileFetcher = { device, slot, path, span, progress in
@@ -185,7 +165,7 @@ public final class PassiveLocalDatabase: EventEmitting {
         return backend
     }
     private func tryLoadOneLibrary(_ device: Device, _ slot: MediaSlot, _ tx: TelemetrySpan) async -> (
-        adapter: any PassiveLocalDBAdapter, tempFile: String
+        adapter: any DatabaseAdapter, tempFile: String
     )? {
         do {
             let data = try await fetchFileWithFallback(device, slot, "PIONEER/rekordbox/exportLibrary.db", tx)
@@ -198,7 +178,7 @@ public final class PassiveLocalDatabase: EventEmitting {
         } catch { return nil }
     }
     private func loadPdbDatabase(_ device: Device, _ slot: MediaSlot, _ tx: TelemetrySpan) async throws
-        -> any PassiveLocalDBAdapter
+        -> any DatabaseAdapter
     {
         let pdbData = try await fetchFileWithFallback(device, slot, "PIONEER/rekordbox/export.pdb", tx)
         let dbCreateTx = tx.startChild(SpanContext(op: "setupDatabase"))
@@ -217,7 +197,7 @@ public final class PassiveLocalDatabase: EventEmitting {
         tx.setTag("slot", getSlotName(media.slot) ?? "undefined")
         tx.setData("numTracks", String(media.trackCount))
         tx.setTag("preference", preference.rawValue)
-        let adapter: any PassiveLocalDBAdapter
+        let adapter: any DatabaseAdapter
         var tempFile: String?
         if preference == .pdb {
             adapter = try await loadPdbDatabase(device, slot, tx)
@@ -243,47 +223,62 @@ public final class PassiveLocalDatabase: EventEmitting {
         tx.finish()
         return db
     }
-    public func get(_ deviceId: DeviceID, _ slot: MediaSlot) async throws -> (any PassiveLocalDBAdapter)? {
+    private typealias DatabaseLoader = @DJLinkActor () async throws -> (any DatabaseAdapter)?
+
+    public func get(_ deviceId: DeviceID, _ slot: MediaSlot) async throws -> (any DatabaseAdapter)? {
+        try await prepareGet(deviceId, slot)()
+    }
+    private func prepareGet(_ deviceId: DeviceID, _ slot: MediaSlot) -> DatabaseLoader {
         let cachedMedia = getCachedMedia(deviceId, slot)
-        guard let device = deviceManager.devices[deviceId] else { return nil }
-        if let cachedMedia { return try await getWithMedia(device, slot, cachedMedia) }
-        return await getWithoutMedia(device, slot)
+        guard let device = deviceManager.devices[deviceId] else { return { nil } }
+        if let cachedMedia { return prepareGetWithMedia(device, slot, cachedMedia) }
+        return prepareGetWithoutMedia(device, slot)
     }
     public func getWithMedia(_ device: Device, _ slot: MediaSlot, _ media: MediaSlotInfo) async throws -> (
-        any PassiveLocalDBAdapter
+        any DatabaseAdapter
     )? {
+        try await prepareGetWithMedia(device, slot, media)()
+    }
+    private func prepareGetWithMedia(_ device: Device, _ slot: MediaSlot, _ media: MediaSlotInfo) -> DatabaseLoader {
         let lockKey = "\(device.id)-\(slot.rawValue)"
         let lock = slotLocks[lockKey] ?? AsyncMutex()
         slotLocks[lockKey] = lock
-        guard eligible(device), media.tracksType == .rb else { return nil }
+        guard eligible(device), media.tracksType == .rb else { return { nil } }
         let id = getMediaId(media)
-        let db = try await lock.runExclusive {
-            if let cached = dbs.first(where: { $0.id == id }) { return cached }
-            return try await hydrateDatabase(device, slot, media)
-        }
-        return db.adapter
-    }
-    public func getWithoutMedia(_ device: Device, _ slot: MediaSlot) async -> (any PassiveLocalDBAdapter)? {
-        let lockKey = "\(device.id)-\(slot.rawValue)-nomedia"
-        let lock = slotLocks[lockKey] ?? AsyncMutex()
-        slotLocks[lockKey] = lock
-        guard eligible(device) else { return nil }
-        if let existing = dbs.first(where: { $0.media.deviceId == device.id && $0.media.slot == slot }) {
-            return existing.adapter
-        }
-        do {
+        return { [self] in
             let db = try await lock.runExclusive {
-                if let cached = dbs.first(where: { $0.media.deviceId == device.id && $0.media.slot == slot }) {
-                    return cached
-                }
-                let media = MediaSlotInfo(
-                    deviceId: device.id, slot: slot, name: "Unknown Media", color: .default,
-                    createdDate: Date(timeIntervalSince1970: 0), freeBytes: 0, totalBytes: 0, tracksType: .rb,
-                    trackCount: 0, playlistCount: 0, hasSettings: false)
+                if let cached = dbs.first(where: { $0.id == id }) { return cached }
                 return try await hydrateDatabase(device, slot, media)
             }
             return db.adapter
-        } catch { return nil }
+        }
+    }
+    public func getWithoutMedia(_ device: Device, _ slot: MediaSlot) async -> (any DatabaseAdapter)? {
+        try? await prepareGetWithoutMedia(device, slot)()
+    }
+    private func prepareGetWithoutMedia(_ device: Device, _ slot: MediaSlot) -> DatabaseLoader {
+        let lockKey = "\(device.id)-\(slot.rawValue)-nomedia"
+        let lock = slotLocks[lockKey] ?? AsyncMutex()
+        slotLocks[lockKey] = lock
+        guard eligible(device) else { return { nil } }
+        if let existing = dbs.first(where: { $0.media.deviceId == device.id && $0.media.slot == slot }) {
+            return { existing.adapter }
+        }
+        return { [self] in
+            do {
+                let db = try await lock.runExclusive {
+                    if let cached = dbs.first(where: { $0.media.deviceId == device.id && $0.media.slot == slot }) {
+                        return cached
+                    }
+                    let media = MediaSlotInfo(
+                        deviceId: device.id, slot: slot, name: "Unknown Media", color: .default,
+                        createdDate: Date(timeIntervalSince1970: 0), freeBytes: 0, totalBytes: 0, tracksType: .rb,
+                        trackCount: 0, playlistCount: 0, hasSettings: false)
+                    return try await hydrateDatabase(device, slot, media)
+                }
+                return db.adapter
+            } catch { return nil }
+        }
     }
     private func eligible(_ device: Device) -> Bool {
         device.type == .cdj && device.id >= MIN_CDJ_DEVICE_ID && device.id <= MAX_CDJ_DEVICE_ID
@@ -301,9 +296,11 @@ public final class PassiveLocalDatabase: EventEmitting {
             state.remaining = devices.count * 2
             for device in devices {
                 for slot in [MediaSlot.usb, .sd] {
+                    // 원본 get의 동기 구간은 Task를 만들기 전에 장치 순서·USB→SD 순서로 처리한다.
+                    let loader = prepareGet(device.id, slot)
                     Task { @DJLinkActor in
                         do {
-                            _ = try await get(device.id, slot)
+                            _ = try await loader()
                             state.remaining -= 1
                             if !state.settled && state.remaining == 0 {
                                 state.settled = true
