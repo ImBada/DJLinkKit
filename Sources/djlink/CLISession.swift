@@ -273,7 +273,7 @@ final class CLISession {
             makeLocalDatabase: { [self] host, manager, statusEmitter, preference, clock in
                 LocalDatabase(
                     hostDevice: host, deviceManager: manager, statusEmitter: statusEmitter, preference: preference,
-                    dependencies: guardedLocalDBDependencies(), clock: clock)
+                    dependencies: guardedLocalDBDependencies(), clock: clock, throwsOnMediaQueryFailure: true)
             },
             makeDatabase: { [self] local, remote, manager, logger, host in
                 Database(

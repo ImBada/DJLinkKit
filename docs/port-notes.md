@@ -48,6 +48,8 @@
 
 ## 4단계 (localdb)
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): `LocalDatabase(throwsOnMediaQueryFailure: true)`는 미디어 슬롯 질의 실패를 nil 대신 원래 오류로 전달한다. 기본 false는 원본처럼 nil이다. CLI metadata는 이 옵션을 켜서 요청한 조회 실패를 종료 코드 1로 보고한다.
+
 - PDB·ANLZ는 kaitai `.ksy`(EPL) 대신 DJCrate의 MIT 리더를 고쳐 원본(kaitai 생성 코드)이 읽는 결과와 같게 만들었다. 트랙 문자열은 원본 entity-creators가 쓰는 11칸만 읽고(`dateAdded`=10, `analyzeDate`=15), 잘못된 짧은 문자열의 text는 건너뛴다(id·name 표에서는 빈 이름). 문자열 디코딩은 [kaitai-struct 0.11.0 런타임](https://github.com/kaitai-io/kaitai_struct_javascript_runtime/blob/v0.11.0/KaitaiStream.ts)의 `bytesToStr`와 같다.
 - 메모리 ORM은 better-sqlite3 대신 SQLCipher C API로 같은 스키마·질의를 쓴다. undefined 바인딩은 [better-sqlite3-multiple-ciphers 12.11.1](https://github.com/m4heshd/better-sqlite3-multiple-ciphers/blob/v12.11.1/src/util/data.cpp)처럼 NULL이다(id 없는 PDB 재생 목록 항목은 SQLite가 번호를 매긴다, 무효한 날짜는 NULL → `new Date(null)`처럼 epoch).
 - `LocalDBRow.int`: Int로 표현할 수 없는 NaN·무한대·범위 밖 실수는 nil(원본 JS number는 오류 없음).

@@ -80,6 +80,7 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
     private let statusEmitter: any LocalDBMediaSlotSource
     private let dependencies: LocalDBDependencies
     private let clock: any DJLinkClock
+    private let throwsOnMediaQueryFailure: Bool
     public let emitter = EventHub<LocalDatabase>()
     private var slotLocks: [String: AsyncMutex] = [:]
     private var dbs: [DatabaseItem] = []
@@ -88,17 +89,18 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
         hostDevice: Device, deviceManager: any LocalDBDeviceSource,
         statusEmitter: any LocalDBMediaSlotSource,
         preference: DatabasePreference = .auto, dependencies: LocalDBDependencies = .init(),
-        clock: any DJLinkClock = SystemClock.shared
+        clock: any DJLinkClock = SystemClock.shared, throwsOnMediaQueryFailure: Bool = false
     ) {
         self.init(
             hostDevice: DeviceReference(hostDevice), deviceManager: deviceManager, statusEmitter: statusEmitter,
-            preference: preference, dependencies: dependencies, clock: clock)
+            preference: preference, dependencies: dependencies, clock: clock,
+            throwsOnMediaQueryFailure: throwsOnMediaQueryFailure)
     }
     public init(
         hostDevice: DeviceReference, deviceManager: any LocalDBDeviceSource,
         statusEmitter: any LocalDBMediaSlotSource,
         preference: DatabasePreference = .auto, dependencies: LocalDBDependencies = .init(),
-        clock: any DJLinkClock = SystemClock.shared
+        clock: any DJLinkClock = SystemClock.shared, throwsOnMediaQueryFailure: Bool = false
     ) {
         self.hostDeviceRef = hostDevice
         self.deviceManager = deviceManager
@@ -106,6 +108,7 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
         self.preference = preference
         self.dependencies = dependencies
         self.clock = clock
+        self.throwsOnMediaQueryFailure = throwsOnMediaQueryFailure
         deviceManager.on("disconnected") { [self] device in handleDeviceRemoved(device) }
     }
     public func disconnectForDevice(_ device: Device) { handleDeviceRemoved(device) }
@@ -255,7 +258,11 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
         do {
             media = try await statusEmitter.queryMediaSlot(
                 hostDevice: hostDevice, device: device, slot: slot)
-        } catch { return nil }
+        } catch {
+            // CLI 안전을 위한 추가(기본값은 원본 동작). 실패를 데이터 없음과 구별한다.
+            if throwsOnMediaQueryFailure { throw error }
+            return nil
+        }
         guard media.tracksType == .rb else { return nil }
         let id = getMediaId(media)
         return try await lock.runExclusive {
