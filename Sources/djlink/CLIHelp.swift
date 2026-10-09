@@ -1,7 +1,8 @@
 // 도움말. 사용자에게 보이는 글이라 한국어로 쓴다.
 
 private let commonOptionsHelp = """
-      --iface NAME        쓸 네트워크 인터페이스(예: en7). 없으면 처음 보이는 장치로 정한다
+      --iface NAME        쓸 네트워크 인터페이스(예: en7). 소켓을 그 인터페이스에 묶고 그 서브넷의 장치하고만 통신한다.
+                          없으면 처음 보이는 장치의 인터페이스를 고르고, 그 뒤로는 같은 제한을 건다
       --vcdj-id N         가상 CDJ 번호(기본 7). 1~6은 --allow-player-id를 같이 줄 때만 허용
       --allow-player-id   1~6 번호를 일부러 쓸 때만 준다(실제 플레이어와 겹치면 위험하다)
       --verbose           라이브러리 debug·trace 로그도 표준 오류로 낸다
@@ -11,8 +12,12 @@ private let safetyHelp = """
     안전 규칙:
       - 공연이나 리허설 중인 네트워크에서 돌리지 않는다. 시험용 스위치에 장비 한두 대만 묶는다.
       - 같은 Mac에서 rekordbox·rekordboxAgent가 돌고 있으면 UDP 50000~50002를 잡지 않고 끝낸다.
-      - 가상 CDJ 번호 기본값은 7이다. 1~6은 --allow-player-id를 같이 줄 때만 쓴다.
+      - 가상 CDJ 번호 기본값은 7이다. 1~6은 --allow-player-id를 같이 줄 때만 쓴다. 번호가 겹쳐 1~6으로 옮겨 가야 하면 그 번호로 보내기 전에 멈추고 종료 코드 1로 끝난다.
+      - 소켓은 고른 인터페이스에만 묶고, 그 인터페이스 서브넷 밖의 장치에는 보내거나 연결하지 않는다.
+      - PIONEER/extracted, PIONEER/CDP, djprofile.nxs는 어떤 경로로도(메타데이터·파형·분석 조회 안의 NFS 읽기 포함) 읽지 않는다.
+      - Ctrl-C를 누르면 새 송신·파일 쓰기·NFS 요청을 만들지 않고 소켓을 닫는다.
       - 제어 명령은 --confirm "<장치 이름>"이 대상 장치 이름과 정확히 같을 때만 보낸다.
+      - play·pause는 실기로 확인하기 전까지 거부한다(--unverified-playstate를 줘도 1~4번 장치 가운데 패킷이 구별되는 번호만).
     """
 
 func helpText(_ subcommand: CLISubcommand?) -> String {
@@ -34,7 +39,8 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               passive     libpcap으로 패시브 모니터링(아무것도 보내지 않는다)
 
             `djlink <명령> --help`로 명령별 도움말을 본다.
-            끝나는 법: Ctrl-C. 종료 코드는 0 정상, 1 실행 실패, 2 사용법·안전 규칙 거부, 130 중단.
+            끝나는 법: Ctrl-C. 종료 코드는 0 정상, 1 실행 실패(제한 시간 초과 포함), 2 사용법·안전 규칙 거부, 130 중단(Ctrl-C).
+            watch·status·mixstatus·passive는 Ctrl-C로만 끝나므로 늘 130이다.
 
             \(safetyHelp)
             """
@@ -57,7 +63,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
 
             옵션:
             \(commonOptionsHelp)
-              --download-dir DIR  곡 파일을 받을 폴더(없으면 제목만 출력)
+              --download-dir DIR  곡 파일을 받을 폴더(없으면 제목만 출력). 파일 이름은 <장치>-<슬롯>-<곡 번호>-<원래 이름>이고, 이미 있으면 덮어쓰지 않고 건너뛴다
             """
     case .status:
         return """
@@ -73,7 +79,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
             """
     case .metadata:
         return """
-            사용법: djlink metadata --device N --slot usb|sd --track-id ID [공통 옵션]
+            사용법: djlink metadata --device N --slot usb|sd --track-id ID [--timeout SEC] [공통 옵션]
 
             remotedb/db로 곡 메타데이터·비트 그리드·파형·큐 요약을 출력한다. 곡 종류는 rekordbox(rb)다.
 
@@ -81,11 +87,14 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               --device N        곡이 있는 장치 번호
               --slot usb|sd     곡이 있는 슬롯
               --track-id ID     곡 번호
+              --timeout SEC     명령 전체 제한 시간(1~3600, 기본 \(defaultMetadataTimeoutSeconds)). 넘으면 정리하고 종료 코드 1
             \(commonOptionsHelp)
+
+            요청한 파형·분석 조회가 실패하면(데이터가 없는 것과 다르다) 나머지를 출력한 뒤 종료 코드 1로 끝난다.
             """
     case .fetch:
         return """
-            사용법: djlink fetch --device N --slot usb|sd --path PATH --out FILE [--join] [공통 옵션]
+            사용법: djlink fetch --device N --slot usb|sd --path PATH --out FILE [--join] [--timeout SEC] [공통 옵션]
 
             NFS로 장치의 파일 하나를 받아 FILE에 쓴다(예: PIONEER/rekordbox/export.pdb, exportLibrary.db, ANLZ).
             PIONEER/extracted, PIONEER/CDP, djprofile.nxs 경로는 거부한다. 이미 있는 FILE은 덮어쓰지 않는다.
@@ -97,6 +106,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               --path PATH       슬롯 안의 경로
               --out FILE        쓸 파일
               --join            가상 CDJ로 참여한 뒤 받는다
+              --timeout SEC     명령 전체 제한 시간(1~3600, 기본 \(defaultFetchTimeoutSeconds)). 넘으면 정리하고 종료 코드 1
             \(commonOptionsHelp)
             """
     case .mixstatus:
@@ -112,13 +122,16 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
         return """
             사용법:
               djlink control load  --device N --slot usb|sd|rb --track-id ID [--source-device M] [--track-type rb|unanalyzed] --confirm "<장치 이름>"
-              djlink control play  --device N --confirm "<장치 이름>"
-              djlink control pause --device N --confirm "<장치 이름>"
+              djlink control play  --device N --confirm "<장치 이름>" --unverified-playstate
+              djlink control pause --device N --confirm "<장치 이름>" --unverified-playstate
 
             공연 중인 장비를 움직이는 명령이다. --confirm이 대상 장치 이름(devices에 보이는 이름)과 정확히 같지 않으면 아무것도 보내지 않는다.
-            대상 장치를 확인하기 전에는 가상 CDJ로 참여하지 않는다. play·pause는 능동 연결의 재생 상태 패킷(0x00 재생, 0x01 정지)을 보낸다.
-            주의: 원본 makePlaystatePacket은 칸 번호(0~3)와 장치 번호를 그대로 견준다(칸 번호가 한 칸 어긋났을 수 있다).
-            1:1을 마치기 전에는 고치지 않으므로, 보낸 뒤 출력되는 after: 줄로 실제 장치가 움직였는지 확인한다.
+            대상 장치를 확인하기 전에는 가상 CDJ로 참여하지 않는다.
+            play·pause는 기본으로 거부한다(종료 코드 2). 원본 makePlaystatePacket이 칸 번호(0~3)를 장치 번호와 그대로 견주고
+            나머지 칸을 0으로 채우는데, 공개된 프로토콜 설명으로 0은 "재생 시작"이라 다른 덱이 움직이거나
+            pause가 play와 같은 패킷이 될 수 있기 때문이다(docs/PLAN.md §9). 실기로 확인하기 전에는 시험용 장비에서
+            위험을 알고 --unverified-playstate를 같이 줄 때만 보내며, 그때도 1~4번 장치 가운데 play와 pause가 서로 다른
+            패킷이 되는 번호만 허용한다. 보낸 뒤 출력되는 after: 줄로 실제 장치가 움직였는지 확인한다.
 
             옵션:
               --device N            명령을 받을 장치 번호
@@ -127,6 +140,8 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               --slot usb|sd|rb      load: 곡이 있는 슬롯
               --track-id ID         load: 곡 번호
               --track-type TYPE     load: rb(기본) 또는 unanalyzed
+              --unverified-playstate  play·pause: 확인하지 않은 재생 상태 패킷을 보내는 위험을 알고 있다는 표시
+              --timeout SEC         명령 전체 제한 시간(1~3600, 기본 \(defaultControlTimeoutSeconds)). 넘으면 정리하고 종료 코드 1
             \(commonOptionsHelp)
             """
     case .passive:

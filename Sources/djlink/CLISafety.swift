@@ -1,3 +1,4 @@
+import DJLinkControl
 import DJLinkKit
 import Darwin
 import Foundation
@@ -101,14 +102,16 @@ func checkNeverRead(_ path: String) -> CLISafetyViolation? {
         .filter { $0 != "." }
     if let first = components.first, first.count == 2, first.hasSuffix(":") { components.removeFirst() }
     let lowered = components.map { $0.lowercased() }
+    // `.PIONEER`처럼 앞에 `.`이 붙은 이름도 같은 폴더로 본다(로컬 DB 읽기가 `.PIONEER/...`를 먼저 시도한다).
+    let dotless = lowered.map { String($0.drop { $0 == "." }) }
     if lowered.contains("..") {
         return CLISafetyViolation(message: "경로에 상위 폴더(..)를 쓸 수 없다: \(path)")
     }
     if lowered.contains("djprofile.nxs") {
         return CLISafetyViolation(message: "djprofile.nxs는 읽지 않는다: \(path)")
     }
-    for index in lowered.indices where lowered[index] == "pioneer" && index + 1 < lowered.count {
-        let next = lowered[index + 1]
+    for index in dotless.indices where dotless[index] == "pioneer" && index + 1 < dotless.count {
+        let next = dotless[index + 1]
         if next == "extracted" || next == "cdp" {
             return CLISafetyViolation(message: "PIONEER/extracted·PIONEER/CDP는 읽지 않는다: \(path)")
         }
@@ -124,6 +127,37 @@ func checkControlConfirmation(device: Device, confirm: String) -> CLISafetyViola
         return CLISafetyViolation(
             message:
                 "--confirm \"\(confirm)\"이 장치 \(device.id)의 이름 \"\(device.name)\"과 같지 않다. 아무것도 보내지 않았다")
+    }
+    return nil
+}
+
+// MARK: - 재생 상태 패킷
+
+/// 능동(비-Stagehand) 연결의 `play`·`pause`가 쓰는 재생 상태 패킷은 원본 버그를 그대로 옮겼다(docs/PLAN.md §9).
+/// 칸 번호(0~3)를 `device.id`와 견주고 나머지 칸을 0으로 채운다. 공개된 프로토콜 설명으로 0은 "재생 시작"이라
+/// 장치 번호가 어긋나면 다른 덱이 움직일 수 있다. 실기로 확인하기 전에는 거부하고,
+/// 명시적인 위험 확인 플래그를 줘도 1~4번 장치만, 그리고 play와 pause가 서로 다른 패킷이 되는 번호만 허용한다.
+func checkPlayStateAllowed(deviceId: Int, unverifiedPlaystate: Bool) -> CLISafetyViolation? {
+    guard unverifiedPlaystate else {
+        return CLISafetyViolation(
+            message:
+                "play·pause는 실기로 확인하기 전까지 보내지 않는다: 원본 재생 상태 패킷이 칸 번호(0~3)를 장치 번호와 그대로 견주고 나머지 칸을 0(재생 시작)으로 채워, 다른 덱이 움직이거나 pause가 play와 같은 패킷이 될 수 있다(docs/PLAN.md §9). 위험을 알고 시험용 장비에서 확인하려면 --unverified-playstate를 같이 준다"
+        )
+    }
+    guard 1...4 ~= deviceId else {
+        return CLISafetyViolation(
+            message: "--unverified-playstate는 1~4번 장치에만 쓸 수 있다(대상 \(deviceId)번): 패킷에 칸이 없는 번호는 거부한다")
+    }
+    let device = { (id: Int) in
+        Device(name: VIRTUAL_CDJ_NAME, id: id, type: .cdj, macAddr: [0, 0, 0, 0, 0, 0], ip: try! Address4("10.0.0.1"))
+    }
+    let host = device(DEFAULT_VCDJ_ID)
+    let play = try? makePlaystatePacket(hostDevice: host, device: device(deviceId), playState: .playing)
+    let pause = try? makePlaystatePacket(hostDevice: host, device: device(deviceId), playState: .cued)
+    guard let play, let pause, play != pause else {
+        return CLISafetyViolation(
+            message:
+                "장치 \(deviceId)번은 원본 재생 상태 패킷에 칸이 없어 play와 pause가 같은 패킷(모든 칸 0 = 재생 시작)이 된다. 보내지 않는다")
     }
     return nil
 }

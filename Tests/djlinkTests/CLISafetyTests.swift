@@ -81,6 +81,7 @@ struct CLISafetyTests {
             "PIONEER/extracted", "PIONEER/extracted/a/b", "/PIONEER/extracted/a", "pioneer/EXTRACTED/x",
             "PIONEER/CDP", "PIONEER/cdp/file", "C:\\PIONEER\\CDP\\x", "./PIONEER//extracted", "PIONEER/djprofile.nxs",
             "djprofile.nxs", "/DJPROFILE.NXS", "a/b/djprofile.nxs", "PIONEER/rekordbox/../extracted", "../etc",
+            ".PIONEER/extracted/x", "./.PIONEER/CDP/a", "..PIONEER/extracted",
         ]
         for path in refused { #expect(checkNeverRead(path) != nil, "\(path)") }
         let allowed = [
@@ -89,6 +90,19 @@ struct CLISafetyTests {
             "/Contents/Artist/track.mp3", "PIONEER/extractedx", "PIONEER", "extracted",
         ]
         for path in allowed { #expect(checkNeverRead(path) == nil, "\(path)") }
+    }
+
+    @Test("play and pause are refused without the flag and allowed only where the packets differ")
+    func playStateRisk() throws {
+        for id in [1, 2, 3, 4, 7] {
+            let violation = try #require(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: false))
+            #expect(violation.message.contains("--unverified-playstate"))
+        }
+        // 플래그가 있어도 1~4번만, 그중 패킷이 구별되는 1~3번만 허용한다.
+        for id in [1, 2, 3] { #expect(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: true) == nil) }
+        for id in [0, 4, 5, 6, 7, 17, 32] {
+            #expect(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: true) != nil, "\(id)")
+        }
     }
 
     @Test("control needs the exact device name")

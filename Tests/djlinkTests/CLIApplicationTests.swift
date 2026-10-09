@@ -54,9 +54,12 @@ struct CLIApplicationTests {
         #expect(await app.run(["bogus"]) == 2)
         #expect(await app.run(["watch", "--vcdj-id", "3"]) == 2)
         #expect(await app.run(["control", "play", "--device", "1"]) == 2)
+        #expect(await app.run(["control", "play", "--device", "1", "--confirm", "CDJ-3000"]) == 2)
+        #expect(await app.run(["watch", "--iface", "-h"]) == 2)
         #expect(executor.commands.isEmpty)
         #expect(output.errorLines.contains { $0.contains("--allow-player-id") })
         #expect(output.errorLines.contains { $0.contains("--confirm") })
+        #expect(output.errorLines.contains { $0.contains("--unverified-playstate") })
     }
 
     @Test("rekordbox running stops every network command before it starts")
@@ -65,7 +68,7 @@ struct CLIApplicationTests {
             ["devices"], ["watch"], ["status"], ["mixstatus"], ["passive", "--iface", "en7"],
             ["metadata", "--device", "1", "--slot", "usb", "--track-id", "1"],
             ["fetch", "--device", "1", "--slot", "usb", "--path", "a", "--out", "o"],
-            ["control", "play", "--device", "1", "--confirm", "CDJ-3000"],
+            ["control", "load", "--device", "1", "--slot", "usb", "--track-id", "3", "--confirm", "CDJ-3000"],
         ]
         for arguments in commands {
             let (app, output, executor) = makeApplication(processes: ["launchd", "rekordboxAgent"])

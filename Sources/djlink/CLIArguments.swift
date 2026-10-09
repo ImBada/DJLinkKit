@@ -45,11 +45,18 @@ struct CLICommonOptions: Equatable, Sendable {
     var effectiveVcdjId: Int { vcdjId ?? DEFAULT_VCDJ_ID }
 }
 
+/// 명령마다 거는 전체 제한 시간(초)의 기본값. 넘으면 남은 작업과 소켓을 정리하고 종료 코드 1로 끝난다.
+let defaultMetadataTimeoutSeconds = 15
+let defaultFetchTimeoutSeconds = 300
+let defaultControlTimeoutSeconds = 15
+
 /// 장치 하나를 가리키는 곳(메타데이터·파일).
 struct CLITrackTarget: Equatable, Sendable {
     var deviceId: Int
     var slot: MediaSlot
     var trackId: Int
+    /// 명령 전체 제한 시간(초).
+    var timeoutSeconds = defaultMetadataTimeoutSeconds
 }
 
 struct CLIFetchTarget: Equatable, Sendable {
@@ -59,6 +66,8 @@ struct CLIFetchTarget: Equatable, Sendable {
     var out: String
     /// 가상 CDJ로 참여한 뒤 받는다. 기본은 참여하지 않고 듣기만 한다.
     var join: Bool
+    /// 명령 전체 제한 시간(초).
+    var timeoutSeconds = defaultFetchTimeoutSeconds
 }
 
 struct CLIControlRequest: Equatable, Sendable {
@@ -68,6 +77,10 @@ struct CLIControlRequest: Equatable, Sendable {
     var load: Load?
     /// 대상 장치 이름. 정확히 같아야 보낸다(docs/PLAN.md §11).
     var confirm: String
+    /// `play`·`pause`를 실기로 확인하기 전에 보내겠다는 명시적 위험 확인(`--unverified-playstate`).
+    var unverifiedPlaystate = false
+    /// 명령 전체 제한 시간(초).
+    var timeoutSeconds = defaultControlTimeoutSeconds
 
     struct Load: Equatable, Sendable {
         var sourceDeviceId: Int
@@ -111,6 +124,10 @@ private struct ParsedOptions {
 }
 
 private let commonValueOptions: Set<String> = ["iface", "vcdj-id"]
+/// 정수를 받는 옵션. 값이 `-5`처럼 음수여도 옵션으로 읽지 않고 값으로 받아 범위 오류를 낸다.
+private let numericValueOptions: Set<String> = [
+    "seconds", "position-interval-ms", "vcdj-id", "device", "source-device", "track-id", "timeout",
+]
 private let commonFlagOptions: Set<String> = ["allow-player-id", "verbose"]
 
 private func spec(for subcommand: CLISubcommand) -> OptionSpec {
@@ -123,22 +140,30 @@ private func spec(for subcommand: CLISubcommand) -> OptionSpec {
     case .status:
         OptionSpec(values: commonValueOptions.union(["position-interval-ms"]), flags: commonFlagOptions.union(["all"]))
     case .metadata:
-        OptionSpec(values: commonValueOptions.union(["device", "slot", "track-id"]), flags: commonFlagOptions)
+        OptionSpec(
+            values: commonValueOptions.union(["device", "slot", "track-id", "timeout"]), flags: commonFlagOptions)
     case .fetch:
         OptionSpec(
-            values: commonValueOptions.union(["device", "slot", "path", "out"]),
+            values: commonValueOptions.union(["device", "slot", "path", "out", "timeout"]),
             flags: commonFlagOptions.union(["join"]))
     case .mixstatus:
         OptionSpec(values: commonValueOptions, flags: commonFlagOptions)
     case .control:
         OptionSpec(
             values: commonValueOptions.union([
-                "device", "source-device", "slot", "track-id", "track-type", "confirm",
+                "device", "source-device", "slot", "track-id", "track-type", "confirm", "timeout",
             ]),
-            flags: commonFlagOptions, positionals: 1)
+            flags: commonFlagOptions.union(["unverified-playstate"]), positionals: 1)
     case .passive:
         OptionSpec(values: ["iface", "position-interval-ms"])
     }
+}
+
+/// 값 자리에 온 인자가 옵션처럼 보이는가. `-`로 시작하는 두 글자 이상은 옵션이다. 숫자 옵션에서만 음수 정수(`-5`)를 값으로 본다.
+private func looksLikeOption(_ argument: String, numeric: Bool) -> Bool {
+    guard argument.hasPrefix("-"), argument.count > 1 else { return false }
+    if numeric, argument.dropFirst().allSatisfy(\.isASCII), Int(argument) != nil { return false }
+    return true
 }
 
 /// `--name value`, `--name=value`, 불리언 `--flag`, 위치 인자를 나눈다.
@@ -165,8 +190,14 @@ private func tokenize(_ args: ArraySlice<String>, spec: OptionSpec, subcommand: 
                 }
                 parsed.flags.insert(name)
             } else if spec.values.contains(name) {
-                guard let value = inlineValue ?? iterator.next(), inlineValue != nil || !value.hasPrefix("--") else {
+                guard let value = inlineValue ?? iterator.next() else {
                     throw CLIUsageError("--\(name)에 값이 없다", subcommand: subcommand)
+                }
+                // 다음 인자가 옵션(`-h`·`--x`)이면 값으로 삼키지 않는다. 음수 숫자만 숫자 옵션에서 값으로 받는다.
+                if inlineValue == nil, looksLikeOption(value, numeric: numericValueOptions.contains(name)) {
+                    throw CLIUsageError(
+                        "--\(name)에 값이 없다(다음 인자 \(value)는 옵션으로 보인다. 값이 -로 시작하면 --\(name)=값 으로 준다)",
+                        subcommand: subcommand)
                 }
                 if parsed.values[name] != nil {
                     throw CLIUsageError("--\(name)을 두 번 줬다", subcommand: subcommand)
@@ -204,6 +235,13 @@ private func requireValue(
         throw CLIUsageError("--\(name)이 필요하다", subcommand: subcommand)
     }
     return value
+}
+
+private func parseTimeout(
+    _ parsed: ParsedOptions, default defaultSeconds: Int, subcommand: CLISubcommand
+) throws(CLIUsageError) -> Int {
+    guard let value = parsed.values["timeout"] else { return defaultSeconds }
+    return try parseInt("timeout", value, in: 1...3600, subcommand: subcommand)
 }
 
 /// `usb`·`sd`(·`rb`) 이름을 슬롯으로.
@@ -297,7 +335,9 @@ func parseArguments(_ arguments: [String]) throws(CLIUsageError) -> CLICommand {
         let trackId = try parseInt(
             "track-id", try requireValue(parsed, "track-id", subcommand: subcommand), in: 1...Int(Int32.max),
             subcommand: subcommand)
-        return .metadata(options, CLITrackTarget(deviceId: device, slot: slot, trackId: trackId))
+        let timeout = try parseTimeout(parsed, default: defaultMetadataTimeoutSeconds, subcommand: subcommand)
+        return .metadata(
+            options, CLITrackTarget(deviceId: device, slot: slot, trackId: trackId, timeoutSeconds: timeout))
 
     case .fetch:
         let options = try parseCommonOptions(parsed, subcommand: subcommand)
@@ -311,9 +351,12 @@ func parseArguments(_ arguments: [String]) throws(CLIUsageError) -> CLICommand {
         if let violation = checkNeverRead(path) {
             throw CLIUsageError(violation.message, subcommand: subcommand)
         }
+        let timeout = try parseTimeout(parsed, default: defaultFetchTimeoutSeconds, subcommand: subcommand)
         return .fetch(
             options,
-            CLIFetchTarget(deviceId: device, slot: slot, path: path, out: out, join: parsed.flags.contains("join")))
+            CLIFetchTarget(
+                deviceId: device, slot: slot, path: path, out: out, join: parsed.flags.contains("join"),
+                timeoutSeconds: timeout))
 
     case .mixstatus:
         return .mixstatus(try parseCommonOptions(parsed, subcommand: subcommand))
@@ -348,6 +391,14 @@ private func parseControl(_ parsed: ParsedOptions) throws(CLIUsageError) -> CLIC
     let device = try parseInt(
         "device", try requireValue(parsed, "device", subcommand: subcommand), in: 1...MAX_DEVICE_ID,
         subcommand: subcommand)
+    let unverified = parsed.flags.contains("unverified-playstate")
+    if action == .load {
+        if unverified { throw CLIUsageError("--unverified-playstate는 play·pause에만 쓴다", subcommand: subcommand) }
+    } else if let violation = checkPlayStateAllowed(deviceId: device, unverifiedPlaystate: unverified) {
+        // 안전 규칙: 원본 재생 상태 패킷을 실기로 확인하기 전에는 play·pause를 거부한다(docs/PLAN.md §9).
+        throw CLIUsageError(violation.message, subcommand: subcommand)
+    }
+    let timeout = try parseTimeout(parsed, default: defaultControlTimeoutSeconds, subcommand: subcommand)
     var load: CLIControlRequest.Load?
     if action == .load {
         let slot = try parseSlot(parsed, allowRB: true, subcommand: subcommand)
@@ -371,5 +422,9 @@ private func parseControl(_ parsed: ParsedOptions) throws(CLIUsageError) -> CLIC
             throw CLIUsageError("--\(name)은 load에만 쓴다", subcommand: subcommand)
         }
     }
-    return .control(options, CLIControlRequest(action: action, deviceId: device, load: load, confirm: confirm))
+    return .control(
+        options,
+        CLIControlRequest(
+            action: action, deviceId: device, load: load, confirm: confirm, unverifiedPlaystate: unverified,
+            timeoutSeconds: timeout))
 }

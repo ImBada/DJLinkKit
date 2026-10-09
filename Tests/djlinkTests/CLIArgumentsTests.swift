@@ -44,8 +44,72 @@ struct CLIArgumentsTests {
 
     @Test("a value option does not swallow the next option")
     func missingValue() {
+        #expect(throws: CLIUsageError.self) { try parseArguments(["watch", "--iface", "--verbose"]) }
+        // 값이 아예 없을 때
         #expect(throws: CLIUsageError("--iface에 값이 없다", subcommand: .watch)) {
-            try parseArguments(["watch", "--iface", "--verbose"])
+            try parseArguments(["watch", "--iface"])
+        }
+    }
+
+    /// 값이 필요한 옵션 뒤에 옵션처럼 보이는 인자가 오면 그것을 값으로 삼키지 않고 거부한다(도움말도 삼키지 않는다).
+    @Test("every value option refuses a following -h, --x or -x instead of swallowing it")
+    func valueOptionsDoNotSwallowOptions() throws {
+        let cases: [(subcommand: String, prefix: [String], option: String)] = [
+            ("watch", [], "--iface"), ("watch", [], "--vcdj-id"), ("watch", [], "--download-dir"),
+            ("status", [], "--position-interval-ms"), ("devices", [], "--seconds"),
+            ("mixstatus", [], "--iface"),
+            ("metadata", ["--slot", "usb", "--track-id", "1"], "--device"),
+            ("metadata", ["--device", "1", "--track-id", "1"], "--slot"),
+            ("metadata", ["--device", "1", "--slot", "usb"], "--track-id"),
+            ("metadata", ["--device", "1", "--slot", "usb", "--track-id", "1"], "--timeout"),
+            ("fetch", ["--device", "1", "--slot", "usb", "--out", "o"], "--path"),
+            ("fetch", ["--device", "1", "--slot", "usb", "--path", "a"], "--out"),
+            ("control", ["play", "--device", "1"], "--confirm"),
+            ("passive", [], "--iface"), ("passive", [], "--position-interval-ms"),
+        ]
+        for item in cases {
+            for next in ["-h", "--help", "--x", "--verbose", "-x", "-abc"] {
+                let arguments = [item.subcommand] + item.prefix + [item.option, next]
+                #expect(throws: CLIUsageError.self, "\(arguments)") { try parseArguments(arguments) }
+            }
+        }
+        // 값 뒤에 -h가 오면 도움말이다.
+        #expect(try parseArguments(["watch", "--iface", "en7", "-h"]) == .help(.watch))
+    }
+
+    @Test("a negative number is a value only for numeric options, and then fails its range check")
+    func negativeNumbers() throws {
+        for arguments in [
+            ["devices", "--seconds", "-5"], ["watch", "--vcdj-id", "-7"], ["status", "--position-interval-ms", "-1"],
+            ["metadata", "--device", "-1", "--slot", "usb", "--track-id", "1"],
+            ["metadata", "--device", "1", "--slot", "usb", "--track-id", "-3"],
+            ["metadata", "--device", "1", "--slot", "usb", "--track-id", "1", "--timeout", "-9"],
+        ] {
+            #expect(throws: CLIUsageError.self, "\(arguments)") { try parseArguments(arguments) }
+            // 범위 오류로 거부하므로 "값이 없다"가 아니다.
+            do {
+                _ = try parseArguments(arguments)
+            } catch {
+                #expect(error.message.contains("사이의 정수"), "\(arguments): \(error.message)")
+            }
+        }
+        // 숫자가 아닌 옵션은 음수 모양도 값으로 받지 않는다. `--iface=-1`처럼 등호로 주면 받는다.
+        #expect(throws: CLIUsageError.self) { try parseArguments(["watch", "--iface", "-1"]) }
+        #expect(throws: CLIUsageError.self) { try parseArguments(["watch", "--download-dir", "-1"]) }
+        #expect(
+            try parseArguments(["watch", "--iface=-1", "--download-dir=-out"])
+                == .watch(CLICommonOptions(iface: "-1"), downloadDir: "-out"))
+        // 값 하나짜리 `-`는 옵션이 아니다.
+        #expect(try parseArguments(["watch", "--download-dir", "-"]) == .watch(CLICommonOptions(), downloadDir: "-"))
+    }
+
+    @Test("an inline value can hold anything, including dashes")
+    func inlineValues() throws {
+        #expect(
+            try parseArguments(["watch", "--iface=--weird"])
+                == .watch(CLICommonOptions(iface: "--weird"), downloadDir: nil))
+        #expect(throws: CLIUsageError("--iface가 비어 있다", subcommand: .watch)) {
+            try parseArguments(["watch", "--iface="])
         }
     }
 
@@ -165,16 +229,114 @@ struct CLIArgumentsTests {
         }
     }
 
-    @Test("control play and pause take only the device and confirm")
+    @Test("control play and pause are refused without --unverified-playstate")
+    func controlPlayPauseRefused() {
+        for action in ["play", "pause"] {
+            do {
+                _ = try parseArguments(["control", action, "--device", "2", "--confirm", "CDJ-3000"])
+                Issue.record("\(action)이 거부되지 않았다")
+            } catch {
+                #expect(error.subcommand == .control)
+                #expect(error.message.contains("--unverified-playstate"))
+                #expect(error.message.contains("docs/PLAN.md §9"))
+            }
+        }
+    }
+
+    @Test("control play and pause with the flag take only the device and confirm")
     func controlPlayPause() throws {
-        let command = try parseArguments(["control", "play", "--device", "2", "--confirm", "CDJ-3000"])
+        let command = try parseArguments([
+            "control", "play", "--device", "2", "--confirm", "CDJ-3000", "--unverified-playstate",
+        ])
         #expect(
             command
                 == .control(
                     CLICommonOptions(),
-                    CLIControlRequest(action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000")))
+                    CLIControlRequest(
+                        action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000", unverifiedPlaystate: true)))
         #expect(throws: CLIUsageError("--slot은 load에만 쓴다", subcommand: .control)) {
-            try parseArguments(["control", "pause", "--device", "2", "--slot", "usb", "--confirm", "CDJ-3000"])
+            try parseArguments([
+                "control", "pause", "--device", "2", "--slot", "usb", "--confirm", "CDJ-3000", "--unverified-playstate",
+            ])
+        }
+    }
+
+    @Test("even with the flag, play and pause only go to devices 1-3 where the packets differ")
+    func controlPlayPauseDeviceRange() throws {
+        for action in ["play", "pause"] {
+            for id in [1, 2, 3] {
+                #expect(
+                    try parseArguments([
+                        "control", action, "--device", String(id), "--confirm", "x", "--unverified-playstate",
+                    ]) != .help(nil))
+            }
+            // 4번은 원본 패킷에 칸이 없어 play와 pause가 같은 패킷이 된다. 5 이상과 0은 범위 밖이다.
+            for id in [4, 5, 6, 17, 32, 0, 33] {
+                #expect(throws: CLIUsageError.self, "\(action) \(id)") {
+                    try parseArguments([
+                        "control", action, "--device", String(id), "--confirm", "x", "--unverified-playstate",
+                    ])
+                }
+            }
+        }
+    }
+
+    @Test("--unverified-playstate is only for play and pause")
+    func unverifiedFlagOnLoad() {
+        #expect(throws: CLIUsageError("--unverified-playstate는 play·pause에만 쓴다", subcommand: .control)) {
+            try parseArguments([
+                "control", "load", "--device", "2", "--slot", "usb", "--track-id", "9", "--confirm", "x",
+                "--unverified-playstate",
+            ])
+        }
+        #expect(throws: CLIUsageError.self) {
+            try parseArguments(["status", "--unverified-playstate"])
+        }
+    }
+
+    @Test("metadata, fetch and control take --timeout with a default and a range")
+    func timeouts() throws {
+        guard
+            case .metadata(_, let meta) = try parseArguments([
+                "metadata", "--device", "1", "--slot", "usb", "--track-id", "1",
+            ])
+        else { return }
+        #expect(meta.timeoutSeconds == 15)
+        guard
+            case .metadata(_, let metaLong) = try parseArguments([
+                "metadata", "--device", "1", "--slot", "usb", "--track-id", "1", "--timeout", "40",
+            ])
+        else { return }
+        #expect(metaLong.timeoutSeconds == 40)
+        guard
+            case .fetch(_, let fetch) = try parseArguments([
+                "fetch", "--device", "1", "--slot", "usb", "--path", "a", "--out", "o",
+            ])
+        else { return }
+        #expect(fetch.timeoutSeconds == 300)
+        guard
+            case .fetch(_, let fetchShort) = try parseArguments([
+                "fetch", "--device", "1", "--slot", "usb", "--path", "a", "--out", "o", "--timeout=5",
+            ])
+        else { return }
+        #expect(fetchShort.timeoutSeconds == 5)
+        guard
+            case .control(_, let load) = try parseArguments([
+                "control", "load", "--device", "2", "--slot", "usb", "--track-id", "9", "--confirm", "x", "--timeout",
+                "30",
+            ])
+        else { return }
+        #expect(load.timeoutSeconds == 30)
+        for value in ["0", "3601", "x", ""] {
+            #expect(throws: CLIUsageError.self, "\(value)") {
+                try parseArguments([
+                    "metadata", "--device", "1", "--slot", "usb", "--track-id", "1", "--timeout", value,
+                ])
+            }
+        }
+        // 지속 실행 명령에는 제한 시간 옵션이 없다.
+        #expect(throws: CLIUsageError("알 수 없는 옵션: --timeout", subcommand: .watch)) {
+            try parseArguments(["watch", "--timeout", "5"])
         }
     }
 
