@@ -142,16 +142,22 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
     private func tryLoadOneLibrary(device: Device, slot: MediaSlot, tx: TelemetrySpan) async
         -> LoadedAdapter?
     {
+        var tempFile: String?
         do {
             let data = try await fetchFileWithFallback(
                 device: device, slot: slot, basePath: "PIONEER/rekordbox/exportLibrary.db", tx: tx)
-            let tempFile = URL(filePath: dependencies.fileSystem.tmpdir).appending(
+            let path = URL(filePath: dependencies.fileSystem.tmpdir).appending(
                 path: "prolink-onelibrary-\(device.id)-\(slot.rawValue)-\(clock.nowMilliseconds()).db"
             ).path
-            try dependencies.fileSystem.writeFileSync(tempFile, data)
-            let adapter = try dependencies.makeOneLibraryAdapter(tempFile)
-            return .init(adapter: adapter, tempFile: tempFile)
-        } catch { return nil }
+            tempFile = path
+            try dependencies.fileSystem.writeFileSync(path, data)
+            let adapter = try dependencies.makeOneLibraryAdapter(path)
+            return .init(adapter: adapter, tempFile: path)
+        } catch {
+            // 쓰기 도중 남은 파일도 정리한다. 기존 닫기 경로처럼 삭제 오류는 무시한다.
+            if let tempFile { try? dependencies.fileSystem.unlinkSync(tempFile) }
+            return nil
+        }
     }
     private func loadPdbDatabase(device: Device, slot: MediaSlot, tx: TelemetrySpan) async throws
         -> any DatabaseAdapter

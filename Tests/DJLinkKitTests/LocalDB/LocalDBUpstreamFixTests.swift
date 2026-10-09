@@ -195,4 +195,119 @@ struct LocalDBUpstreamFixTests {
         #expect(retained.allSatisfy { $0.closeCalls == 1 })
         #expect(fs.unlinks == fs.writes.map(\.0))
     }
+
+    @Test("OneLibrary 열기 실패는 임시 파일을 지운 뒤 기존 선택 정책을 따른다", arguments: [DatabasePreference.auto, .oneLibrary])
+    @DJLinkActor func oneLibraryOpenFailure(preference: DatabasePreference) async throws {
+        let fs = LocalDBFakeFileSystem()
+        let pdb = LocalDBFakeAdapter(type: .pdb, rows: [])
+        var openedPaths: [String] = []
+        var downloads: [String] = []
+        let dependencies = LocalDBDependencies(
+            fetchFile: { options in
+                downloads.append(options.path)
+                return [1, 2, 3]
+            }, fileSystem: fs,
+            makeOneLibraryAdapter: { path in
+                openedPaths.append(path)
+                throw DJLinkError("시험용 OneLibrary 열기 실패")
+            }, makeMetadataORM: { pdb }, hydrateDatabase: { _ in })
+        let local = LocalDatabase(
+            hostDevice: localDBTestHost, deviceManager: LocalDBFakeDeviceSource(),
+            statusEmitter: LocalDBFakeMediaSlotSource(), preference: preference, dependencies: dependencies)
+        if preference == .oneLibrary {
+            await #expect(throws: DJLinkError("OneLibrary database not found and preference is set to oneLibrary only"))
+            {
+                _ = try await local.get(3, .usb)
+            }
+            #expect(!downloads.contains { $0.hasSuffix("export.pdb") })
+        } else {
+            let loaded = try await local.get(3, .usb)
+            #expect((loaded as? LocalDBFakeAdapter) === pdb)
+            #expect(downloads.contains { $0.hasSuffix("export.pdb") })
+        }
+        #expect(fs.writes.count == 1)
+        #expect(openedPaths == fs.writes.map(\.0))
+        #expect(fs.unlinks == openedPaths)
+        local.disconnectForDevice(localDBTestCDJ)
+        #expect(fs.unlinks == openedPaths)
+    }
+
+    @Test("대체 OneLibrary 열기 실패도 임시 파일을 지우고 한 번만 시도한다")
+    @DJLinkActor func oneLibraryAlternateFailure() async throws {
+        let fs = LocalDBFakeFileSystem()
+        let pdb = LocalDBFakeAdapter(type: .pdb, rows: [])
+        let dependencies = LocalDBDependencies(
+            fetchFile: { _ in [] }, fileSystem: fs,
+            makeOneLibraryAdapter: { _ in throw DJLinkError("시험용 대체 DB 열기 실패") },
+            makeMetadataORM: { pdb }, hydrateDatabase: { _ in })
+        let local = LocalDatabase(
+            hostDevice: localDBTestHost, deviceManager: LocalDBFakeDeviceSource(),
+            statusEmitter: LocalDBFakeMediaSlotSource(), preference: .pdb, dependencies: dependencies)
+        _ = try await local.get(3, .usb)
+        local.preference = .auto
+        _ = try await local.findTrack(3, .usb, 1)
+        _ = try await local.findTrack(3, .usb, 2)
+        #expect(fs.writes.count == 1)
+        #expect(fs.unlinks == fs.writes.map(\.0))
+        #expect(local.getDatabaseType(3, .usb) == .pdb)
+        local.disconnectForDevice(localDBTestCDJ)
+        #expect(pdb.closeCalls == 1)
+        #expect(fs.unlinks.count == 1)
+    }
+
+    @Test("OneLibrary 파일 처리의 실패와 성공에서 임시 파일 수명을 지킨다", arguments: ["write", "unlink", "fetch", "success"])
+    @DJLinkActor func oneLibraryFileLifetime(scenario: String) async throws {
+        let fs = LocalDBFailingFileSystem()
+        fs.failWrite = scenario == "write"
+        fs.failUnlink = scenario == "unlink"
+        let oneLibrary = LocalDBFakeAdapter(type: .oneLibrary, rows: [])
+        let pdb = LocalDBFakeAdapter(type: .pdb, rows: [])
+        var openCalls = 0
+        let dependencies = LocalDBDependencies(
+            fetchFile: { options in
+                if scenario == "fetch", options.path.hasSuffix("exportLibrary.db") {
+                    throw DJLinkError("시험용 다운로드 실패")
+                }
+                return [1, 2, 3]
+            }, fileSystem: fs,
+            makeOneLibraryAdapter: { _ in
+                openCalls += 1
+                if scenario == "success" { return oneLibrary }
+                throw DJLinkError("시험용 OneLibrary 열기 실패")
+            }, makeMetadataORM: { pdb }, hydrateDatabase: { _ in })
+        let local = LocalDatabase(
+            hostDevice: localDBTestHost, deviceManager: LocalDBFakeDeviceSource(),
+            statusEmitter: LocalDBFakeMediaSlotSource(), dependencies: dependencies)
+        let loaded = try await local.get(3, .usb)
+        #expect(loaded?.type == (scenario == "success" ? .oneLibrary : .pdb))
+        if scenario == "fetch" {
+            #expect(fs.writes.isEmpty)
+            #expect(fs.unlinks.isEmpty)
+            #expect(openCalls == 0)
+        } else {
+            #expect(fs.writes.count == 1)
+            #expect(openCalls == (scenario == "write" ? 0 : 1))
+            #expect(fs.unlinks == (scenario == "success" ? [] : fs.writes))
+        }
+        local.disconnectForDevice(localDBTestCDJ)
+        #expect(fs.unlinks == fs.writes)
+        #expect(oneLibrary.closeCalls == (scenario == "success" ? 1 : 0))
+    }
+}
+
+@DJLinkActor private final class LocalDBFailingFileSystem: LocalDBFileSystem {
+    let tmpdir = "/tmp"
+    var writes: [String] = []
+    var unlinks: [String] = []
+    var failWrite = false
+    var failUnlink = false
+    func writeFileSync(_ path: String, _ data: [UInt8]) throws {
+        // 일부 바이트를 쓴 뒤 실패하는 경우에도 파일이 남았다고 가정한다.
+        writes.append(path)
+        if failWrite { throw DJLinkError("시험용 파일 쓰기 실패") }
+    }
+    func unlinkSync(_ path: String) throws {
+        unlinks.append(path)
+        if failUnlink { throw DJLinkError("시험용 파일 삭제 실패") }
+    }
 }
