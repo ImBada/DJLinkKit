@@ -1263,3 +1263,31 @@ Felix Geisendörfer (felix@debuggable.com)
    See the License for the specific language governing permissions and
    limitations under the License.
 ````
+
+## 8단계 의존성 의미 대응: cap 0.2.1
+
+- 출처: [npm cap 0.2.1](https://registry.npmjs.org/cap/-/cap-0.2.1.tgz)(`mscdex-cap-74501f5/`), 원본 alphatheta-connect의 선택 의존성(libpcap 바인딩)
+- 쓰는 곳: `Sources/DJLinkPassive/PassivePcapAdapter.swift`의 Ethernet·IPv4·UDP 디코더와 캡처 열기(snaplen, 버퍼, 필터, dispatch 반복)
+- 코드는 옮기지 않았다. `lib/Decoders.js`·`src/binding.cc`를 읽어 원본이 겪는 동작을 Swift와 libpcap C API로 다시 만들었다.
+
+```text
+Copyright Brian White. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+```
