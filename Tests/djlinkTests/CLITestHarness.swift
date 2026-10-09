@@ -182,6 +182,8 @@ final class CLIHarness {
     let clock = TestClock()
     let interfaces: FakeInterfaceProvider
     let files: RecordingFileWriter
+    /// 주면 `files` 대신 이 쓰기 도구로 파일을 쓴다(큐에서 막히는 가짜 등).
+    var fileWriterOverride: (any CLIFileWriter)?
     let nfs = RecordingNFS()
     let backend = FakePcapBackend()
     let abort = CLIAbort()
@@ -212,7 +214,7 @@ final class CLIHarness {
         runtime.socketFactory = factory
         runtime.interfaceProvider = interfaces
         runtime.clock = clock
-        runtime.files = files
+        runtime.files = fileWriterOverride ?? files
         runtime.nfs = nfs
         let abort = self.abort
         runtime.makeAbort = { abort }
@@ -267,6 +269,8 @@ final class CLIHarness {
 final class CLIRun {
     private var code: Int32?
     private let abort: CLIAbort
+
+    var isFinished: Bool { code != nil }
 
     init(abort: CLIAbort, body: @escaping @DJLinkActor () async -> Int32) {
         self.abort = abort

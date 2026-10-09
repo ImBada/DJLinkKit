@@ -20,6 +20,9 @@ struct DispatchCLIScheduler: CLIIndependentScheduler {
 
 /// 동기 PDB 해석·파일 시스템 호출이 멈춰도 중단 후 3초 안에 프로세스를 끝낸다.
 final class CLIWatchdog: Sendable {
+    /// 중단한 뒤 정리를 기다리는 시간(초). 넘으면 프로세스를 강제로 끝낸다.
+    static let defaultGraceSeconds = 3
+
     private struct State {
         var completed = false
         var cancellations: [@Sendable () -> Void] = []
@@ -28,13 +31,15 @@ final class CLIWatchdog: Sendable {
     private let scheduler: any CLIIndependentScheduler
     private let abort: CLIAbort
     private let terminate: @Sendable (Int32) -> Void
+    private let graceSeconds: Int
 
     init(
-        abort: CLIAbort, scheduler: any CLIIndependentScheduler,
+        abort: CLIAbort, scheduler: any CLIIndependentScheduler, graceSeconds: Int = CLIWatchdog.defaultGraceSeconds,
         terminate: @escaping @Sendable (Int32) -> Void = { _exit($0) }
     ) {
         self.abort = abort
         self.scheduler = scheduler
+        self.graceSeconds = graceSeconds
         self.terminate = terminate
         abort.observeRequest { [weak self] in self?.armGracePeriod() }
     }
@@ -58,7 +63,7 @@ final class CLIWatchdog: Sendable {
 
     private func armGracePeriod() {
         track(
-            scheduler.schedule(seconds: 3) { [weak self] in
+            scheduler.schedule(seconds: graceSeconds) { [weak self] in
                 guard let self, !self.state.withLock({ $0.completed }) else { return }
                 self.terminate(self.abort.reason == .interrupted ? CLIExitCode.interrupted : CLIExitCode.failure)
             })

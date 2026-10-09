@@ -33,10 +33,18 @@ extension CLIFileWriter {
 
 /// POSIX 호출로 쓴다. `.atomic`과 `.withoutOverwriting`은 같이 쓸 수 없어서(NSData.h),
 /// 같은 폴더의 임시 파일에 먼저 쓰고 `link(2)`로 게시한다. `link`는 대상이 있으면 `EEXIST`로 실패한다.
-/// `link`를 지원하지 않는 파일 시스템(FAT 등)에서는 `O_EXCL`로 만든 파일에 직접 쓴다(덮어쓰지는 않지만 원자적이지는 않다).
+/// `link`를 지원하지 않는 파일 시스템(FAT·exFAT 등)에서는 `renamex_np(RENAME_EXCL)`로 게시한다(역시 대상이 있으면 `EEXIST`).
+/// 그것도 지원하지 않을 때만 `O_EXCL`로 만든 파일에 직접 쓴다(덮어쓰지는 않지만 원자적이지 않아, 강제 종료하면 반쯤 쓴 파일이 최종 이름으로 남을 수 있다).
 struct POSIXFileWriter: CLIFileWriter {
+    /// 한 번에 쓰는 크기. 사이마다 중단 플래그를 확인한다.
+    static let writeChunkSize = 1 << 20
+
     /// 시험이 `link` 실패를 만들어 보려고 바꿔 넣는다.
     var link: @Sendable (_ existing: String, _ new: String) -> Int32 = { Darwin.link($0, $1) }
+    /// 시험이 `renamex_np` 실패를 만들어 보려고 바꿔 넣는다. 대상이 있으면 덮어쓰지 않고 `EEXIST`로 실패해야 한다.
+    var renameExclusively: @Sendable (_ existing: String, _ new: String) -> Int32 = {
+        renamex_np($0, $1, UInt32(RENAME_EXCL))
+    }
 
     init() {}
 
@@ -82,8 +90,18 @@ struct POSIXFileWriter: CLIFileWriter {
         case EEXIST:
             throw CLIFileExistsError(path: path)
         case ENOTSUP, EPERM, ENOSYS, EXDEV:
-            // 하드 링크를 지원하지 않는 파일 시스템.
-            try Self.createExclusively(data, path: path, checkCancellation: checkCancellation)
+            // 하드 링크를 지원하지 않는 파일 시스템: 임시 파일을 덮어쓰지 않는 이름 바꾸기로 게시한다.
+            try checkCancellation()
+            if renameExclusively(temporary, path) == 0 { return }
+            switch errno {
+            case EEXIST:
+                throw CLIFileExistsError(path: path)
+            case ENOTSUP, EINVAL, ENOSYS, EPERM, EXDEV:
+                // 덮어쓰지 않는 이름 바꾸기도 지원하지 않는 파일 시스템. 마지막 수단이다.
+                try Self.createExclusively(data, path: path, checkCancellation: checkCancellation)
+            default:
+                throw Self.error("파일을 게시하지 못했다", path)
+            }
         default:
             throw Self.error("파일을 게시하지 못했다", path)
         }
@@ -113,14 +131,16 @@ struct POSIXFileWriter: CLIFileWriter {
         }
     }
 
+    /// `writeChunkSize` 단위로 쓰고 사이마다 `checkCancellation`을 부른다.
     private static func writeAll(
         _ fd: Int32, _ data: [UInt8], path: String, checkCancellation: @Sendable () throws -> Void
     ) throws {
         var offset = 0
         while offset < data.count {
             try checkCancellation()
+            let length = min(data.count - offset, writeChunkSize)
             let written = data.withUnsafeBytes { raw in
-                write(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset)
+                write(fd, raw.baseAddress!.advanced(by: offset), length)
             }
             if written < 0 {
                 if errno == EINTR { continue }

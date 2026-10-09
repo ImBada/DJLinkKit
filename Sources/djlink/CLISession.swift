@@ -1,9 +1,21 @@
 import DJLinkKit
 import DJLinkPassive
 import Foundation
+import Synchronization
 
 // 한 번의 실행이 가진 모든 것(네트워크·소켓·타이머·작업)의 주인. 끝날 때 어떤 경로로 끝나든 `cleanup()`이 거둔다.
 // 부작용을 만들기 전에는 늘 `abort.check()`를 거친다.
+
+/// 어느 스레드에서나 읽고 쓰는 한 번짜리 표시.
+final class CLIFlag: Sendable {
+    private let value = Mutex(false)
+
+    init() {}
+
+    var isSet: Bool { value.withLock { $0 } }
+
+    func set() { value.withLock { $0 = true } }
+}
 
 @DJLinkActor
 final class CLISession {
@@ -24,6 +36,13 @@ final class CLISession {
     private var announcingStopped = false
     private var cleanedUp = false
     private var configuredNFS = false
+    /// 별도 큐에서 도는 파일 게시. `cleanup()`이 끝나길 기다린다.
+    private var publishing: Set<UUID> = []
+    private var publishWaiters: [CLIWaiter<Void>] = []
+    /// 정리가 시작된 뒤에는 새 게시를 시작하지 않고 돌던 게시도 쓰기 사이에 멈춘다.
+    private nonisolated let closing = CLIFlag()
+    /// `cleanup()`이 진행 중인 파일 게시를 기다리는 시간(초). 중단 후 강제 종료 감시와 같다.
+    static let publishGraceSeconds = CLIWatchdog.defaultGraceSeconds
 
     init(runtime: CLIRuntime, output: any CLIOutput, abort: CLIAbort) {
         self.runtime = runtime
@@ -57,20 +76,49 @@ final class CLISession {
     }
 
     /// 파일 쓰기·fsync·게시가 DJLinkActor를 점유하지 않게 별도 큐에서 한다.
+    /// 진행 중인 게시는 추적하며, 큐의 일이 끝나기 전에는 돌아오지 않는다(`cleanup()`이 기다린다).
     func publishFile(_ data: [UInt8], path: String, directory: String? = nil) async throws {
         let files = runtime.files
         let abort = abort
+        let closing = closing
+        let checkCancellation: @Sendable () throws -> Void = {
+            try abort.check()
+            if closing.isSet { throw CLIAborted() }
+        }
+        try checkCancellation()
+        let id = UUID()
+        publishing.insert(id)
+        defer { publishFinished(id) }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             DispatchQueue.global(qos: .utility).async {
                 do {
-                    try abort.check()
+                    try checkCancellation()
                     if let directory { try files.createDirectory(atPath: directory) }
-                    try files.publishWithoutOverwriting(data, toPath: path, checkCancellation: { try abort.check() })
+                    try files.publishWithoutOverwriting(data, toPath: path, checkCancellation: checkCancellation)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
+        }
+    }
+
+    private func publishFinished(_ id: UUID) {
+        publishing.remove(id)
+        guard publishing.isEmpty else { return }
+        let waiters = publishWaiters
+        publishWaiters = []
+        for waiter in waiters { waiter.finish(.success(())) }
+    }
+
+    /// 진행 중인 파일 게시가 끝나길(쓰기 도중이면 취소돼 임시 파일을 지우길) 기다린다. 오래 걸리면 `publishGraceSeconds`에 포기한다.
+    private func waitForPublishes() async {
+        guard !publishing.isEmpty else { return }
+        let waiter = CLIWaiter<Void>()
+        _ = try? await waiter.wait { waiter in
+            publishWaiters.append(waiter)
+            let timer = runtime.clock.setTimeout(.seconds(Self.publishGraceSeconds)) { waiter.finish(.success(())) }
+            waiter.onFinish { [runtime] in runtime.clock.clearTimer(timer) }
         }
     }
 
@@ -261,7 +309,7 @@ final class CLISession {
         if let violation = checkNeverRead(path) { throw CLIRuntimeError(violation.message) }
     }
 
-    private func configureNFS() {
+    func configureNFS() {
         guard runtime.configuresNFSGlobals, !configuredNFS else { return }
         configuredNFS = true
         configureNFSDependencies(socketFactory: sockets, clock: runtime.clock)
@@ -344,6 +392,7 @@ final class CLISession {
     func cleanup() async {
         guard !cleanedUp else { return }
         cleanedUp = true
+        closing.set()
         runtime.clock.clearTimeout(deadline)
         deadline = nil
         stopAnnouncing()
@@ -357,6 +406,7 @@ final class CLISession {
         }
         if let network { try? await network.close() }
         await sockets.closeAll()
+        await waitForPublishes()
         watchdog?.complete()
     }
 }
