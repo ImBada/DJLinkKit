@@ -32,7 +32,13 @@ private func mp4WithCover(_ imageData: [UInt8], covrName: [UInt8]) -> [UInt8] {
 }
 
 /// APIC 프레임(v2.3): 인코딩 바이트, MIME(latin1)+0, 그림 종류, 설명(인코딩대로)+끝 표시, 이미지.
-private func apicFrame(encodingByte: UInt8, description: [UInt8], terminator: [UInt8], image: [UInt8]) -> [UInt8] {
+private func apicFrame(
+    encodingByte: UInt8,
+    description: [UInt8],
+    terminator: [UInt8],
+    image: [UInt8],
+    syncsafeSize: Bool = false
+) -> [UInt8] {
     let body = [UInt8].concat([
         [encodingByte],
         [UInt8]("image/jpeg\0", encoding: .latin1),
@@ -43,7 +49,14 @@ private func apicFrame(encodingByte: UInt8, description: [UInt8], terminator: [U
     ])
     var header = [UInt8].alloc(10)
     header.set([UInt8]("APIC", encoding: .ascii), 0)
-    header.writeUInt32BE(body.count, 4)
+    if syncsafeSize {
+        header[4] = UInt8((body.count >> 21) & 0x7f)
+        header[5] = UInt8((body.count >> 14) & 0x7f)
+        header[6] = UInt8((body.count >> 7) & 0x7f)
+        header[7] = UInt8(body.count & 0x7f)
+    } else {
+        header.writeUInt32BE(body.count, 4)
+    }
     return header + body
 }
 
@@ -57,6 +70,13 @@ private func id3Tag(_ majorVersion: Int, _ frames: [[UInt8]]) -> [UInt8] {
     header[8] = UInt8((body.count >> 7) & 0x7f)
     header[9] = UInt8(body.count & 0x7f)
     return header + body
+}
+
+/// 확장 헤더(플래그 0x40)가 있는 태그. `extendedHeader`는 크기 칸을 포함한 확장 헤더 전체다.
+private func id3TagWithExtendedHeader(_ majorVersion: Int, _ extendedHeader: [UInt8], _ frames: [[UInt8]]) -> [UInt8] {
+    var tag = id3Tag(majorVersion, [extendedHeader] + frames)
+    tag[5] = 0x40
+    return tag
 }
 
 // ----------------------------------------------------------------- 시험
@@ -105,6 +125,44 @@ struct ArtworkUpstreamFixTests {
         func bigEndianBom() async throws {
             let description: [UInt8] = [0xfe, 0xff, 0x00, 0x43, 0x00, 0x6f, 0x00, 0x76]
             let file = id3Tag(3, [apicFrame(encodingByte: 1, description: description, terminator: [0, 0], image: TINY_JPEG)])
+
+            let result = try await extractFromMp3(createBufferReader(file, "mp3"))
+
+            #expect(try #require(result).data.bytesEqual(TINY_JPEG))
+        }
+    }
+
+    @Suite("ID3 확장 헤더")
+    struct ExtendedHeader {
+        // 원본 alphatheta-connect/src/artwork/parsers/id3.ts:128 — v2.3의 확장 헤더 크기는 크기 칸 4바이트를 뺀 값인데
+        // 4바이트를 더하지 않아 프레임이 4바이트 앞에서 읽히기 시작했다.
+        @Test("skips a v2.3 extended header (size excludes the size field itself)")
+        func v23ExtendedHeader() async throws {
+            let extended: [UInt8] = [0, 0, 0, 6, 0, 0, 0, 0, 0, 0]
+            let frame = apicFrame(encodingByte: 0, description: [], terminator: [0], image: TINY_JPEG)
+            let file = id3TagWithExtendedHeader(3, extended, [frame])
+
+            let result = try await extractFromMp3(createBufferReader(file, "mp3"))
+
+            #expect(try #require(result).data.bytesEqual(TINY_JPEG))
+        }
+
+        @Test("skips a v2.3 extended header that carries a CRC")
+        func v23ExtendedHeaderWithCrc() async throws {
+            let extended: [UInt8] = [0, 0, 0, 10, 0x80, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78]
+            let frame = apicFrame(encodingByte: 0, description: [], terminator: [0], image: TINY_JPEG)
+            let file = id3TagWithExtendedHeader(3, extended, [frame])
+
+            let result = try await extractFromMp3(createBufferReader(file, "mp3"))
+
+            #expect(try #require(result).data.bytesEqual(TINY_JPEG))
+        }
+
+        @Test("skips a v2.4 extended header (size includes the size field itself)")
+        func v24ExtendedHeader() async throws {
+            let extended: [UInt8] = [0, 0, 0, 6, 1, 0]
+            let frame = apicFrame(encodingByte: 0, description: [], terminator: [0], image: TINY_JPEG, syncsafeSize: true)
+            let file = id3TagWithExtendedHeader(4, extended, [frame])
 
             let result = try await extractFromMp3(createBufferReader(file, "mp3"))
 

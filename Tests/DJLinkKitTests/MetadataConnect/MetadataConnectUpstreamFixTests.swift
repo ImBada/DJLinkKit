@@ -74,6 +74,13 @@ private func id3Tag(_ majorVersion: Int, _ frames: [[UInt8]]) -> [UInt8] {
     return header + body
 }
 
+/// 확장 헤더(플래그 0x40)가 있는 태그. `extendedHeader`는 크기 칸을 포함한 확장 헤더 전체다.
+private func id3TagWithExtendedHeader(_ majorVersion: Int, _ extendedHeader: [UInt8], _ frames: [[UInt8]]) -> [UInt8] {
+    var tag = id3Tag(majorVersion, [extendedHeader] + frames)
+    tag[5] = 0x40
+    return tag
+}
+
 /// APIC 프레임(v2.3): 인코딩 바이트, MIME(latin1)+0, 그림 종류, 설명(인코딩대로)+끝 표시, 이미지.
 private func apicFrame(encodingByte: UInt8, description: [UInt8], terminator: [UInt8], image: [UInt8]) -> [UInt8] {
     let body = [UInt8].concat([
@@ -391,6 +398,45 @@ struct MetadataConnectUpstreamFixTests {
             let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
 
             #expect(metadata.artwork == fakeJpeg)
+        }
+    }
+
+    @Suite("ID3 확장 헤더")
+    struct ExtendedHeader {
+        // 원본 metadata-connect/src/parsers/id3.ts:158 — v2.3의 확장 헤더 크기는 크기 칸 4바이트를 뺀 값인데
+        // 4바이트를 더하지 않아 프레임이 4바이트 앞에서 읽히기 시작했다.
+        @Test("skips a v2.3 extended header (size excludes the size field itself)")
+        func v23ExtendedHeader() async throws {
+            // 크기 6 = 플래그 2 + 패딩 4. 헤더 전체는 10바이트.
+            let extended: [UInt8] = [0, 0, 0, 6, 0, 0, 0, 0, 0, 0]
+            let file = id3TagWithExtendedHeader(3, extended, [id3v23Frame("TIT2", "Title"), id3v23Frame("TPE1", "Artist")])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.title == "Title")
+            #expect(metadata.artist == "Artist")
+        }
+
+        @Test("skips a v2.3 extended header that carries a CRC")
+        func v23ExtendedHeaderWithCrc() async throws {
+            // 크기 10 = 플래그 2 + 패딩 4 + CRC 4. 헤더 전체는 14바이트.
+            let extended: [UInt8] = [0, 0, 0, 10, 0x80, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78]
+            let file = id3TagWithExtendedHeader(3, extended, [id3v23Frame("TIT2", "Title")])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.title == "Title")
+        }
+
+        @Test("skips a v2.4 extended header (size includes the size field itself)")
+        func v24ExtendedHeader() async throws {
+            // 동기 안전 크기 6 = 크기 칸 4 + 플래그 바이트 수 1 + 플래그 1. 헤더 전체가 6바이트.
+            let extended: [UInt8] = [0, 0, 0, 6, 1, 0]
+            let file = id3TagWithExtendedHeader(4, extended, [id3v23Frame("TIT2", "Title")])
+
+            let metadata = try #require(try await MetadataConnect.extractFromMp3(MetadataConnect.createBufferReader(file, "mp3")))
+
+            #expect(metadata.title == "Title")
         }
     }
 }

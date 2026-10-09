@@ -134,7 +134,8 @@ func extractFromMp3(_ reader: any ArtworkFileReader) async throws -> ExtractedAr
         if majorVersion == 4 {
             extendedHeaderSize = readSyncsafe(extHeader, 0)
         } else {
-            extendedHeaderSize = try extHeader.readUInt32BE(0)
+            // PLAN §9: v2.3의 확장 헤더 크기는 크기 칸 4바이트를 뺀 값이다(v2.4는 크기 칸을 포함한다).
+            extendedHeaderSize = try extHeader.readUInt32BE(0) + 4
         }
     }
 
