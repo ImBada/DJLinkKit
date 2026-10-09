@@ -33,6 +33,8 @@ let package = Package(
         ),
         .testTarget(name: "DJLinkControlTests", dependencies: ["DJLinkControl", "DJLinkTestSupport"]),
         .testTarget(name: "DJLinkPassiveTests", dependencies: ["DJLinkPassive", "DJLinkTestSupport"]),
-        .testTarget(name: "djlinkTests", dependencies: ["djlink"]),
+        .testTarget(
+            name: "djlinkTests",
+            dependencies: ["djlink", "DJLinkKit", "DJLinkControl", "DJLinkPassive", "DJLinkTestSupport"]),
     ]
 )

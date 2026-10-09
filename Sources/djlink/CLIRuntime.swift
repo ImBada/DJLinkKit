@@ -1,8 +1,14 @@
 import DJLinkKit
+import DJLinkPassive
 import Foundation
 
-// 네트워크에 붙는 공통 순서(원본 cli의 bringOnline → autoconfigFromPeers → connect).
-// 소켓을 여는 코드라서 시험하지 않는다. 판단이 필요한 부분은 순수 함수로 뺐다.
+// 실행에 필요한 바깥 세계(소켓·인터페이스·시계·파일·NFS·패시브 캡처)를 한 묶음으로 주입한다.
+// 실제 실행은 `CLIRuntime.live`, 시험은 가짜(FakeSocketFactory·FakeInterfaceProvider·TestClock 등)를 넣는다.
+
+/// 장치 알림을 기다리는 기본 시간(초).
+let discoveryTimeoutSeconds = 30
+/// 대상 장치가 보일 때까지 기다리는 시간(초).
+let deviceWaitSeconds = 10
 
 /// `--iface` 이름으로 IPv4 외부 주소를 고른다.
 func selectInterface(
@@ -16,80 +22,96 @@ func candidateInterfaceNames(_ interfaces: [(name: String, addresses: [NetworkIn
     interfaces.filter { $0.addresses.contains { $0.family == "IPv4" && !$0.internal } }.map(\.name)
 }
 
-/// 장치 기다리는 기본 시간(초).
-let discoveryTimeoutSeconds = 30
+/// NFS 읽기. 실제는 `DJLinkKit`의 NFS 함수, 시험은 가짜.
+protocol CLINFS: Sendable {
+    @DJLinkActor
+    func fetchFile(
+        device: Device, slot: MediaSlot, path: String, onProgress: (@DJLinkActor (FetchProgress) -> Void)?,
+        chunkSize: Int?
+    ) async throws -> [UInt8]
 
-/// 가상 CDJ로 참여하지 않고 소켓만 열어 장치 알림을 듣는다.
-@DJLinkActor
-func openListeningNetwork(options: CLICommonOptions, output: any CLIOutput) async throws -> ProlinkNetwork {
-    output.log(.await, "Bringing up prolink network")
-    let config = NetworkConfig(logger: CLILogger(output: output, verbose: options.verbose))
-    let network = try await bringOnline(config)
-    output.log(.success, "Network online (listening on UDP \(ANNOUNCE_PORT)-\(STATUS_PORT))")
-    network.deviceManager.on(.connected) { device in
-        output.log(.star, "New device: \(formatDevice(device))")
-    }
-    network.deviceManager.on(.disconnected) { device in
-        output.log(.info, "Device left: \(device.name) [id: \(device.id)]")
-    }
-    return network
+    @DJLinkActor
+    func fetchFileRange(device: Device, slot: MediaSlot, path: String, offset: Int, length: Int) async throws -> [UInt8]
+
+    @DJLinkActor
+    func fileSize(device: Device, slot: MediaSlot, path: String) async throws -> Int
 }
 
-/// 가상 CDJ로 참여한다. `--iface`가 있으면 그 인터페이스로, 없으면 원본처럼 처음 보이는 장치로 정한다.
-/// 끼어든 Ctrl-C는 false.
-@DJLinkActor
-func joinNetwork(
-    _ network: ProlinkNetwork, options: CLICommonOptions, knownDevice: Device? = nil, output: any CLIOutput
-) async throws -> Bool {
-    let provider = SystemInterfaceProvider()
-    if let name = options.iface {
-        guard let info = selectInterface(named: name, in: provider.networkInterfaces()) else {
-            let names = candidateInterfaceNames(provider.networkInterfaces())
-            throw CLIRuntimeError(
-                "인터페이스 \(name)에서 IPv4 주소를 찾지 못했다. 쓸 수 있는 이름: \(names.isEmpty ? "(없음)" : names.joined(separator: ", "))"
-            )
-        }
-        network.configure(NetworkConfig(iface: info, vcdjId: options.effectiveVcdjId))
-    } else if let knownDevice {
-        // 이미 본 장치와 같은 서브넷의 인터페이스를 고른다(autoconfigFromPeers와 같은 방법).
-        guard let match = try getMatchingInterface(knownDevice.ip, interfaceProvider: provider) else {
-            throw CLIRuntimeError("장치 \(knownDevice.ip.address)와 같은 서브넷의 인터페이스를 찾지 못했다. --iface로 정한다")
-        }
-        network.configure(NetworkConfig(iface: match.info, vcdjId: options.effectiveVcdjId))
-    } else {
-        output.log(.await, "Autoconfiguring network.. waiting for devices")
-        let done: Void? = try await CLIInterrupt.shared.race(
-            timeoutSeconds: discoveryTimeoutSeconds,
-            timeoutMessage: "\(discoveryTimeoutSeconds)초 안에 장치를 찾지 못했다. 장치가 같은 네트워크에 있는지, --iface를 줘 보라"
-        ) {
-            try await network.autoconfigFromPeers()
-        }
-        guard done != nil else { return false }
-        // autoconfigFromPeers는 번호를 기본값으로 되돌리므로 줬다면 다시 건다.
-        if let id = options.vcdjId { network.configure(NetworkConfig(vcdjId: id)) }
-        output.log(.success, "Autoconfigure successful!")
+struct LiveCLINFS: CLINFS {
+    init() {}
+
+    @DJLinkActor
+    func fetchFile(
+        device: Device, slot: MediaSlot, path: String, onProgress: (@DJLinkActor (FetchProgress) -> Void)?,
+        chunkSize: Int?
+    ) async throws -> [UInt8] {
+        try await DJLinkKit.fetchFile(
+            device: device, slot: slot, path: path, onProgress: onProgress, chunkSize: chunkSize)
     }
-    output.log(.await, "Connecting to network!")
-    try network.connect()
-    guard network.isConnected() else { throw CLIRuntimeError("Failed to connect to the network") }
-    if let vcdj = network.virtualDevice {
-        output.log(.star, "Network connected! Joined as virtual CDJ \"\(vcdj.name)\" [id: \(vcdj.id)]")
+
+    @DJLinkActor
+    func fetchFileRange(device: Device, slot: MediaSlot, path: String, offset: Int, length: Int) async throws -> [UInt8]
+    {
+        try await DJLinkKit.fetchFileRange(device: device, slot: slot, path: path, offset: offset, length: length)
     }
-    return true
+
+    @DJLinkActor
+    func fileSize(device: Device, slot: MediaSlot, path: String) async throws -> Int {
+        try await DJLinkKit.getFileInfo(device: device, slot: slot, path: path).size
+    }
 }
 
-/// 연결을 정리하고 소켓을 닫는다.
 @DJLinkActor
-func shutdown(_ network: ProlinkNetwork) async {
-    if network.isConnected() { _ = try? network.disconnect() }
-    try? await network.close()
+struct CLIRuntime {
+    var socketFactory: any SocketFactory
+    var interfaceProvider: any InterfaceProvider
+    var clock: any DJLinkClock
+    var files: any CLIFileWriter
+    var nfs: any CLINFS
+    /// 패시브 캡처 네트워크를 만든다(아직 시작하지 않는다). 시험은 가짜 `PcapBackend`를 넣는다.
+    var makePassiveNetwork: @DJLinkActor (PassiveNetworkConfig) -> PassiveProlinkNetwork
+    /// 한 번의 실행이 쓰는 중단 토큰. 시험은 자기가 쥔 토큰을 돌려줘서 원하는 때 중단한다.
+    var makeAbort: @DJLinkActor () -> CLIAbort
+    /// SIGINT·SIGTERM을 받아 중단 토큰을 세운다. 시험에서는 끈다.
+    var installsSignalHandlers: Bool
+    /// NFS 모듈의 전역 설정(소켓 공장·경로 검사)을 이 실행 동안 바꾼다. 전역이라 시험에서는 끈다.
+    var configuresNFSGlobals: Bool
+
+    static var live: CLIRuntime {
+        CLIRuntime(
+            socketFactory: LiveSocketFactory.shared, interfaceProvider: SystemInterfaceProvider(),
+            clock: SystemClock.shared, files: POSIXFileWriter(), nfs: LiveCLINFS(),
+            makePassiveNetwork: { PassiveProlinkNetwork($0) }, makeAbort: { CLIAbort() },
+            installsSignalHandlers: true, configuresNFSGlobals: true)
+    }
 }
 
-/// 장치가 보일 때까지 기다린다(없으면 오류).
-@DJLinkActor
-func requireDevice(_ network: ProlinkNetwork, id: Int, timeoutMs: Int = 10_000) async throws -> Device {
-    guard let device = await network.deviceManager.getDeviceEnsured(id, timeout: timeoutMs) else {
-        throw CLIRuntimeError("장치 \(id)가 \(timeoutMs / 1000)초 안에 보이지 않는다. `djlink devices`로 번호를 확인한다")
+/// 소켓을 묶고 대화를 제한하는 인터페이스 하나. 이 서브넷 밖의 장치와는 보내지도 연결하지도 않는다.
+struct CLINetworkScope: Equatable, Sendable {
+    var name: String
+    var info: NetworkInterfaceInfo
+    var subnet: Address4
+
+    init(name: String, info: NetworkInterfaceInfo) throws {
+        self.name = name
+        self.info = info
+        self.subnet = try Self.subnet(of: info)
     }
-    return device
+
+    private static func subnet(of info: NetworkInterfaceInfo) throws -> Address4 {
+        do {
+            if let cidr = info.cidr { return try Address4(cidr) }
+            // cidr이 없으면 넷마스크에서 접두 길이를 구한다.
+            let prefix = try Address4(info.netmask).integerValue.nonzeroBitCount
+            return try Address4("\(info.address)/\(prefix)")
+        } catch {
+            throw CLIRuntimeError("인터페이스 \(info.address)의 서브넷을 알 수 없다: \(error)")
+        }
+    }
+
+    func contains(_ ip: Address4) -> Bool { ip.isInSubnet(subnet) }
+
+    func contains(_ device: Device) -> Bool { contains(device.ip) }
+
+    var description: String { "\(name) (\(subnet.address))" }
 }
