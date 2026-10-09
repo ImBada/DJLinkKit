@@ -11,6 +11,39 @@ func makeLiveTCPConnection() throws -> any TCPConnection {
 @DJLinkActor
 final class LiveTCPConnection: TCPConnection {
     private var connection: NWConnection?
+    private(set) var requiredInterfaceName: String?
+
+    func setRequiredInterface(name: String) throws {
+        guard connection == nil else { throw DJLinkError("TCP connection already started") }
+        requiredInterfaceName = name
+    }
+
+    private func resolveInterface(_ name: String) async throws -> NWInterface {
+        let monitor = NWPathMonitor()
+        return try await withCheckedThrowingContinuation { continuation in
+            var finished = false
+            let timer = clock.setTimeout(.seconds(3)) {
+                guard !finished else { return }
+                finished = true
+                monitor.cancel()
+                continuation.resume(throwing: DJLinkError("Network interface not found: \(name)"))
+            }
+            monitor.pathUpdateHandler = { path in
+                DJLinkActor.assumeIsolated {
+                    guard !finished else { return }
+                    finished = true
+                    self.clock.clearTimer(timer)
+                    monitor.cancel()
+                    if let interface = path.availableInterfaces.first(where: { $0.name == name }) {
+                        continuation.resume(returning: interface)
+                    } else {
+                        continuation.resume(throwing: DJLinkError("Network interface not found: \(name)"))
+                    }
+                }
+            }
+            monitor.start(queue: DJLinkActor.queue)
+        }
+    }
     private var connecting: CheckedContinuation<Void, any Error>?
     private var reads: [(size: Int?, continuation: CheckedContinuation<[UInt8]?, any Error>)] = []
     private var bytes: [UInt8] = []
@@ -34,7 +67,12 @@ final class LiveTCPConnection: TCPConnection {
         guard let port = NWEndpoint.Port(rawValue: UInt16(exactly: port) ?? 0), port.rawValue != 0 else {
             throw DJLinkError("Invalid TCP port")
         }
-        let conn = NWConnection(host: NWEndpoint.Host(host), port: port, using: .tcp)
+        let parameters = NWParameters.tcp
+        if let requiredInterfaceName {
+            parameters.requiredInterface = try await resolveInterface(requiredInterfaceName)
+        }
+        guard !ended else { throw DJLinkError("Socket closed") }
+        let conn = NWConnection(host: NWEndpoint.Host(host), port: port, using: parameters)
         connection = conn
         try await withCheckedThrowingContinuation { continuation in
             connecting = continuation

@@ -100,6 +100,8 @@ final class GuardedTCPConnection: TCPConnection {
 
     var isOpen: Bool { inner.isOpen }
 
+    func setRequiredInterface(name: String) throws { try inner.setRequiredInterface(name: name) }
+
     func destroy(_ error: (any Error)?) { inner.destroy(error) }
 }
 
@@ -133,6 +135,7 @@ final class CLISocketRegistry: SocketFactory {
         try abort.check()
         let connection = GuardedTCPConnection(try inner.createTCPConnection(), abort: abort)
         tcpConnections.append(connection)
+        if let boundInterfaceName { try connection.setRequiredInterface(name: boundInterfaceName) }
         return connection
     }
 
@@ -142,6 +145,7 @@ final class CLISocketRegistry: SocketFactory {
         for socket in udpSockets where !socket.isCloseRequested {
             try socket.setBoundInterface(name: name)
         }
+        for connection in tcpConnections { try connection.setRequiredInterface(name: name) }
     }
 
     /// 열린 소켓을 모두 닫는다. 이미 닫은 것은 건너뛰고 닫기 오류는 무시한다.

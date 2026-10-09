@@ -20,6 +20,15 @@ public protocol TCPConnection: AnyObject {
     /// `stream.writable && !stream.closed && !stream.destroyed`
     var isOpen: Bool { get }
 
+    /// CLI 안전을 위한 추가(기본값은 원본 동작). 연결 전에 이름으로 인터페이스를 요구한다.
+    func setRequiredInterface(name: String) throws
+
     /// `socket.destroy(error)`
     func destroy(_ error: (any Error)?)
+}
+
+extension TCPConnection {
+    public func setRequiredInterface(name: String) throws {
+        throw DJLinkError("This connection cannot require a network interface")
+    }
 }

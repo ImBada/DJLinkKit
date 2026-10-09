@@ -34,6 +34,8 @@
 
 ## 3단계 (remotedb·NFS)
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다. 찾지 못하면 TCP 연결을 시작하지 않는다. `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다. 미호출 시 원본처럼 라우팅한다.
+
 - NFS 경로 시험 입력의 `Users/chris/...`를 `Users/example/...`로 바꿨다(개인 이름 정리, 경로 해석 결과의 모양은 같다).
 
 - 필드 형에 `RemoteDB` 접두사(`RemoteDBUInt32` 등)를 붙였다(표준 형과 이름이 겹친다).

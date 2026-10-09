@@ -4,6 +4,12 @@ import DJLinkKit
 @DJLinkActor
 public final class FakeTCPConnection: TCPConnection {
     public private(set) var connectCalls: [(port: Int, host: String)] = []
+    public private(set) var requiredInterfaces: [String] = []
+    public var interfaceError: (any Error)?
+    public func setRequiredInterface(name: String) throws {
+        if let interfaceError { throw interfaceError }
+        requiredInterfaces.append(name)
+    }
     public private(set) var writes: [[UInt8]] = []
     public private(set) var readCalls: [Int?] = []
     public private(set) var isOpen = true
