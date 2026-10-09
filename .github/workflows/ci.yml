@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 원본 고정 커밋: UPSTREAM.md와 scripts/port-status.sh의 값과 같아야 한다.
+env:
+  ALPHATHETA_CONNECT_SHA: 7496991060a38951c2119db13c26b3da7c075bfa
+  ONELIBRARY_CONNECT_SHA: ac3edd3b8a18f7649d336ebd56d28b15923a05d6
+  METADATA_CONNECT_SHA: c2ae262650a7bbe7af5fb5222a6ab6b882ecf865
+
+jobs:
+  test:
+    # macOS 15 이상, Swift 6.2 이상(PLAN §3). 러너에 깔린 가장 높은 Xcode를 고른다.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 최신 Xcode 선택
+        run: |
+          latest="$(ls -d /Applications/Xcode_[0-9]*.app | grep -vi beta | sort -V | tail -1)"
+          echo "선택: $latest"
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+          swift --version
+
+      - name: 원본 세 저장소를 고정 커밋으로 받기
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/upstream"
+          mkdir -p "$dir"
+          fetch() {
+            local name="$1" sha="$2"
+            git init -q "$dir/$name"
+            git -C "$dir/$name" remote add origin "https://github.com/chrisle/$name.git"
+            git -C "$dir/$name" fetch -q --depth 1 origin "$sha"
+            git -C "$dir/$name" checkout -q FETCH_HEAD
+            echo "$name $(git -C "$dir/$name" rev-parse HEAD)"
+          }
+          fetch alphatheta-connect "$ALPHATHETA_CONNECT_SHA"
+          fetch onelibrary-connect "$ONELIBRARY_CONNECT_SHA"
+          fetch metadata-connect "$METADATA_CONNECT_SHA"
+          echo "UPSTREAM_DIR=$dir" >> "$GITHUB_ENV"
+
+      # 루프백(127.0.0.1) 통합 시험은 DJLINK_LOOPBACK_TESTS=1일 때만 돈다(PLAN §11). CI에서는 켜지 않는다.
+      - name: swift test
+        env:
+          DJLINK_LOOPBACK_TESTS: "0"
+        run: swift test
+
+      # 원본 it( 수와 옮긴 @Test 수가 하나라도 다르면 실패한다. 옮기는 도중에는 실패가 정상이다.
+      - name: port-status
+        if: ${{ !cancelled() }}
+        run: bash scripts/port-status.sh

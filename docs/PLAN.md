@@ -242,6 +242,15 @@ let package = Package(
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 
+옮기면서 찾아 그대로 둔 원본 버그(2026-10-10, 자세한 것은 [port-notes.md](port-notes.md)):
+
+- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견줘 id 4 이상이면 비트가 서지 않는다. 실기에서 `play`·`pause` 대상이 어긋나는지 먼저 확인한다.
+- mixstatus: 같은 trackId 중복을 막는 `return`이 `cancelSetEnding`보다 앞에 있어 같은 곡을 다시 틀면 30초 뒤 `setEnded`가 난다 / `isSetActive`가 false로 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않는다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없다.
+- network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다. `disconnect()`가 돌려주는 `this.close`는 바인딩되지 않아 부르면 TypeError다(Swift는 정상 동작).
+- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠진다(USB 입력은 신뢰할 수 없다) / 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4, 실기 확인 필요) / 알 수 없는 cue type도 버튼이 있으면 hot_cue / 장치 제거 때 첫 DB만 닫는다 / OneLibrary 열기 실패 때 임시 파일이 남는다.
+- metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 `toString('ascii')` 때문에 맞지 않는다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽힌다 / 빈 값만 있어도 결과가 null이 아니다 / APIC의 BOM 검사가 MIME 바이트를 읽는다 / v2.3 확장 헤더 크기에 4바이트가 빠진다.
+- virtualcdj: `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않는다 / `getDeviceEnsured`가 장치가 먼저 와도 타이머를 지우지 않는다 / `makeStatusPacket`이 머리말을 0x0b에 쓴다 / stage 0x06 패킷이 55바이트다.
+
 ## 10. 라이선스·출처
 
 **LICENSE**
