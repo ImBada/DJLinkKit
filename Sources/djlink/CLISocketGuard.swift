@@ -13,6 +13,7 @@ final class GuardedUDPSocket: UDPSocket {
     private let abort: CLIAbort
     private let requireDestination: @DJLinkActor (String) throws -> Void
     private(set) var isCloseRequested = false
+    var cancelsPendingReads: Bool { true }
 
     init(_ inner: any UDPSocket, abort: CLIAbort, requireDestination: @escaping @DJLinkActor (String) throws -> Void) {
         self.inner = inner

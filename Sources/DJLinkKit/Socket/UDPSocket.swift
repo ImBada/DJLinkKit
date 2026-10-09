@@ -76,6 +76,9 @@ public protocol UDPSocket: AnyObject {
         callback: (@DJLinkActor ((any Error)?, Int) -> Void)?
     )
 
+    /// CLI 안전을 위한 추가(기본값 false는 원본 동작). RPC 대기를 닫기·취소 시 실패로 끝낸다.
+    var cancelsPendingReads: Bool { get }
+
     /// `socket.setBroadcast(flag)`
     func setBroadcast(_ flag: Bool)
 
@@ -92,6 +95,8 @@ public protocol UDPSocket: AnyObject {
 }
 
 extension UDPSocket {
+    public var cancelsPendingReads: Bool { false }
+
     public func setBoundInterface(name: String) throws {
         throw DJLinkError("This socket cannot be bound to a network interface")
     }

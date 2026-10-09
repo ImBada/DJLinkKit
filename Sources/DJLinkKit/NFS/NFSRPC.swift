@@ -51,6 +51,8 @@ public struct RetryConfig: Sendable {
     public let mutex = AsyncMutex()
     public var xid = 1
     public var connected = true
+    private var closed = false
+    private var closeListener: SocketListener?
     public let clock: any DJLinkClock
     public init(
         address: String, retryConfig: RetryConfig = RetryConfig(),
@@ -60,6 +62,12 @@ public struct RetryConfig: Sendable {
         self.retryConfig = retryConfig
         self.clock = clock
         socket = try socketFactory.createUDPSocket(reuseAddr: false)
+        if socket.cancelsPendingReads {
+            closeListener = socket.onClose { [weak self] in
+                self?.closed = true
+                self?.connected = false
+            }
+        }
     }
     public func setupRequest(program: Int, version: Int, procedure: Int, data: [UInt8]) throws -> [UInt8] {
         let authBody = try rpc.UnixAuth(stamp: 0x967b8703, name: "", uid: 0, gid: 0, gids: []).toXDR()
@@ -73,8 +81,26 @@ public struct RetryConfig: Sendable {
         let callData = try setupRequest(program: program, version: version, procedure: procedure, data: data)
         let retryConfig = retryConfig
         let resp = try await mutex.runExclusive {
-            try await withRetry(clock: clock, options: retryConfig.options, shouldRetry: { $0 is TimeoutError }) { _ in
-                try await withTimeout(clock: self.clock, .ms(retryConfig.transactionTimeout ?? 1000)) {
+            let cancellable = self.socket.cancelsPendingReads
+            let sleep: (@DJLinkActor (Duration) async throws -> Void)? =
+                cancellable
+                ? { duration in
+                    guard !self.closed else { throw SocketNotRunningError() }
+                    _ = try await udpReadCancellable(
+                        self.socket, clock: self.clock, duration: duration, waitingForRetry: true)
+                } : nil
+            return try await withRetry(
+                clock: clock, options: retryConfig.options, shouldRetry: { $0 is TimeoutError }, sleep: sleep
+            ) { _ in
+                if cancellable {
+                    try Task.checkCancellation()
+                    guard !self.closed else { throw SocketNotRunningError() }
+                    try await udpSend(self.socket, callData, port, self.address)
+                    guard !self.closed else { throw SocketNotRunningError() }
+                    return try await udpReadCancellable(
+                        self.socket, clock: self.clock, duration: .ms(retryConfig.transactionTimeout ?? 1000))
+                }
+                return try await withTimeout(clock: self.clock, .ms(retryConfig.transactionTimeout ?? 1000)) {
                     try await udpSend(self.socket, callData, port, self.address)
                     return await udpRead(self.socket)
                 }
@@ -89,7 +115,15 @@ public struct RetryConfig: Sendable {
         }
         return data
     }
-    public func disconnect() async throws { try await udpClose(socket) }
+    public func disconnect() async throws {
+        if socket.cancelsPendingReads {
+            closed = true
+            connected = false
+        }
+        try await udpClose(socket)
+        if let closeListener { socket.off(closeListener) }
+        closeListener = nil
+    }
 }
 @DJLinkActor public final class RpcProgram {
     public var program: Int

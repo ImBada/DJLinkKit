@@ -33,6 +33,7 @@ public func withRetry<T>(
     options: RetryOptions = RetryOptions(),
     random: @DJLinkActor () -> Double = { Double.random(in: 0..<1) },
     shouldRetry: @DJLinkActor (any Error) -> Bool = { _ in true },
+    sleep: (@DJLinkActor (Duration) async throws -> Void)? = nil,
     _ operation: @DJLinkActor (_ attempt: Int) async throws -> T
 ) async throws -> T {
     let minimum = options.minTimeout ?? 1000
@@ -67,7 +68,11 @@ public func withRetry<T>(
                 }
             }
             let delay = timeouts.removeFirst()
-            await clock.sleep(for: .ms(delay))
+            if let sleep {
+                try await sleep(.ms(delay))
+            } else {
+                await clock.sleep(for: .ms(delay))
+            }
             attempt += 1
         }
     }

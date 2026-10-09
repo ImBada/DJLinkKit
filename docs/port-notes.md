@@ -37,6 +37,8 @@
 
 ## 3단계 (remotedb·NFS)
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): `UDPSocket.cancelsPendingReads`는 기본 false이며 CLI 래퍼만 true다. RPC는 이 경우 `udpReadCancellable`로 닫기·취소·시간 초과 때 대기자를 실패시키고 구독·타이머를 거둔다. 재시도 대기도 닫기로 풀린다. `withRetry(sleep:)`의 기본 nil은 원본 시계 sleep이며 CLI RPC에서만 취소 가능한 대기를 주입한다. 원본 `udpRead`는 바꾸지 않는다.
+
 - CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다. 찾지 못하면 TCP 연결을 시작하지 않는다. `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다. 미호출 시 원본처럼 라우팅한다.
 
 - NFS 경로 시험 입력의 `Users/chris/...`를 `Users/example/...`로 바꿨다(개인 이름 정리, 경로 해석 결과의 모양은 같다).
