@@ -111,8 +111,9 @@ extension MetadataConnect {
     }
 
     /// Check if a frame ID matches any of the target IDs
+    // PLAN §9: 원본은 `startsWith`로 앞부분만 비교해 TCOM·TCOP이 장르(TCO)로 읽혔다. 프레임 ID 전체를 비교한다.
     private static func matchesFrameId(_ frameId: String, _ targets: [String]) -> Bool {
-        targets.contains { frameId == $0 || frameId.hasPrefix($0) }
+        targets.contains(frameId)
     }
 
     /// Extract metadata from an MP3 file with ID3v2 tags
