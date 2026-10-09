@@ -212,6 +212,8 @@ public final class MixstatusProcessor: EventEmitting {
     private var isSetActive = false
     /// When we are waiting for a set to end, use this to cancel the timer.
     private var cancelSetEnding: (@DJLinkActor () -> Void)?
+    /// `cancelSetEnding`을 건 대기의 번호. 가장 최근 대기만 `cancelSetEnding`을 비운다.
+    private var setEndingGeneration = 0
     /// The configuration for this instance of the processor
     private var config: MixstatusConfig
 
@@ -366,8 +368,19 @@ public final class MixstatusProcessor: EventEmitting {
             return
         }
 
+        // PLAN §9: 원본은 앞 대기를 취소하지 않고 #cancelSetEnding을 덮어써 앞 타이머를 지울 수 없었다.
+        if let cancelSetEnding {
+            cancelSetEnding()
+        }
+
+        // 취소된 앞 대기의 뒷부분이 새 대기의 취소 함수를 지우지 않도록 대기마다 번호를 붙인다.
+        setEndingGeneration += 1
+        let generation = setEndingGeneration
+
         let promise = SetEndingPromise(enqueue: { [self] in enqueueMicrotask($0) }) { [self] shouldEnd in
-            cancelSetEnding = nil
+            if setEndingGeneration == generation {
+                cancelSetEnding = nil
+            }
 
             if !shouldEnd || !isSetActive {
                 return

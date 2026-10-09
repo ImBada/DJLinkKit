@@ -126,4 +126,58 @@ final class MixStatusUpstreamFixTests {
         await clock.settle()
         #expect(seHandler.callCount == 1)
     }
+
+    @Test("replaces the pending set ending timer when setMayStop is called twice")
+    func replacesPendingSetEndingTimer() async {
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+
+        // Cue: the first set ending timer starts (ends at 30s)
+        feedState(1) { $0.playState = .cued }
+        #expect(clock.pendingTimerCount == 1)
+
+        // Nothing is playing, so asking for the next track arms the set ending again (ends at 40s)
+        clock.advance(ms: 10 * 1000)
+        processor.triggerNextTrack()
+        await clock.settle()
+        #expect(clock.pendingTimerCount == 1)
+
+        clock.advance(ms: 25 * 1000)
+        await clock.settle()
+        #expect(!seHandler.wasCalled)
+
+        clock.advance(ms: 5 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+    }
+
+    @Test("cancels the replaced set ending timer when a deck plays live again")
+    func cancelsReplacedSetEndingTimer() async {
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+        feedState(1) { $0.playState = .cued }
+
+        clock.advance(ms: 10 * 1000)
+        processor.triggerNextTrack()
+        await clock.settle()
+
+        // The cancelled first timer's continuation must not wipe the second timer's cancel function
+        feedState(1) { $0.playState = .playing }
+        await clock.settle()
+        #expect(clock.pendingTimerCount == 0)
+
+        clock.advance(ms: 120 * 1000)
+        await clock.settle()
+        #expect(!seHandler.wasCalled)
+    }
 }
