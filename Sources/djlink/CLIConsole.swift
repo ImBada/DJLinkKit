@@ -1,4 +1,5 @@
 import DJLinkKit
+import Darwin
 import Foundation
 import Synchronization
 
@@ -10,16 +11,33 @@ protocol CLIOutput: Sendable {
     func writeErrorLine(_ line: String)
 }
 
-/// 표준 출력·표준 오류로 쓴다.
+/// 표준 출력·표준 오류로 쓴다. 쓰기가 실패해도(예: 닫힌 파이프, SIGPIPE를 무시하므로 `EPIPE`) 멈추거나 죽지 않고 그 줄을 버린다.
 struct StandardCLIOutput: CLIOutput {
-    init() {}
+    private let outputDescriptor: Int32
+    private let errorDescriptor: Int32
 
-    func writeLine(_ line: String) {
-        FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    init(outputDescriptor: Int32 = STDOUT_FILENO, errorDescriptor: Int32 = STDERR_FILENO) {
+        self.outputDescriptor = outputDescriptor
+        self.errorDescriptor = errorDescriptor
     }
 
-    func writeErrorLine(_ line: String) {
-        FileHandle.standardError.write(Data((line + "\n").utf8))
+    func writeLine(_ line: String) { Self.write(line, to: outputDescriptor) }
+
+    func writeErrorLine(_ line: String) { Self.write(line, to: errorDescriptor) }
+
+    private static func write(_ line: String, to descriptor: Int32) {
+        let bytes = Array((line + "\n").utf8)
+        var offset = 0
+        while offset < bytes.count {
+            let written = bytes.withUnsafeBytes {
+                Darwin.write(descriptor, $0.baseAddress!.advanced(by: offset), $0.count - offset)
+            }
+            if written < 0 {
+                if errno == EINTR { continue }
+                return
+            }
+            offset += written
+        }
     }
 }
 

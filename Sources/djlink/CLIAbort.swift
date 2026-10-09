@@ -202,18 +202,28 @@ final class DispatchCLISignalSource: CLISignalSource, @unchecked Sendable {
 }
 
 /// 신호 큐에서 플래그를 세운다. 두 번째 신호는 액터와 무관하게 즉시 끝낸다.
+/// SIGINT·SIGTERM·SIGHUP(터미널이 닫힘)은 같은 정리 경로로 가고, SIGPIPE는 무시한다(닫힌 파이프 쓰기는 오류로 돌아온다).
 final class CLISignalHandler: Sendable {
+    /// 정리 경로로 보내는 신호.
+    static let interruptSignals: [Int32] = [SIGINT, SIGTERM, SIGHUP]
+    /// 무시하는 신호.
+    static let ignoredSignals: [Int32] = [SIGPIPE]
+
     private let sources: [any CLISignalSource]
+    private let setIgnored: @Sendable (Int32, Bool) -> Void
 
     init(
         abort: CLIAbort,
         makeSource: (Int32, @escaping @Sendable (UInt) -> Void) -> any CLISignalSource = {
             DispatchCLISignalSource(number: $0, handler: $1)
         },
+        setIgnored: @escaping @Sendable (Int32, Bool) -> Void = { signal($0, $1 ? SIG_IGN : SIG_DFL) },
         terminate: @escaping @Sendable (Int32) -> Void = { _exit($0) }
     ) {
+        self.setIgnored = setIgnored
+        for number in Self.ignoredSignals { setIgnored(number, true) }
         let count = Mutex<UInt>(0)
-        sources = [SIGINT, SIGTERM].map { number in
+        sources = Self.interruptSignals.map { number in
             makeSource(number) { events in
                 let total = count.withLock { count in
                     count += max(1, events)
@@ -227,5 +237,6 @@ final class CLISignalHandler: Sendable {
 
     func remove() {
         for source in sources { source.cancel() }
+        for number in Self.ignoredSignals { setIgnored(number, false) }
     }
 }
