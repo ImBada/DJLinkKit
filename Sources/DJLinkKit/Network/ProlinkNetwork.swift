@@ -119,6 +119,12 @@ public final class ProlinkNetwork {
         guard var config else { throw DJLinkError(connectErrorHelp) }
         let tx = Telemetry.startTransaction(.init(name: "connect"))
         let connectMethod = config.connectMethod ?? .active
+        // CLI 안전을 위한 추가(기본값은 원본 동작). Stagehand 전체 송신 경로에 정책을 적용할 수 없으면 거부한다.
+        if connectMethod == .stagehand,
+            config.allowsDeviceId != nil || config.announceTargetFilter != nil || config.onDeviceIdRejected != nil
+        {
+            throw DJLinkError("Stagehand connection does not support the configured CLI safety policies")
+        }
         let vcdjId = config.vcdjId ?? (connectMethod == .stagehand ? generateStagehandDeviceId() : DEFAULT_VCDJ_ID)
         config.vcdjId = vcdjId
         self.config = config

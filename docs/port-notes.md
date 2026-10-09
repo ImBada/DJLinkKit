@@ -22,6 +22,8 @@
 
 ## 2단계 network
 
+- CLI 안전을 위한 추가(기본값은 원본 동작): Stagehand 연결에 `allowsDeviceId`·`announceTargetFilter`·`onDeviceIdRejected`가 설정되면 시작 전 명시적으로 거부한다. Stagehand 브로드캐스트와 heartbeat에 이 정책을 온전히 적용하지 못하기 때문이다. 안전 옵션이 없는 기본 Stagehand는 원본 동작을 유지한다.
+
 - `network.control`: Control은 DJLinkKit에 기대는 별도 타깃(`DJLinkControl`)이라 network가 connect 때 만들 수 없다. `DJLinkControl`이 `ProlinkNetwork`를 확장해, 연결된 뒤 처음 읽을 때 그 연결의 beat·status 소켓과 가상 장치 참조로 만든다. 같은 연결에서는 같은 Control, 다음 connect에서는 새 Control이다. 연결 전에는 원본처럼 nil.
 - `db`·`localdb`·`remotedb`는 시험에서 가짜를 넣을 수 있게 서비스 프로토콜(`NetworkDatabase` 등) 형으로 돌려준다. 기본은 실제 클래스다.
 - `NetworkConfig`는 전체·부분 설정을 같은 형으로 받는다. nil은 생략으로 처리하므로 JS의 명시적 `undefined` 덮어쓰기는 구별하지 않는다.
