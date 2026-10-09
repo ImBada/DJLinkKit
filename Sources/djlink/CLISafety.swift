@@ -94,19 +94,30 @@ func checkRekordboxNotRunning(lister: any ProcessLister) -> CLISafetyViolation? 
 // MARK: - 읽지 않는 경로
 
 /// docs/PLAN.md §13의 `UsbLayout.neverRead`와 같은 뜻. NFS로도 열거·읽기·복사하지 않는다.
-/// 경로는 `/`·`\` 모두 구분자로 보고, 드라이브 글자와 `.`·빈 칸을 걷어낸 뒤 대소문자 없이 견준다.
+/// 경로는 `/`·`\` 모두 구분자로 보고, 드라이브 글자를 걷어낸 뒤 구성 요소마다 비교한다.
+/// 구성 요소 끝의 `.`·공백은 Windows·FAT 계열이 이름에서 걷어내므로(`PIONEER.`는 `PIONEER`) 걷어낸 뒤 대소문자 없이 견준다.
+/// `~`가 든 구성 요소는 FAT 8.3 짧은 이름 별칭(`EXTRAC~1`)일 수 있어 어떤 이름인지 알 수 없으므로 거부한다.
 func checkNeverRead(_ path: String) -> CLISafetyViolation? {
     var components = path.replacingOccurrences(of: "\\", with: "/")
         .split(separator: "/", omittingEmptySubsequences: true)
         .map { String($0) }
-        .filter { $0 != "." }
     if let first = components.first, first.count == 2, first.hasSuffix(":") { components.removeFirst() }
-    let lowered = components.map { $0.lowercased() }
-    // `.PIONEER`처럼 앞에 `.`이 붙은 이름도 같은 폴더로 본다(로컬 DB 읽기가 `.PIONEER/...`를 먼저 시도한다).
-    let dotless = lowered.map { String($0.drop { $0 == "." }) }
-    if lowered.contains("..") {
+    // 점·공백만 있는 구성 요소: 점이 하나면 현재 폴더(건너뜀), 둘 이상(`..`·`...`)은 상위 폴더 참조로 본다.
+    var parentReference = false
+    components = components.filter { component in
+        guard component.allSatisfy({ $0 == "." || $0.isWhitespace }) else { return true }
+        if component.filter({ $0 == "." }).count >= 2 { parentReference = true }
+        return false
+    }
+    if parentReference {
         return CLISafetyViolation(message: "경로에 상위 폴더(..)를 쓸 수 없다: \(path)")
     }
+    if components.contains(where: { $0.contains("~") }) {
+        return CLISafetyViolation(message: "경로에 ~가 든 이름(FAT 짧은 이름 별칭일 수 있다)은 읽지 않는다: \(path)")
+    }
+    let lowered = components.map { String($0.reversed().drop { $0 == "." || $0.isWhitespace }.reversed()).lowercased() }
+    // `.PIONEER`처럼 앞에 `.`이 붙은 이름도 같은 폴더로 본다(로컬 DB 읽기가 `.PIONEER/...`를 먼저 시도한다).
+    let dotless = lowered.map { String($0.drop { $0 == "." }) }
     if lowered.contains("djprofile.nxs") {
         return CLISafetyViolation(message: "djprofile.nxs는 읽지 않는다: \(path)")
     }

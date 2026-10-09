@@ -83,11 +83,33 @@ struct CLISafetyTests {
             "djprofile.nxs", "/DJPROFILE.NXS", "a/b/djprofile.nxs", "PIONEER/rekordbox/../extracted", "../etc",
             ".PIONEER/extracted/x", "./.PIONEER/CDP/a", "..PIONEER/extracted",
         ]
+        // 구성 요소 끝의 점·공백은 FAT·Windows가 걷어낸다.
+        let trailing = [
+            "PIONEER./extracted", "PIONEER /extracted", "PIONEER/extracted.", "PIONEER/extracted ",
+            "PIONEER/extracted. . ", "PIONEER/CDP...", "pioneer. ./cdp/x", "djprofile.nxs.", "DJPROFILE.NXS ",
+            "a/djprofile.nxs. .", "C:\\PIONEER.\\CDP.\\x", ".PIONEER./Extracted /x",
+        ]
+        for path in trailing { #expect(checkNeverRead(path) != nil, "\(path)") }
+        // 상위 폴더 참조의 변형.
+        for path in ["PIONEER/.../extracted", "a/.. /b", "../x", "a/. ./b", "a/.../b"] {
+            #expect(checkNeverRead(path) != nil, "\(path)")
+        }
+        // FAT 8.3 별칭(`~`가 든 구성 요소)은 무슨 이름인지 알 수 없어 거부한다.
+        let aliases = [
+            "PIONEER/EXTRAC~1", "PIONEER/extrac~1/x", "PIONEER~1/EXTRACTED", "PIONEER/CDP~1", "DJPROF~1.NXS",
+            "PIONEER/rekordbox/EXPORT~1.PDB", "a~b/c.mp3", "~", "Contents/Artist/track~1.mp3",
+        ]
+        for path in aliases {
+            let violation = checkNeverRead(path)
+            #expect(violation != nil, "\(path)")
+            #expect(violation?.message.contains("~") == true, "\(path)")
+        }
         for path in refused { #expect(checkNeverRead(path) != nil, "\(path)") }
         let allowed = [
             "PIONEER/rekordbox/export.pdb", "PIONEER/rekordbox/exportLibrary.db",
             "PIONEER/USBANLZ/P016/0000875E/ANLZ0000.DAT",
-            "/Contents/Artist/track.mp3", "PIONEER/extractedx", "PIONEER", "extracted",
+            "/Contents/Artist/track.mp3", "PIONEER/extractedx", "PIONEER", "extracted", "a.b/c.d", "PIONEER/.hidden/x",
+            "Contents/Artist. Name/track.mp3", ".PIONEER/rekordbox/export.pdb", "C:\\Contents\\a.mp3", "a/./b", "a/ /b",
         ]
         for path in allowed { #expect(checkNeverRead(path) == nil, "\(path)") }
     }
