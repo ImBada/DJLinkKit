@@ -14,8 +14,8 @@ extension MetadataConnect {
 
     /// iTunes metadata atom types
     private enum AtomTypes {
-        // 원본 주의: 'ascii'로 읽으면 상위 비트가 지워져 0xa9가 ')'가 되므로, 아래 '\xa9…' 이름들은 원본에서도 맞는 일이 없다.
-        // 기반의 `.ascii`가 같은 방식이라 Swift에서도 그대로 맞지 않는다(1:1이라 그대로 둔다).
+        // PLAN §9: 원본은 atom 이름을 'ascii'로 읽어 0xa9가 ')'가 되어 아래 '\xa9…' 이름이 맞지 않았다.
+        // atom 이름은 바이트 그대로(latin1) 읽는다.
         static let TITLE = "\u{a9}nam" // Title
         static let ARTIST = "\u{a9}ART" // Artist
         static let ALBUM = "\u{a9}alb" // Album
@@ -37,7 +37,7 @@ extension MetadataConnect {
 
         let header = try await reader.read(offset, 8)
         let size = try header.readUInt32BE(0)
-        let type = header.toString(.ascii, 4, 8)
+        let type = header.toString(.latin1, 4, 8)
 
         // Extended size (64-bit)
         if size == 1 {
@@ -187,7 +187,7 @@ extension MetadataConnect {
     public static func extractFromMp4(_ reader: any FileReader) async throws -> ExtractedMetadata? {
         // Verify this is an MP4 file by checking for ftyp atom
         let ftypHeader = try await reader.read(0, 8)
-        if ftypHeader.count < 8 || ftypHeader.toString(.ascii, 4, 8) != "ftyp" {
+        if ftypHeader.count < 8 || ftypHeader.toString(.latin1, 4, 8) != "ftyp" {
             return nil
         }
 

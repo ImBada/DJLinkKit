@@ -16,7 +16,8 @@ private func readAtomHeader(_ reader: any ArtworkFileReader, _ offset: Int) asyn
 
     let header = try await reader.read(offset, 8)
     let size = try header.readUInt32BE(0)
-    let type = header.toString(.ascii, 4, 8)
+    // PLAN §9: atom 이름은 바이트 그대로(latin1) 읽는다(원본은 'ascii'라 상위 비트가 지워졌다).
+    let type = header.toString(.latin1, 4, 8)
 
     if size == 1 {
         if offset + 16 > reader.size {
@@ -113,7 +114,7 @@ private func findCoverArtData(
 
 func extractFromMp4(_ reader: any ArtworkFileReader) async throws -> ExtractedArtwork? {
     let ftypHeader = try await reader.read(0, 8)
-    if ftypHeader.count < 8 || ftypHeader.toString(.ascii, 4, 8) != "ftyp" {
+    if ftypHeader.count < 8 || ftypHeader.toString(.latin1, 4, 8) != "ftyp" {
         return nil
     }
 
