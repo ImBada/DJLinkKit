@@ -27,6 +27,19 @@ struct CLIDestinationSafetyTests {
         await registry.closeAll()
     }
 
+    @Test("a UDP send without a callback still reports its refusal")
+    func callbacklessSend() async throws {
+        let factory = FakeSocketFactory()
+        let abort = CLIAbort()
+        let registry = CLISocketRegistry(inner: factory, abort: abort)
+        registry.scope = try CLINetworkScope(name: "en7", info: networkInterface("192.168.1.100"))
+        let udp = try registry.createUDPSocket(reuseAddr: false)
+        udp.send([1], port: 111, address: "10.0.0.1")
+        #expect(factory.udpSockets[0].sent.isEmpty)
+        #expect(abort.isAborted)
+        await registry.closeAll()
+    }
+
     @Test("unselected scope cannot send")
     func noScope() async throws {
         let factory = FakeSocketFactory()

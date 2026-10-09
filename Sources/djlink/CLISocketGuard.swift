@@ -60,7 +60,11 @@ final class GuardedUDPSocket: UDPSocket {
             try requireDestination(address)
             try abort.check()
         } catch {
-            if let callback { callback(error, 0) }
+            if let callback {
+                callback(error, 0)
+            } else {
+                abort.fail("UDP 송신을 거부했다: \(error)")
+            }
             return
         }
         inner.send(msg, port: port, address: address, callback: callback)
