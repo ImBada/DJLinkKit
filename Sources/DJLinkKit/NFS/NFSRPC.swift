@@ -66,6 +66,10 @@ public struct RetryConfig: Sendable {
             closeListener = socket.onClose { [weak self] in
                 self?.closed = true
                 self?.connected = false
+                if let self, let closeListener = self.closeListener {
+                    self.socket.off(closeListener)
+                    self.closeListener = nil
+                }
             }
         }
     }
@@ -80,15 +84,16 @@ public struct RetryConfig: Sendable {
         xid += 1
         let callData = try setupRequest(program: program, version: version, procedure: procedure, data: data)
         let retryConfig = retryConfig
-        let resp = try await mutex.runExclusive {
+        let resp: [UInt8] = try await mutex.runExclusive { () async throws -> [UInt8] in
             let cancellable = self.socket.cancelsPendingReads
-            let sleep: (@DJLinkActor (Duration) async throws -> Void)? =
-                cancellable
-                ? { duration in
+            var sleep: (@DJLinkActor (Duration) async throws -> Void)?
+            if cancellable {
+                sleep = { duration in
                     guard !self.closed else { throw SocketNotRunningError() }
                     _ = try await udpReadCancellable(
                         self.socket, clock: self.clock, duration: duration, waitingForRetry: true)
-                } : nil
+                }
+            }
             return try await withRetry(
                 clock: clock, options: retryConfig.options, shouldRetry: { $0 is TimeoutError }, sleep: sleep
             ) { _ in
