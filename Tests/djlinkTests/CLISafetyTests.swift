@@ -94,10 +94,10 @@ struct CLISafetyTests {
         for path in ["PIONEER/.../extracted", "a/.. /b", "../x", "a/. ./b", "a/.../b"] {
             #expect(checkNeverRead(path) != nil, "\(path)")
         }
-        // FAT 8.3 별칭(`~`가 든 구성 요소)은 무슨 이름인지 알 수 없어 거부한다.
+        // FAT 8.3 별칭 꼴(이름 8자 이하가 `~숫자`로 끝남)은 무슨 이름인지 알 수 없어 거부한다.
         let aliases = [
-            "PIONEER/EXTRAC~1", "PIONEER/extrac~1/x", "PIONEER~1/EXTRACTED", "PIONEER/CDP~1", "DJPROF~1.NXS",
-            "PIONEER/rekordbox/EXPORT~1.PDB", "a~b/c.mp3", "~", "Contents/Artist/track~1.mp3",
+            "PIONEER/EXTRAC~1", "PIONEER/extrac~1/x", "PIONEE~1/EXTRACTED", "PIONEER/CDP~1", "DJPROF~1.NXS",
+            "PIONEER/rekordbox/EXPORT~1.PDB", "Contents/Artist/track~1.mp3", "PIONE~10/x",
         ]
         for path in aliases {
             let violation = checkNeverRead(path)
@@ -109,6 +109,8 @@ struct CLISafetyTests {
             "PIONEER/rekordbox/export.pdb", "PIONEER/rekordbox/exportLibrary.db",
             "PIONEER/USBANLZ/P016/0000875E/ANLZ0000.DAT",
             "/Contents/Artist/track.mp3", "PIONEER/extractedx", "PIONEER", "extracted", "a.b/c.d", "PIONEER/.hidden/x",
+            // 8.3 별칭 꼴이 아닌 `~`는 곡 이름에 쓰일 수 있어 막지 않는다.
+            "a~b/c.mp3", "Contents/Artist ~ Remix/track~mix.mp3", "~", "Contents/long name~1.mp3",
             "Contents/Artist. Name/track.mp3", ".PIONEER/rekordbox/export.pdb", "C:\\Contents\\a.mp3", "a/./b", "a/ /b",
         ]
         for path in allowed { #expect(checkNeverRead(path) == nil, "\(path)") }

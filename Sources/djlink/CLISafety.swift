@@ -96,7 +96,20 @@ func checkRekordboxNotRunning(lister: any ProcessLister) -> CLISafetyViolation? 
 /// docs/PLAN.md §13의 `UsbLayout.neverRead`와 같은 뜻. NFS로도 열거·읽기·복사하지 않는다.
 /// 경로는 `/`·`\` 모두 구분자로 보고, 드라이브 글자를 걷어낸 뒤 구성 요소마다 비교한다.
 /// 구성 요소 끝의 `.`·공백은 Windows·FAT 계열이 이름에서 걷어내므로(`PIONEER.`는 `PIONEER`) 걷어낸 뒤 대소문자 없이 견준다.
-/// `~`가 든 구성 요소는 FAT 8.3 짧은 이름 별칭(`EXTRAC~1`)일 수 있어 어떤 이름인지 알 수 없으므로 거부한다.
+/// FAT 8.3 짧은 이름 별칭 꼴(`EXTRAC~1`, `DJPROF~1.NXS`: 이름 8자 이하가 `~숫자`로 끝나고 확장자 3자 이하)인 구성 요소는
+/// 어떤 긴 이름인지 알 수 없으므로 거부한다. `a~b.mp3`처럼 그 꼴이 아닌 `~`는 막지 않는다.
+/// FAT 8.3 짧은 이름 별칭 꼴인가. 끝의 `.`·공백은 걷어내고 본다.
+func isFATShortNameAlias(_ component: String) -> Bool {
+    let trimmed = String(component.reversed().drop { $0 == "." || $0.isWhitespace }.reversed())
+    let parts = trimmed.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+    let base = parts[0]
+    if parts.count == 2, parts[1].count > 3 { return false }
+    guard base.count <= 8, let tilde = base.lastIndex(of: "~"), tilde != base.startIndex else { return false }
+    let digits = base[base.index(after: tilde)...]
+    return !digits.isEmpty && digits.allSatisfy(\.isASCII) && digits.allSatisfy(\.isNumber)
+        && !base[..<tilde].contains("~")
+}
+
 func checkNeverRead(_ path: String) -> CLISafetyViolation? {
     var components = path.replacingOccurrences(of: "\\", with: "/")
         .split(separator: "/", omittingEmptySubsequences: true)
@@ -112,8 +125,8 @@ func checkNeverRead(_ path: String) -> CLISafetyViolation? {
     if parentReference {
         return CLISafetyViolation(message: "경로에 상위 폴더(..)를 쓸 수 없다: \(path)")
     }
-    if components.contains(where: { $0.contains("~") }) {
-        return CLISafetyViolation(message: "경로에 ~가 든 이름(FAT 짧은 이름 별칭일 수 있다)은 읽지 않는다: \(path)")
+    if components.contains(where: isFATShortNameAlias) {
+        return CLISafetyViolation(message: "경로에 ~가 든 FAT 짧은 이름 별칭은 읽지 않는다: \(path)")
     }
     let lowered = components.map { String($0.reversed().drop { $0 == "." || $0.isWhitespace }.reversed()).lowercased() }
     // `.PIONEER`처럼 앞에 `.`이 붙은 이름도 같은 폴더로 본다(로컬 DB 읽기가 `.PIONEER/...`를 먼저 시도한다).
