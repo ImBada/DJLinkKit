@@ -85,8 +85,8 @@ public func makeStatusPacket(_ device: Device) -> [UInt8] {
     //  - 0x24: 01 byte device ID
     //  - 0x7C: 04 byte firmware string
 
-    // 원본 그대로 머리말을 0x0b에 쓴다(뒤의 이름이 덮어쓴다). docs/PLAN.md §9 참고.
-    b.set(PROLINK_HEADER, 0x0b)
+    // PLAN §9: 원본의 형식 주석대로 머리말은 0에, 이름은 0x0b에 쓴다.
+    b.set(PROLINK_HEADER, 0)
     b.set([UInt8](device.name, encoding: .ascii), 0x0b)
     b.set([UInt8(truncatingIfNeeded: device.id)], 0x21)
     b.set([UInt8(truncatingIfNeeded: device.id)], 0x24)
