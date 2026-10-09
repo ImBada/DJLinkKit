@@ -70,7 +70,7 @@ public enum PcapDecoders {
         public enum IP { public static let UDP = 17 }
     }
     public struct EthernetResult: Equatable, Sendable {
-        public var type: Int
+        public var type: Int?
         public var offset: Int
     }
     public struct IPv4Result: Equatable, Sendable {
@@ -87,7 +87,9 @@ public enum PcapDecoders {
         public var offset: Int
     }
     public static func Ethernet(_ buf: [UInt8]) throws -> EthernetResult {
-        EthernetResult(type: try buf.readUInt16BE(12), offset: 14)
+        let typeOffset = buf.at(12) == 0x81 && buf.at(13) == 0x00 ? 16 : 12
+        let typeLength = try buf.readUInt16BE(typeOffset)
+        return EthernetResult(type: typeLength >= 1536 ? typeLength : nil, offset: typeOffset + 2)
     }
     public static func IPV4(_ buf: [UInt8], _ offset: Int) throws -> IPv4Result {
         let ihl = try buf.readUInt8(offset) & 0x0f
@@ -100,7 +102,7 @@ public enum PcapDecoders {
     public static func UDP(_ buf: [UInt8], _ offset: Int) throws -> UDPResult {
         UDPResult(
             srcport: try buf.readUInt16BE(offset), dstport: try buf.readUInt16BE(offset + 2),
-            length: try buf.readUInt16BE(offset + 4), offset: offset + 8)
+            length: try buf.readUInt16BE(offset + 4) - 8, offset: offset + 8)
     }
 }
 
@@ -181,6 +183,7 @@ public final class PcapAdapter: EventEmitting {
             let ip = try PcapDecoders.IPV4(buffer, eth.offset)
             guard ip.protocol == PcapDecoders.PROTOCOL.IP.UDP else { return }
             let udp = try PcapDecoders.UDP(buffer, ip.offset)
+            // 원본 버그 그대로: cap 디코더와 어댑터가 UDP 헤더 길이를 각각 한 번씩 뺀다.
             let length = udp.length - 8
             guard length > 0 else { return }
             var payload = [UInt8](repeating: 0, count: length)
@@ -189,7 +192,7 @@ public final class PcapAdapter: EventEmitting {
             let event = PcapPacket(packet: payload, info: PacketInfo(payload: payload, srcAddr: ip.srcaddr))
             switch udp.dstport {
             case ANNOUNCE_PORT: emitter.emit(.announce, event)
-            case BEAT_PORT: emitter.emit(.beat, event)
+            case BEAT_PORT: try emitter.emitThrowing(.beat, event)
             case STATUS_PORT: emitter.emit(.status, event)
             default: break
             }

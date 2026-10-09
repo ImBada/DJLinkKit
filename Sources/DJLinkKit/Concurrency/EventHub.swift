@@ -31,7 +31,7 @@ public final class EventHub<Owner> {
     private struct Listener {
         let id: UInt64
         let once: Bool
-        let call: @DJLinkActor (Any) -> Void
+        let call: @DJLinkActor (Any) throws -> Void
     }
 
     private var nextID: UInt64 = 0
@@ -43,6 +43,15 @@ public final class EventHub<Owner> {
     public func on<Payload>(
         _ event: EventName<Owner, Payload>,
         _ handler: @escaping @DJLinkActor (Payload) -> Void
+    ) -> EventSubscription {
+        add(event, once: false, handler)
+    }
+
+    /// 원본에서 호출자가 emit의 예외를 잡는 경계에 쓰는 구독 창구.
+    @discardableResult
+    package func onThrowing<Payload>(
+        _ event: EventName<Owner, Payload>,
+        _ handler: @escaping @DJLinkActor (Payload) throws -> Void
     ) -> EventSubscription {
         add(event, once: false, handler)
     }
@@ -64,6 +73,13 @@ public final class EventHub<Owner> {
     /// 구독자가 하나라도 있었으면 true(Node `emit`의 반환값).
     @discardableResult
     public func emit<Payload>(_ event: EventName<Owner, Payload>, _ payload: Payload) -> Bool {
+        // 원본과 다름: 잡는 호출자가 없는 Swift 이벤트 경계에서는 예외를 잡고 넘어간다.
+        (try? emitThrowing(event, payload)) ?? false
+    }
+
+    /// 처리기 예외가 나면 뒤 구독자를 부르지 않고 emit을 감싼 catch로 전파한다.
+    @discardableResult
+    package func emitThrowing<Payload>(_ event: EventName<Owner, Payload>, _ payload: Payload) throws -> Bool {
         guard let snapshot = listeners[event.name], !snapshot.isEmpty else { return false }
         if snapshot.contains(where: \.once) {
             let onceIDs = Set(snapshot.filter(\.once).map(\.id))
@@ -71,7 +87,7 @@ public final class EventHub<Owner> {
             if listeners[event.name]?.isEmpty == true { listeners[event.name] = nil }
         }
         for listener in snapshot {
-            listener.call(payload)
+            try listener.call(payload)
         }
         return true
     }
@@ -105,11 +121,11 @@ public final class EventHub<Owner> {
     private func add<Payload>(
         _ event: EventName<Owner, Payload>,
         once: Bool,
-        _ handler: @escaping @DJLinkActor (Payload) -> Void
+        _ handler: @escaping @DJLinkActor (Payload) throws -> Void
     ) -> EventSubscription {
         nextID += 1
         let listener = Listener(id: nextID, once: once) { value in
-            handler(value as! Payload)
+            try handler(value as! Payload)
         }
         listeners[event.name, default: []].append(listener)
         return EventSubscription(id: listener.id, name: event.name)

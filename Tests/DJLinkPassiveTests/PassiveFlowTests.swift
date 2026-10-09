@@ -79,7 +79,8 @@ private func frame(_ payload: [UInt8], port: Int, options: Bool = false) -> [UIn
     bytes.writeUInt32BE(0x0a000002, 30)
     bytes.writeUInt16BE(50000, udpOffset)
     bytes.writeUInt16BE(port, udpOffset + 2)
-    bytes.writeUInt16BE(payload.count + 8, udpOffset + 4)
+    // 어댑터가 내보낼 payload를 만드는 보조 함수라 원본의 이중 차감 16바이트를 더한다.
+    bytes.writeUInt16BE(payload.count + 16, udpOffset + 4)
     return bytes + payload
 }
 private func announce(_ id: Int, name: String = "CDJ-test", short: Bool = true) -> [UInt8] {
@@ -130,6 +131,80 @@ struct PassiveFlowTests {
         #expect(seen == ["announce", "beat", "status"])
         #expect(info == .init(payload: [1, 2, 3], srcAddr: "10.0.0.1"))
         #expect(backend.minimum == 0)
+        adapter.stop()
+    }
+    @Test("original UDP double subtraction drops eight bytes and treats standard announce as short format")
+    func udpDoubleSubtraction() throws {
+        let backend = FlowPcapBackend()
+        let adapter = PcapAdapter(config: .init(iface: "en0", bufferSize: 2048), backend: backend)
+        let manager = PassiveDeviceManager(adapter, clock: TestClock())
+        var packets: [PcapPacket] = []
+        adapter.on(.announce) { packets.append($0) }
+        try adapter.start()
+        let payload = announce(1, short: false)
+        var bytes = frame(payload, port: ANNOUNCE_PORT)
+        // 실제 패킷의 UDP 길이는 헤더 8바이트와 payload의 합이다.
+        bytes.writeUInt16BE(payload.count + 8, 38)
+        #expect(try PcapDecoders.UDP(bytes, 34).length == 54)
+        backend.packet?(bytes, false)
+        #expect(packets.count == 1)
+        #expect(packets.first?.packet == Array(payload.prefix(46)))
+        #expect(manager.devices[1]?.type == .cdj)
+        #expect(manager.devices[1]?.ip.address == "10.0.0.1")
+        for length in 0...8 {
+            var short = frame([UInt8](repeating: 1, count: length), port: ANNOUNCE_PORT)
+            short.writeUInt16BE(length + 8, 38)
+            backend.packet?(short, false)
+        }
+        #expect(packets.count == 1)
+        manager.stop()
+        adapter.stop()
+    }
+    @Test("Ethernet VLAN skips one tag and keeps length and reserved values undefined")
+    func vlan() throws {
+        var bytes = frame([1, 2, 3], port: ANNOUNCE_PORT)
+        bytes.insert(contentsOf: [0x81, 0x00, 0x00, 0x01], at: 12)
+        let ethernet = try PcapDecoders.Ethernet(bytes)
+        #expect(ethernet.type == 0x0800 && ethernet.offset == 18)
+        let backend = FlowPcapBackend()
+        let adapter = PcapAdapter(config: .init(iface: "en0", bufferSize: 2048), backend: backend)
+        var packets: [PcapPacket] = []
+        adapter.on(.announce) { packets.append($0) }
+        try adapter.start()
+        backend.packet?(bytes, false)
+        #expect(packets.first?.packet == [1, 2, 3])
+        for typeLength in [0, 1500, 1501, 1535, 1536] {
+            bytes.writeUInt16BE(typeLength, 16)
+            #expect(try PcapDecoders.Ethernet(bytes).type == (typeLength >= 1536 ? typeLength : nil))
+            backend.packet?(bytes, false)
+        }
+        #expect(packets.count == 1)
+        adapter.stop()
+    }
+    @Test("position parse errors reach adapter catch and stop later beat listeners")
+    func positionError() throws {
+        let backend = FlowPcapBackend()
+        let adapter = PcapAdapter(config: .init(iface: "en0", bufferSize: 2048), backend: backend)
+        let position = PassivePositionEmitter(adapter)
+        let status = PassiveStatusEmitter(adapter)
+        let manager = PassiveDeviceManager(adapter, clock: TestClock())
+        var errors: [any Error] = []
+        var laterBeats = 0
+        adapter.on(.error) { errors.append($0) }
+        adapter.on(.beat) { _ in laterBeats += 1 }
+        var malformed = [UInt8](repeating: 0, count: 0x21)
+        malformed.replaceSubrange(0..<10, with: PROLINK_HEADER)
+        try adapter.start()
+        backend.packet?(frame(malformed, port: BEAT_PORT), false)
+        #expect(errors.count == 1 && errors.first is BufferRangeError)
+        #expect(laterBeats == 0)
+        backend.packet?(frame(malformed, port: STATUS_PORT), false)
+        malformed[10] = 6
+        backend.packet?(frame(malformed, port: ANNOUNCE_PORT), false)
+        #expect(errors.count == 1)
+        position.stop()
+        status.stop()
+        manager.stop()
         adapter.stop()
     }
     @Test("adapter start is idempotent and preserves open and missing-module errors")
