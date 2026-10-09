@@ -8,7 +8,7 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 - 1:1 포트의 0~9단계 코드를 모두 옮겼다.
 - 원본 시험 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)를 모두 옮겼고, 모두 통과한다. 원본 `it` 수와 옮긴 `@Test` 수가 파일마다 같다(`scripts/port-status.sh`).
-- 전체 시험 765개(DJLinkKit 663, DJLinkPassive 43, DJLinkControl 13, djlink CLI 46)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
+- 전체 시험 845개(DJLinkKit 677, DJLinkPassive 43, DJLinkControl 13, djlink CLI 112)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
 - **실기 확인은 아직 하지 않았다.** 모든 시험은 가짜 소켓과 합성 데이터로 돈다. 실제 CDJ·믹서와 맞춰 본 적이 없으므로 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
 - 원본과 다르게 옮긴 곳, 일부러 그대로 옮긴 원본 버그는 [docs/port-notes.md](docs/port-notes.md)에 있다.
 
@@ -77,19 +77,25 @@ UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh --stage 4  # 단계 하�
 | `watch [--iface NAME] [--vcdj-id N] [--download-dir DIR]` | 원본 cli 흐름. 곡이 바뀔 때마다 제목을 낸다. 파일은 `--download-dir`를 준 경우에만 받는다 |
 | `status` | 상태·정밀 위치·on-air |
 | `metadata --device N --slot usb\|sd --track-id ID` | 메타데이터·그리드·파형·큐 요약 |
-| `fetch --device N --slot usb\|sd --path PATH --out FILE` | NFS로 파일 하나 받기 |
+| `fetch --device N --slot usb\|sd --path PATH --out FILE` | NFS로 파일 하나 받기(이미 있으면 거부) |
 | `mixstatus` | MixstatusProcessor 이벤트 |
-| `control load\|play\|pause ... --confirm "<장치 이름>"` | 제어 명령 |
+| `control load ... --confirm "<장치 이름>"` | 곡 올리기. `play`·`pause`는 `--unverified-playstate` 없이는 거부 |
 | `passive --iface NAME` | libpcap으로 보기만 하기(BPF 권한 필요) |
 
 CLI가 지키는 안전 규칙(docs/PLAN.md §11):
 
 - 시작할 때 같은 Mac에서 rekordbox·rekordboxAgent가 돌고 있으면 UDP 50000~50002를 잡지 않고 끝낸다. 확인하지 못해도 끝낸다.
-- 가상 CDJ 번호 기본값은 7이다. 1~6은 `--allow-player-id`를 같이 줄 때만 쓴다.
+- 소켓은 고른 인터페이스에만 묶고(macOS `IP_BOUND_IF`) 그 인터페이스 서브넷 밖의 장치에는 announce도 연결도 질의도 하지 않는다. `--iface`를 주면 소켓을 만들 때부터 묶고, 주지 않으면 처음 보이는 장치(이미 본 장치가 있으면 그것)의 인터페이스를 고른 뒤 같은 제한을 건다. 다른 LAN에 같이 연결된 Mac에서는 `--iface`를 주는 편이 안전하다.
+- 가상 CDJ 번호 기본값은 7이다. 1~6은 `--allow-player-id`를 같이 줄 때만 쓴다. 번호가 겹쳐 다시 골라야 하는데 허용하지 않는 번호(1~6)가 나오면 그 번호로 announce하기 전에 멈추고 오류를 낸 뒤 종료 코드 1로 끝난다.
 - 제어 명령은 `--confirm`이 대상 장치 이름과 정확히 같을 때만 보낸다. 대상을 확인하기 전에는 가상 CDJ로 참여하지 않는다.
-- `fetch`는 `PIONEER/extracted`·`PIONEER/CDP`·`djprofile.nxs` 경로를 거부한다.
+- `control play`·`control pause`는 거부한다(종료 코드 2). 원본 재생 상태 패킷이 칸 번호(0~3)를 장치 번호와 그대로 견주고 나머지 칸을 0(재생 시작)으로 채워 다른 덱이 움직이거나 `pause`가 `play`와 같은 패킷이 될 수 있다(docs/PLAN.md §9). 실기로 확인하기 전에는 시험용 장비에서 위험을 알고 `--unverified-playstate`를 같이 줄 때만 보내고, 그때도 1~3번 장치(play와 pause 패킷이 서로 다른 번호)에만 보낸다.
+- `PIONEER/extracted`·`PIONEER/CDP`·`djprofile.nxs`는 `fetch`뿐 아니라 메타데이터·파형·분석·앨범아트 조회 안의 모든 NFS 읽기에서 거부한다.
+- Ctrl-C를 누르면 이미 중단된 뒤에는 참여(announce)·제어 송신·파일 쓰기·NFS 요청을 새로 만들지 않고, 시작한 작업과 소켓(NFS RPC 소켓 포함)을 모두 닫고 끝낸다. 정리가 멈추면 Ctrl-C를 한 번 더 눌러 바로 끝낸다.
+- `metadata`·`fetch`·`control`은 전체 제한 시간이 있다(`--timeout SEC`, 기본 15·300·15초). 넘으면 남은 작업과 소켓을 정리하고 종료 코드 1로 끝난다.
+- `watch --download-dir`는 파일을 `<장치>-<슬롯>-<곡 번호>-<원래 이름>`으로 쓰고, `fetch`와 `watch` 모두 이미 있는 파일은 덮어쓰지 않는다(임시 파일에 쓴 뒤 `link`로 게시한다).
+- `metadata`는 요청한 파형·분석 조회가 실패하면(데이터가 없는 것과 다르다) 나머지를 출력한 뒤 종료 코드 1로 끝낸다. `passive`는 캡처 오류를 출력하고 정리한 뒤 종료 코드 1로 끝낸다.
 
-끝낼 때는 Ctrl-C를 누른다. 종료 코드는 0 정상, 1 실행 실패, 2 사용법·안전 규칙 거부, 130 중단이다.
+종료 코드는 0 정상, 1 실행 실패(제한 시간 초과·번호 거부·캡처 오류 포함), 2 사용법·안전 규칙 거부, 130 중단(Ctrl-C)이다. `watch`·`status`·`mixstatus`·`passive`는 Ctrl-C로만 끝나므로 늘 130이다.
 
 ## 원본과 라이선스
 

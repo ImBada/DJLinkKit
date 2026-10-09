@@ -176,7 +176,7 @@
 
 | 원본 파일 | Swift 파일 | 상태 |
 |---|---|---|
-| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 9개 파일로 나뉘었다. 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 네트워크에 붙는 공통 순서 `CLIRuntime.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift`, Ctrl-C 처리 `CLIInterrupt.swift` | 옮김 (원본 시험 없음. 우리 시험 46개가 통과) |
+| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 12개 파일로 나뉘었다. 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 한 번의 실행이 가진 네트워크·소켓·작업과 정리 `CLISession.swift`, 주입하는 바깥 세계(소켓·인터페이스·시계·파일·NFS) `CLIRuntime.swift`, 소켓 소유권·인터페이스 묶기·중단 뒤 송신 차단 `CLISocketGuard.swift`, 중단 토큰·신호 `CLIAbort.swift`, 덮어쓰지 않는 파일 쓰기 `CLIFileWriter.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift` | 옮김 (원본 시험 없음. 우리 시험 112개가 통과) |
 
 ### 빈 구현
 
@@ -321,27 +321,30 @@
 | `Tests/DJLinkKitTests/Network/NetworkFlowTests.swift` | 8 | `ProlinkNetwork`의 connect·disconnect 흐름(가짜 소켓) |
 | `Tests/DJLinkKitTests/RemoteDB/RemoteDBTransportTests.swift` | 12 | remotedb 연결을 가짜 TCP로 검사 |
 | `Tests/DJLinkKitTests/RemoteDB/LiveTCPConnectionLoopbackTests.swift` | 6 | 실제 TCP 구현을 127.0.0.1에서만 검사. `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다 |
-| `Tests/DJLinkKitTests/NFS/NFSTransportTests.swift` | 12 | NFS RPC 전송을 가짜 UDP로 검사 |
+| `Tests/DJLinkKitTests/NFS/NFSTransportTests.swift` | 14 | NFS RPC 전송을 가짜 UDP로 검사. CLI 안전을 위한 경로 검사 훅과 모든 클라이언트 닫기 포함 |
+| `Tests/DJLinkKitTests/Network/CLISafetyOptInTests.swift` | 12 | CLI 안전을 위한 opt-in(번호 정책, announce 대상 필터, `IP_BOUND_IF` 묶기)이 기본값에서는 원본과 같고 켜면 막는 것 |
 | `Tests/DJLinkKitTests/LocalDB/LocalDBReaderIntegrationTests.swift` | 29 | Kaitai를 대신한 PDB·ANLZ 바이트 리더의 실제 바이트 경계 |
 | `Tests/DJLinkKitTests/LocalDB/CipherDatabaseColdOpenTests.swift` | 7 | SQLCipher 처음 열기 경쟁(DJCrate의 `CipherColdOpenTests`·`CipherLab`에서 옮김, §6). 별도 시험 프로세스를 띄우는 워커 시험이 포함된다 |
 | `Tests/DJLinkControlTests/ControlNetworkTests.swift` | 2 | `ProlinkNetwork.control`이 연결 뒤에 만들어지는 것 |
 | `Tests/DJLinkPassiveTests/PassiveFlowTests.swift` | 12 | 패시브 네트워크 전체 흐름(가짜 pcap) |
 | `Tests/djlinkTests/CLIApplicationTests.swift` | 6 | CLI 실행 흐름과 종료 코드(가짜 실행기) |
-| `Tests/djlinkTests/CLIArgumentsTests.swift` | 16 | 인자 해석 |
+| `Tests/djlinkTests/CLIArgumentsTests.swift` | 23 | 인자 해석(옵션 값 삼킴 방지, `play`·`pause` 거부, `--timeout`) |
 | `Tests/djlinkTests/CLIFormatTests.swift` | 14 | 출력 형식 |
-| `Tests/djlinkTests/CLISafetyTests.swift` | 10 | 안전 규칙(rekordbox 실행 확인, 가상 CDJ 번호, `--confirm`, `fetch` 경로 거부) |
+| `Tests/djlinkTests/CLISafetyTests.swift` | 11 | 안전 규칙(rekordbox 실행 확인, 가상 CDJ 번호, `--confirm`, 재생 상태 패킷, 경로 거부) |
+| `Tests/djlinkTests/CLIFileWriterTests.swift` | 11 | 덮어쓰지 않는 파일 게시(임시 폴더만 쓴다) |
+| `Tests/djlinkTests/CLIRuntimeTests.swift` | 47 | 가짜 소켓·시계·파일·NFS로 돌린 실행 경로: 인터페이스 묶기·서브넷 제한, 번호 정책, 중단 뒤 송신·쓰기 0회, 제한 시간, 정리, 종료 코드, NFS 경로 검사 |
 
 시험 수 합계(`@Test` 선언 기준):
 
 | 시험 대상 | 원본 대응 | 우리 시험 | 합 |
 |---|---|---|---|
-| `DJLinkKitTests` | 580 | 83 | 663 |
+| `DJLinkKitTests` | 580 | 97 | 677 |
 | `DJLinkControlTests` | 11 | 2 | 13 |
 | `DJLinkPassiveTests` | 31 | 12 | 43 |
-| `djlinkTests` | 0 | 46 | 46 |
-| 합 | 622 | 143 | 765 |
+| `djlinkTests` | 0 | 112 | 112 |
+| 합 | 622 | 223 | 845 |
 
-위 표는 선언된 `@Test` 수다. `swift test`는 765개를 모두 돌리고, 그중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)는 건너뜀으로 센다.
+위 표는 선언된 `@Test` 수다. `swift test`는 845개를 모두 돌리고, 그중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)는 건너뜀으로 센다.
 
 ## 4. 우리가 더한 Swift 파일 (원본에 대응하는 파일이 없다)
 
