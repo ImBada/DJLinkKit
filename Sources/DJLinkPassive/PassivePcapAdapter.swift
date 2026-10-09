@@ -190,8 +190,8 @@ public final class PcapAdapter: EventEmitting {
             let ip = try PcapDecoders.IPV4(buffer, eth.offset)
             guard ip.protocol == PcapDecoders.PROTOCOL.IP.UDP else { return }
             let udp = try PcapDecoders.UDP(buffer, ip.offset)
-            // 원본 버그 그대로: cap 디코더와 어댑터가 UDP 헤더 길이를 각각 한 번씩 뺀다.
-            let length = udp.length - 8
+            // PLAN §9: 원본은 cap 디코더(이미 헤더 8바이트를 뺀 길이)에서 8을 한 번 더 빼 payload 끝 8바이트를 잘랐다.
+            let length = udp.length
             guard length > 0 else { return }
             var payload = [UInt8](repeating: 0, count: length)
             let copied = buffer.subarray(udp.offset, udp.offset + length)
