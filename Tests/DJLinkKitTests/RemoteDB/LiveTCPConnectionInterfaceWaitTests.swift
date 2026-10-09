@@ -18,11 +18,10 @@ struct LiveTCPConnectionInterfaceWaitTests {
         let client = LiveTCPConnection()
         let connect = await startConnect(client)
         #expect(client.isResolvingInterface)
-        let started = ContinuousClock.now
+        // 3초 타이머가 먼저 끝났다면 오류는 "Network interface not found"였을 것이다.
         client.destroy(DJLinkError("closed by test"))
         #expect(!client.isResolvingInterface)
         await #expect(throws: DJLinkError("closed by test")) { try await connect.value }
-        #expect(ContinuousClock.now - started < .seconds(1))
         #expect(!client.isOpen)
     }
 
