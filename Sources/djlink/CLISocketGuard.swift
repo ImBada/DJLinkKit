@@ -117,6 +117,10 @@ final class GuardedTCPConnection: TCPConnection {
 
     func setRequiredInterface(name: String) throws { try inner.setRequiredInterface(name: name) }
 
+    func setConnectGuard(_ check: @escaping @DJLinkActor () throws -> Void) throws {
+        try inner.setConnectGuard(check)
+    }
+
     func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws {
         try inner.setCloseHandler(handler)
     }
@@ -176,6 +180,10 @@ final class CLISocketRegistry: SocketFactory {
         try connection.setCloseHandler { [weak self, weak connection] in
             guard let connection else { return }
             self?.tcpConnections.removeAll { $0 === connection }
+        }
+        try connection.setConnectGuard { [weak self] in
+            guard let self else { throw CLIAborted() }
+            try self.abort.check()
         }
         if let boundInterfaceName { try connection.setRequiredInterface(name: boundInterfaceName) }
         return connection

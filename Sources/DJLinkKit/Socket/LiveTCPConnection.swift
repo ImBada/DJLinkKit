@@ -10,6 +10,8 @@ func makeLiveTCPConnection() throws -> any TCPConnection {
 /// NWConnection의 수신 조각을 모아 promise-readable의 read(size) 의미를 유지한다.
 @DJLinkActor
 final class LiveTCPConnection: TCPConnection {
+    private var connectGuard: (@DJLinkActor () throws -> Void)?
+    func setConnectGuard(_ check: @escaping @DJLinkActor () throws -> Void) throws { connectGuard = check }
     private var closeHandler: (@DJLinkActor () -> Void)?
     func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws { closeHandler = handler }
     private var connection: NWConnection?
@@ -72,8 +74,9 @@ final class LiveTCPConnection: TCPConnection {
         let parameters = NWParameters.tcp
         if let requiredInterfaceName {
             parameters.requiredInterface = try await resolveInterface(requiredInterfaceName)
+            guard !ended else { throw DJLinkError("Socket closed") }
         }
-        guard !ended else { throw DJLinkError("Socket closed") }
+        try connectGuard?()
         let conn = NWConnection(host: NWEndpoint.Host(host), port: port, using: parameters)
         connection = conn
         try await withCheckedThrowingContinuation { continuation in

@@ -23,6 +23,9 @@ public protocol TCPConnection: AnyObject {
     /// CLI 안전을 위한 추가(기본값은 원본 동작). 연결 전에 이름으로 인터페이스를 요구한다.
     func setRequiredInterface(name: String) throws
 
+    /// CLI 안전을 위한 추가(기본값은 원본 동작). 비동기 인터페이스 해석 뒤 실제 연결 직전에 검사한다.
+    func setConnectGuard(_ check: @escaping @DJLinkActor () throws -> Void) throws
+
     /// CLI 안전을 위한 추가(기본값은 원본 동작). 원격 종료를 포함해 닫힌 연결을 알린다.
     func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws
 
@@ -31,6 +34,10 @@ public protocol TCPConnection: AnyObject {
 }
 
 extension TCPConnection {
+    public func setConnectGuard(_ check: @escaping @DJLinkActor () throws -> Void) throws {
+        throw DJLinkError("This connection cannot guard connect")
+    }
+
     public func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws {
         throw DJLinkError("This connection cannot report closure")
     }
