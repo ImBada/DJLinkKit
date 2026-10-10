@@ -241,7 +241,7 @@ let package = Package(
 - devices: `getDeviceEnsured`가 장치가 먼저 와도 시간 제한 타이머를 지우지 않았다.
 - virtualcdj: announcer의 `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않았다 / `makeStatusPacket`이 머리말을 0x0b에 썼다(정의만 있고 쓰이지 않는 함수).
 - network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않았다.
-- mixstatus: 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 났다 / `isSetActive`가 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않았다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없었다.
+- mixstatus: 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 났다 / `isSetActive`가 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않았다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없었다 / 같은 데크에서 같은 곡으로 새 세트를 시작하면 `nowPlaying`·`setStarted`가 모두 나지 않았다(중복 억제 `lastEmittedTrackId`가 세트가 끝나도 남았다, PR #3).
 - localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠졌다(이제 오류), 쪽 번호 비교로 비단조 사슬에서 일찍 끝나거나 빈 후보 뒤로 읽었다(이제 링크를 따라 마지막 쪽·빈 후보에서 종료) / 장치 제거 때 첫 DB만 닫았다 / OneLibrary 열기에 실패하면 임시 파일이 남았다.
 - metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 맞지 않았다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽혔다 / 값이 모두 비어도 결과가 null이 아니었다 / APIC의 BOM 검사 위치(겉으로 드러나는 동작 변화 없음) / ID3 v2.3 확장 헤더 크기에 4바이트가 빠졌다.
 - passive: UDP 길이를 두 번 빼서 payload 끝 8바이트가 잘리고 표준 announce가 short format으로 읽혔다.
@@ -258,7 +258,6 @@ let package = Package(
 
 - 비트 패킷(0x28)을 읽는 코드가 없다(기능 추가, 실기 캡처로 형식을 확인한 뒤).
 - localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
-- mixstatus: 같은 덱에서 같은 곡으로 새 세트를 시작하면 `nowPlaying`·`setStarted`가 모두 나지 않는다(중복 억제 `lastEmittedTrackId`가 세트가 끝나도 남는다).
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
 
