@@ -30,12 +30,13 @@ git clone https://github.com/chrisle/metadata-connect.git    && git -C metadata-
 
 ## 새 원본 릴리스를 따라가는 순서
 
-한 번에 한 릴리스씩 한다(PLAN §12).
+한 번에 한 릴리스씩, 1:1 기준선인 `port/one-to-one` 브랜치에서 한다(PLAN §12).
 
 1. 두 커밋 사이의 차이를 본다(`git diff <고정 커밋>..<새 릴리스>`).
 2. 바뀐 시험부터 옮긴다.
 3. 코드를 옮긴다.
-4. `scripts/port-status.sh`와 시험이 통과하는지 본다.
-5. 이 파일(`UPSTREAM.md`)의 커밋·버전·날짜를 갱신한다.
+4. `scripts/ci.sh`(시험과 `port-status.sh`)가 통과하는지 본다.
+5. 이 파일(`UPSTREAM.md`)과 `scripts/port-status.sh`의 고정 커밋, 버전, 날짜를 갱신한다.
+6. main에 합친다. PLAN §9에서 고친 곳과 겹치면 고친 쪽을 남긴다.
 
 새 차이에 펌웨어 분석 근거가 생기면 [PROVENANCE.md](PROVENANCE.md)에 더한다. 시험 대응이나 파일 이름이 늘거나 바뀌면 `docs/port-map.md`와 `scripts/port-status.sh`의 대응표도 같이 고친다.
