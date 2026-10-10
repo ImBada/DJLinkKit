@@ -105,6 +105,67 @@ final class MixStatusUpstreamFixTests {
         #expect(seHandler.callCount == 2)
     }
 
+    @Test("reports setStarted and nowPlaying when a new set starts with the same track on the same deck")
+    func reportsNewSetWithSameTrack() async {
+        let ssHandler = CallRecorder<Void>()
+        let npHandler = CallRecorder<CDJStatus.State>()
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setStarted, ssHandler.handler)
+        processor.on(.nowPlaying, npHandler.handler)
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+        #expect(ssHandler.callCount == 1)
+        #expect(npHandler.callCount == 1)
+
+        feedState(1) { $0.playState = .cued }
+        clock.advance(ms: 30 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+
+        // The same track on the same deck after the set has ended starts a new set
+        feedState(1) { $0.playState = .playing }
+        #expect(ssHandler.callCount == 2)
+        #expect(npHandler.callCount == 2)
+        #expect(npHandler.calls.last?.trackId == 123)
+    }
+
+    @Test("clears the duplicate record of every deck when the set ends, not only the last live deck")
+    func clearsEveryDeckRecordAtSetEnd() async {
+        let ssHandler = CallRecorder<Void>()
+        let npHandler = CallRecorder<CDJStatus.State>()
+        let seHandler = CallRecorder<Void>()
+        processor.on(.setStarted, ssHandler.handler)
+        processor.on(.nowPlaying, npHandler.handler)
+        processor.on(.setEnded, seHandler.handler)
+
+        feedState(1) {
+            $0.trackId = 123
+            $0.playState = .playing
+        }
+        feedState(2) {
+            $0.trackId = 456
+            $0.playState = .playing
+        }
+
+        // Deck 1 stops, so deck 2 becomes the live deck; then deck 2 stops too
+        feedState(1) { $0.playState = .cued }
+        feedState(2) { $0.playState = .cued }
+        #expect(npHandler.calls.map(\.trackId) == [123, 456])
+
+        clock.advance(ms: 30 * 1000)
+        await clock.settle()
+        #expect(seHandler.callCount == 1)
+
+        // Deck 1 was reported earlier in the set; its record must be gone as well
+        feedState(1) { $0.playState = .playing }
+        #expect(ssHandler.callCount == 2)
+        #expect(npHandler.calls.map(\.trackId) == [123, 456, 123])
+    }
+
     @Test("does not report setEnded again when a stopped deck stops after the set has ended")
     func doesNotReportSetEndedTwice() async {
         let seHandler = CallRecorder<Void>()

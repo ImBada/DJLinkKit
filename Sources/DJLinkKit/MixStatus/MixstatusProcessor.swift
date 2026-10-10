@@ -388,6 +388,9 @@ public final class MixstatusProcessor: EventEmitting {
 
             // PLAN §9: 원본은 isSetActive를 되돌리지 않아 다음 세트에서 setStarted가 나지 않았다.
             isSetActive = false
+            // PLAN §9: 원본은 중복 억제 기록을 세트가 끝나도 남겨, 같은 데크·같은 곡으로 새 세트를 시작하면
+            // setStarted·nowPlaying이 모두 나지 않았다. 중복 억제는 한 세트 안에서만 한다.
+            lastEmittedTrackId.removeAll()
             emitter.emit(.setEnded, ())
         }
         let endTimeout = clock.setTimeout(.ms(config.timeBetweenSets * 1000)) { [self] in
