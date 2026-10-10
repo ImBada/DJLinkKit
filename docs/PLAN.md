@@ -233,9 +233,9 @@ let package = Package(
 
 ## 9. 1:1 이후 고칠 것
 
-1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치에 쌓는다. 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다.
+1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다.
 
-**고친 것**(2026-10-10, `fix/upstream-bugs`)
+**고친 것**(2026-10-10, PR #2)
 
 - status: 정밀 위치 파서가 패킷 종류 바이트(0x0a = 0x0b)를 보지 않아 같은 50001 포트의 비트 패킷도 위치로 읽었다(`src/status/utils.ts:132`). 능동·패시브 모두 고쳤다.
 - devices: `getDeviceEnsured`가 장치가 먼저 와도 시간 제한 타이머를 지우지 않았다.
