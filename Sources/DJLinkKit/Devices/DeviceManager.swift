@@ -11,6 +11,7 @@
 private final class EnsuredRace {
     var settled = false
     var handler: EventSubscription?
+    var timeoutHandle: TimerHandle?
 }
 
 extension EventName where Owner == DeviceManager, Payload == Device {
@@ -111,18 +112,19 @@ public final class DeviceManager: EventEmitting {
         }
 
         // Wait for the device to be connected
-        // 원본 `Promise.race([devicePromise, setTimeout])`. 원본처럼 장치가 먼저 와도 타이머는 지우지 않는다.
+        // PLAN §9: 장치가 먼저 오면 Promise.race의 남은 시간 제한도 지운다.
         return await withCheckedContinuation { (continuation: CheckedContinuation<Device?, Never>) in
             let race = EnsuredRace()
 
-            race.handler = on(.connected) { [weak self] device in
+            race.handler = on(.connected) { [weak self, clock] device in
                 guard device.id == id, !race.settled else { return }
                 race.settled = true
+                if let timeoutHandle = race.timeoutHandle { clock.clearTimeout(timeoutHandle) }
                 if let handler = race.handler { self?.off(handler) }
                 continuation.resume(returning: device)
             }
 
-            clock.setTimeout(.ms(Double(timeout))) { [weak self] in
+            race.timeoutHandle = clock.setTimeout(.ms(Double(timeout))) { [weak self] in
                 guard !race.settled else { return }
                 race.settled = true
                 if let handler = race.handler { self?.off(handler) }

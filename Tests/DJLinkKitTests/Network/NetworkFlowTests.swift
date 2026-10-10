@@ -225,6 +225,7 @@ struct NetworkFlowTests {
         try await network.close()
     }
 
+    // PLAN §9: 원본 버그를 고쳐 기대값을 바꿨다(원본: src/network.ts:180-185, bind 실패 뒤 소켓을 남김).
     @Test("bind failure leaves sockets open and does not enable broadcast like upstream")
     func bindFailure() async throws {
         let sockets = [FakeUDPSocket(), FakeUDPSocket(), FakeUDPSocket()]
@@ -239,7 +240,7 @@ struct NetworkFlowTests {
         #expect(sockets[0].bindCalls.count == 1)
         #expect(sockets[1].bindCalls.count == 1)
         #expect(sockets[2].bindCalls.isEmpty)
-        #expect(sockets.allSatisfy { !$0.isClosed && $0.broadcastCalls.isEmpty })
+        #expect(sockets.allSatisfy { $0.isClosed && $0.broadcastCalls.isEmpty })
     }
 }
 

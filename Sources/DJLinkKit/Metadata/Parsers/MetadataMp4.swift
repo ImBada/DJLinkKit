@@ -14,8 +14,8 @@ extension MetadataConnect {
 
     /// iTunes metadata atom types
     private enum AtomTypes {
-        // 원본 주의: 'ascii'로 읽으면 상위 비트가 지워져 0xa9가 ')'가 되므로, 아래 '\xa9…' 이름들은 원본에서도 맞는 일이 없다.
-        // 기반의 `.ascii`가 같은 방식이라 Swift에서도 그대로 맞지 않는다(1:1이라 그대로 둔다).
+        // PLAN §9: 원본은 atom 이름을 'ascii'로 읽어 0xa9가 ')'가 되어 아래 '\xa9…' 이름이 맞지 않았다.
+        // atom 이름은 바이트 그대로(latin1) 읽는다.
         static let TITLE = "\u{a9}nam" // Title
         static let ARTIST = "\u{a9}ART" // Artist
         static let ALBUM = "\u{a9}alb" // Album
@@ -37,7 +37,7 @@ extension MetadataConnect {
 
         let header = try await reader.read(offset, 8)
         let size = try header.readUInt32BE(0)
-        let type = header.toString(.ascii, 4, 8)
+        let type = header.toString(.latin1, 4, 8)
 
         // Extended size (64-bit)
         if size == 1 {
@@ -187,7 +187,7 @@ extension MetadataConnect {
     public static func extractFromMp4(_ reader: any FileReader) async throws -> ExtractedMetadata? {
         // Verify this is an MP4 file by checking for ftyp atom
         let ftypHeader = try await reader.read(0, 8)
-        if ftypHeader.count < 8 || ftypHeader.toString(.ascii, 4, 8) != "ftyp" {
+        if ftypHeader.count < 8 || ftypHeader.toString(.latin1, 4, 8) != "ftyp" {
             return nil
         }
 
@@ -198,8 +198,6 @@ extension MetadataConnect {
         guard let ilst = try await findIlstAtom(reader, moov.dataOffset, moov.dataSize) else { return nil }
 
         var metadata = ExtractedMetadata()
-        // JS의 `Object.keys(metadata).length === 0`는 값이 undefined여도 키가 있으면 세지 않는다. 키가 생겼는지 따로 센다.
-        var hasKeys = false
 
         // Iterate through ilst child atoms
         var offset = ilst.dataOffset
@@ -215,40 +213,33 @@ extension MetadataConnect {
             // Extract metadata based on atom type
             switch atomType {
             case AtomTypes.TITLE:
-                hasKeys = true
                 if metadata.title == nil { metadata.title = try await readTextDataAtom(reader, atomDataOffset, atomDataSize) }
 
             case AtomTypes.ARTIST:
-                hasKeys = true
                 if metadata.artist == nil { metadata.artist = try await readTextDataAtom(reader, atomDataOffset, atomDataSize) }
 
             case AtomTypes.ALBUM:
-                hasKeys = true
                 if metadata.album == nil { metadata.album = try await readTextDataAtom(reader, atomDataOffset, atomDataSize) }
 
             case AtomTypes.GENRE:
                 let genre = try await readTextDataAtom(reader, atomDataOffset, atomDataSize)
-                hasKeys = true
                 if metadata.genre == nil { metadata.genre = genre }
 
             case AtomTypes.GENRE_ID:
                 let genreId = try await readNumericDataAtom(reader, atomDataOffset, atomDataSize)
                 if let genreId, metadata.genre == nil {
-                    hasKeys = true
                     metadata.genre = id3v1Genre(genreId - 1) // MP4 genre IDs are 1-based
                 }
 
             case AtomTypes.YEAR:
                 let yearStr = try await readTextDataAtom(reader, atomDataOffset, atomDataSize)
                 if let yearStr, metadata.year == nil, let year = firstFourDigits(yearStr) {
-                    hasKeys = true
                     metadata.year = year
                 }
 
             case AtomTypes.BPM:
                 let bpm = try await readNumericDataAtom(reader, atomDataOffset, atomDataSize)
                 if let bpm, bpm > 0, bpm < 500 {
-                    hasKeys = true
                     if metadata.bpm == nil { metadata.bpm = Double(bpm) }
                 }
 
@@ -256,14 +247,12 @@ extension MetadataConnect {
                 if metadata.label != nil { break }
                 let name = try await readFreeformName(reader, atomDataOffset, atomDataSize)
                 if let name, FREEFORM_LABEL_NAMES.contains(name.uppercased()) {
-                    hasKeys = true
                     metadata.label = try await readTextDataAtom(reader, atomDataOffset, atomDataSize)
                 }
 
             case AtomTypes.COVER:
                 if metadata.artwork == nil {
                     if let artwork = try await readCoverArtwork(reader, atomDataOffset, atomDataSize) {
-                        hasKeys = true
                         metadata.artwork = artwork.data
                         metadata.artworkMimeType = artwork.mimeType
                     }
@@ -277,7 +266,9 @@ extension MetadataConnect {
         }
 
         // Return null if no metadata was found
-        if !hasKeys {
+        // PLAN §9: 원본은 `Object.keys(metadata).length === 0`이라 undefined 값의 키도 세어 값이 없어도 null이 아니었다.
+        // 실제 값이 하나도 없으면 nil이다.
+        if metadata == ExtractedMetadata() {
             return nil
         }
 

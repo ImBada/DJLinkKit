@@ -31,16 +31,6 @@ extension MetadataConnect {
         offset += 1
         var encoding = getTextEncoding(encodingByte)
 
-        // Check for BOM in UTF-16
-        if encodingByte == 1 && data.count > offset + 2 {
-            let bom = try data.readUInt16BE(offset)
-            if bom == 0xfeff {
-                encoding = .utf16be
-            } else if bom == 0xfffe {
-                encoding = .utf16le
-            }
-        }
-
         let mimeResult = readNullTerminatedString(data, offset, .latin1)
         let mimeType = mimeResult.value
         offset += mimeResult.bytesConsumed
@@ -50,6 +40,17 @@ extension MetadataConnect {
         let pictureType = PictureType(rawValue: Int(data[offset]))
         offset += 1
         if offset >= data.count { return nil }
+
+        // Check for BOM in UTF-16
+        // PLAN §9: 원본은 인코딩 바이트 바로 뒤(MIME 문자열)에서 BOM을 찾았다. BOM은 설명 문자열 앞에 있다.
+        if encodingByte == 1 && data.count > offset + 2 {
+            let bom = try data.readUInt16BE(offset)
+            if bom == 0xfeff {
+                encoding = .utf16be
+            } else if bom == 0xfffe {
+                encoding = .utf16le
+            }
+        }
 
         let descResult = readNullTerminatedString(data, offset, encoding)
         offset += descResult.bytesConsumed
@@ -111,8 +112,9 @@ extension MetadataConnect {
     }
 
     /// Check if a frame ID matches any of the target IDs
+    // PLAN §9: 원본은 `startsWith`로 앞부분만 비교해 TCOM·TCOP이 장르(TCO)로 읽혔다. 프레임 ID 전체를 비교한다.
     private static func matchesFrameId(_ frameId: String, _ targets: [String]) -> Bool {
-        targets.contains { frameId == $0 || frameId.hasPrefix($0) }
+        targets.contains(frameId)
     }
 
     /// Extract metadata from an MP3 file with ID3v2 tags
@@ -134,7 +136,8 @@ extension MetadataConnect {
             if majorVersion == 4 {
                 extendedHeaderSize = readSyncsafe(extHeader, 0)
             } else {
-                extendedHeaderSize = try extHeader.readUInt32BE(0)
+                // PLAN §9: v2.3의 확장 헤더 크기는 크기 칸 4바이트를 뺀 값이다(v2.4는 크기 칸을 포함한다).
+                extendedHeaderSize = try extHeader.readUInt32BE(0) + 4
             }
         }
 
@@ -142,8 +145,6 @@ extension MetadataConnect {
         let tagData = try await reader.read(10 + extendedHeaderSize, tagSize - extendedHeaderSize)
 
         var metadata = ExtractedMetadata()
-        // JS의 `Object.keys(metadata).length === 0`는 값이 undefined여도 키가 있으면 세지 않는다. 키가 생겼는지 따로 센다.
-        var hasKeys = false
         var frontCover: ArtworkResult?
         var anyArtwork: ArtworkResult?
 
@@ -184,28 +185,20 @@ extension MetadataConnect {
 
             // Extract metadata from text frames
             if matchesFrameId(normalizedId, FrameIds.title) {
-                hasKeys = true
                 if metadata.title == nil { metadata.title = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.artist) {
-                hasKeys = true
                 if metadata.artist == nil { metadata.artist = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.album) {
-                hasKeys = true
                 if metadata.album == nil { metadata.album = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.genre) {
-                hasKeys = true
                 if metadata.genre == nil { metadata.genre = try parseGenre(parseTextFrame(frameData)) }
             } else if matchesFrameId(normalizedId, FrameIds.label) {
-                hasKeys = true
                 if metadata.label == nil { metadata.label = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.year) {
-                hasKeys = true
                 if metadata.year == nil { metadata.year = try parseYear(parseTextFrame(frameData) ?? "") }
             } else if matchesFrameId(normalizedId, FrameIds.bpm) {
-                hasKeys = true
                 if metadata.bpm == nil { metadata.bpm = try parseBpm(parseTextFrame(frameData) ?? "") }
             } else if matchesFrameId(normalizedId, FrameIds.key) {
-                hasKeys = true
                 if metadata.key == nil { metadata.key = try parseTextFrame(frameData) }
             } else if matchesFrameId(normalizedId, FrameIds.picture) {
                 if let artwork = try parseApicFrame(frameData) {
@@ -222,13 +215,14 @@ extension MetadataConnect {
 
         // Use front cover if available, otherwise any artwork
         if let artwork = frontCover ?? anyArtwork {
-            hasKeys = true
             metadata.artwork = artwork.data
             metadata.artworkMimeType = artwork.mimeType
         }
 
         // Return null if no metadata was found
-        if !hasKeys {
+        // PLAN §9: 원본은 `Object.keys(metadata).length === 0`이라 undefined 값의 키도 세어 값이 없어도 null이 아니었다.
+        // 실제 값이 하나도 없으면 nil이다.
+        if metadata == ExtractedMetadata() {
             return nil
         }
 

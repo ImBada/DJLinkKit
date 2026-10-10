@@ -73,7 +73,9 @@ extension MixstatusConfig {
         if let mode = config.mode { self.mode = mode }
         if let timeBetweenSets = config.timeBetweenSets { self.timeBetweenSets = timeBetweenSets }
         if let useOnAirStatus = config.useOnAirStatus { self.useOnAirStatus = useOnAirStatus }
-        if let allowedInterruptBeats = config.allowedInterruptBeats { self.allowedInterruptBeats = allowedInterruptBeats }
+        if let allowedInterruptBeats = config.allowedInterruptBeats {
+            self.allowedInterruptBeats = allowedInterruptBeats
+        }
         if let beatsUntilReported = config.beatsUntilReported { self.beatsUntilReported = beatsUntilReported }
     }
 }
@@ -210,6 +212,8 @@ public final class MixstatusProcessor: EventEmitting {
     private var isSetActive = false
     /// When we are waiting for a set to end, use this to cancel the timer.
     private var cancelSetEnding: (@DJLinkActor () -> Void)?
+    /// `cancelSetEnding`을 건 대기의 번호. 가장 최근 대기만 `cancelSetEnding`을 비운다.
+    private var setEndingGeneration = 0
     /// The configuration for this instance of the processor
     private var config: MixstatusConfig
 
@@ -288,6 +292,12 @@ public final class MixstatusProcessor: EventEmitting {
             return
         }
 
+        // PLAN §9: 원본은 이 취소가 중복 판정 뒤에 있어, 같은 곡을 다시 틀면 재생 중에 setEnded가 났다.
+        // 중복이어도 데크가 다시 라이브로 돌아왔으므로 세트 종료 대기는 취소한다.
+        if let cancelSetEnding {
+            cancelSetEnding()
+        }
+
         // Suppress duplicate nowPlaying for the same track on the same deck. This
         // can happen when a DJ cues mid-track and resumes (Cued/Loading/Ended are
         // all stoppingStates that drop the deck from livePlayers, so the next play
@@ -300,10 +310,6 @@ public final class MixstatusProcessor: EventEmitting {
         if !isSetActive {
             isSetActive = true
             emitter.emit(.setStarted, ())
-        }
-
-        if let cancelSetEnding {
-            cancelSetEnding()
         }
 
         livePlayers.insert(deviceId)
@@ -362,13 +368,26 @@ public final class MixstatusProcessor: EventEmitting {
             return
         }
 
+        // PLAN §9: 원본은 앞 대기를 취소하지 않고 #cancelSetEnding을 덮어써 앞 타이머를 지울 수 없었다.
+        if let cancelSetEnding {
+            cancelSetEnding()
+        }
+
+        // 취소된 앞 대기의 뒷부분이 새 대기의 취소 함수를 지우지 않도록 대기마다 번호를 붙인다.
+        setEndingGeneration += 1
+        let generation = setEndingGeneration
+
         let promise = SetEndingPromise(enqueue: { [self] in enqueueMicrotask($0) }) { [self] shouldEnd in
-            cancelSetEnding = nil
+            if setEndingGeneration == generation {
+                cancelSetEnding = nil
+            }
 
             if !shouldEnd || !isSetActive {
                 return
             }
 
+            // PLAN §9: 원본은 isSetActive를 되돌리지 않아 다음 세트에서 setStarted가 나지 않았다.
+            isSetActive = false
             emitter.emit(.setEnded, ())
         }
         let endTimeout = clock.setTimeout(.ms(config.timeBetweenSets * 1000)) { [self] in

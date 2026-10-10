@@ -79,7 +79,8 @@ public func makeStagehand0aPacket(_ device: Device) throws(BufferRangeError) -> 
 
 /// Build Stagehand stage 0x02 packet: Second-stage device number claim.
 /// Sent 3 times at 305ms intervals with counter N (1, 2, 3).
-public func makeStagehand02Packet(_ device: Device, _ mac: [UInt8], _ counter: Int) throws(BufferRangeError) -> [UInt8] {
+public func makeStagehand02Packet(_ device: Device, _ mac: [UInt8], _ counter: Int) throws(BufferRangeError) -> [UInt8]
+{
     var parts = ints(PROLINK_HEADER)  // 10 bytes
     parts += [0x02, 0x00]  // 2 bytes packet type (0x02)
     parts += ints(try buildName(device))  // 20 bytes device name
@@ -122,7 +123,8 @@ public final class StagehandAnnouncer {
     private var stageCounter = 0
     private let iface: NetworkInterfaceInfo
     private let logger: any Logger
-    private var onStartupComplete: (@DJLinkActor () -> Void)?
+    /// 시작 절차가 끝날 때 함께 풀 ready 대기자들.
+    private var startupWaiters: [CheckedContinuation<Void, Never>] = []
     private let mac: [UInt8]
     private let clock: any DJLinkClock
 
@@ -143,14 +145,14 @@ public final class StagehandAnnouncer {
         self.clock = clock
     }
 
-    /// 원본 getter처럼 부를 때마다 기다리는 쪽을 새로 걸고 앞의 것을 덮어쓴다(마지막 것만 풀린다).
+    /// PLAN §9: 반복해서 읽어도 앞 ready 대기자를 덮어쓰지 않는다.
     public var ready: Void {
         get async {
             if currentStage == .keepAlive {
                 return
             }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                onStartupComplete = { continuation.resume() }
+                startupWaiters.append(continuation)
             }
         }
     }
@@ -186,8 +188,9 @@ public final class StagehandAnnouncer {
         case .keepAlive:
             logger.info("Stagehand join sequence complete, transitioning to keep-alive")
             try startKeepAlive()
-            onStartupComplete?()
-            onStartupComplete = nil
+            let waiters = startupWaiters
+            startupWaiters.removeAll()
+            for waiter in waiters { waiter.resume() }
             return
         }
 

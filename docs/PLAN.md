@@ -233,23 +233,34 @@ let package = Package(
 
 ## 9. 1:1 이후 고칠 것
 
-1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 고정 커밋 기준으로 알려진 것은 다음과 같다.
+1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다.
 
-- 정밀 위치 파서(`src/status/utils.ts:132` `positionFromPacket`)는 머리말과 0x20 바이트만 보고 패킷 종류 바이트(0x0a, 0x0b여야 함)는 보지 않는다. 그래서 같은 50001 포트로 오는 비트 패킷(0x28)을 위치로 읽을 수 있다.
+**고친 것**(2026-10-10, PR #2)
+
+- status: 정밀 위치 파서가 패킷 종류 바이트(0x0a = 0x0b)를 보지 않아 같은 50001 포트의 비트 패킷도 위치로 읽었다(`src/status/utils.ts:132`). 능동·패시브 모두 고쳤다.
+- devices: `getDeviceEnsured`가 장치가 먼저 와도 시간 제한 타이머를 지우지 않았다.
+- virtualcdj: announcer의 `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않았다 / `makeStatusPacket`이 머리말을 0x0b에 썼다(정의만 있고 쓰이지 않는 함수).
+- network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않았다.
+- mixstatus: 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 났다 / `isSetActive`가 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않았다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없었다.
+- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠졌다(이제 오류), 쪽 번호 비교로 비단조 사슬에서 일찍 끝나거나 빈 후보 뒤로 읽었다(이제 링크를 따라 마지막 쪽·빈 후보에서 종료) / 장치 제거 때 첫 DB만 닫았다 / OneLibrary 열기에 실패하면 임시 파일이 남았다.
+- metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 맞지 않았다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽혔다 / 값이 모두 비어도 결과가 null이 아니었다 / APIC의 BOM 검사 위치(겉으로 드러나는 동작 변화 없음) / ID3 v2.3 확장 헤더 크기에 4바이트가 빠졌다.
+- passive: UDP 길이를 두 번 빼서 payload 끝 8바이트가 잘리고 표준 announce가 short format으로 읽혔다.
+
+**실기 확인 뒤 정할 것**
+
+- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견주고 나머지 칸을 0으로 채운다. 대상이 한 칸 어긋나고, 공개된 프로토콜 설명으로는 0이 "재생 시작"이라 다른 덱을 움직일 수 있다. `djlink`는 확인 전까지 `--unverified-playstate` 없이 `play`·`pause`를 거부한다.
 - on-air 패킷을 상태 소켓(50002)에서만 읽는다(`src/status/index.ts:122`). beat-link는 50001에서 읽는다. 실기 캡처로 확인한 뒤 정한다.
-- 비트 패킷(0x28)을 읽는 코드가 없다(기능 추가).
-- `makeStatusPacket`(`src/virtualcdj/index.ts:48`)이 정의만 있고 쓰이지 않는다.
-- README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
+- localdb: 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4).
+- virtualcdj: stage 0x06 패킷이 55바이트다.
+- passive: 캡처 중 인터페이스가 사라지면 오류 없이 캡처 중 상태가 남을 수 있다(cap의 dispatch 반복과 같다).
+
+**기능 추가·검토 필요**
+
+- 비트 패킷(0x28)을 읽는 코드가 없다(기능 추가, 실기 캡처로 형식을 확인한 뒤).
+- localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
+- mixstatus: 같은 덱에서 같은 곡으로 새 세트를 시작하면 `nowPlaying`·`setStarted`가 모두 나지 않는다(중복 억제 `lastEmittedTrackId`가 세트가 끝나도 남는다).
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
-
-옮기면서 찾아 그대로 둔 원본 버그(2026-10-10, 자세한 것은 [port-notes.md](port-notes.md)):
-
-- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견줘 id 4 이상이면 비트가 서지 않는다. 실기에서 `play`·`pause` 대상이 어긋나는지 먼저 확인한다.
-- mixstatus: 같은 trackId 중복을 막는 `return`이 `cancelSetEnding`보다 앞에 있어 같은 곡을 다시 틀면 30초 뒤 `setEnded`가 난다 / `isSetActive`가 false로 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않는다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없다.
-- network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다. `disconnect()`가 돌려주는 `this.close`는 바인딩되지 않아 부르면 TypeError다(Swift는 정상 동작).
-- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠진다(USB 입력은 신뢰할 수 없다) / 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4, 실기 확인 필요) / 알 수 없는 cue type도 버튼이 있으면 hot_cue / 장치 제거 때 첫 DB만 닫는다 / OneLibrary 열기 실패 때 임시 파일이 남는다.
-- metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 `toString('ascii')` 때문에 맞지 않는다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽힌다 / 빈 값만 있어도 결과가 null이 아니다 / APIC의 BOM 검사가 MIME 바이트를 읽는다 / v2.3 확장 헤더 크기에 4바이트가 빠진다.
-- virtualcdj: `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않는다 / `getDeviceEnsured`가 장치가 먼저 와도 타이머를 지우지 않는다 / `makeStatusPacket`이 머리말을 0x0b에 쓴다 / stage 0x06 패킷이 55바이트다.
+- README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
 
 ## 10. 라이선스·출처
 

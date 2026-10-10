@@ -79,8 +79,8 @@ private func frame(_ payload: [UInt8], port: Int, options: Bool = false) -> [UIn
     bytes.writeUInt32BE(0x0a000002, 30)
     bytes.writeUInt16BE(50000, udpOffset)
     bytes.writeUInt16BE(port, udpOffset + 2)
-    // 어댑터가 내보낼 payload를 만드는 보조 함수라 원본의 이중 차감 16바이트를 더한다.
-    bytes.writeUInt16BE(payload.count + 16, udpOffset + 4)
+    // 실제 패킷처럼 UDP 길이는 헤더 8바이트와 payload의 합이다.
+    bytes.writeUInt16BE(payload.count + 8, udpOffset + 4)
     return bytes + payload
 }
 private func announce(_ id: Int, name: String = "CDJ-test", short: Bool = true) -> [UInt8] {
@@ -133,8 +133,10 @@ struct PassiveFlowTests {
         #expect(backend.minimum == 0)
         adapter.stop()
     }
-    @Test("original UDP double subtraction drops eight bytes and treats standard announce as short format")
-    func udpDoubleSubtraction() throws {
+    // PLAN §9: 원본은 UDP 길이를 두 번 빼 payload 끝 8바이트를 잘랐다. 고친 뒤에는 payload를 모두 내보내고,
+    // 표준 54바이트 announce를 short format이 아니라 표준 경로(0x34 종류, 0x2c IP)로 읽는다.
+    @Test("UDP payload keeps every byte and a standard announce uses the full format")
+    func udpPayloadLength() throws {
         let backend = FlowPcapBackend()
         let adapter = PcapAdapter(config: .init(iface: "en0", bufferSize: 2048), backend: backend)
         let manager = PassiveDeviceManager(adapter, clock: TestClock())
@@ -142,21 +144,18 @@ struct PassiveFlowTests {
         adapter.on(.announce) { packets.append($0) }
         try adapter.start()
         let payload = announce(1, short: false)
-        var bytes = frame(payload, port: ANNOUNCE_PORT)
-        // 실제 패킷의 UDP 길이는 헤더 8바이트와 payload의 합이다.
-        bytes.writeUInt16BE(payload.count + 8, 38)
+        let bytes = frame(payload, port: ANNOUNCE_PORT)
         #expect(try PcapDecoders.UDP(bytes, 34).length == 54)
         backend.packet?(bytes, false)
         #expect(packets.count == 1)
-        #expect(packets.first?.packet == Array(payload.prefix(46)))
-        #expect(manager.devices[1]?.type == .cdj)
-        #expect(manager.devices[1]?.ip.address == "10.0.0.1")
+        #expect(packets.first?.packet == payload)
+        #expect(manager.devices[1]?.type == DeviceType(rawValue: 4))
+        #expect(manager.devices[1]?.ip.address == "10.0.0.9")
         for length in 0...8 {
-            var short = frame([UInt8](repeating: 1, count: length), port: ANNOUNCE_PORT)
-            short.writeUInt16BE(length + 8, 38)
-            backend.packet?(short, false)
+            backend.packet?(frame([UInt8](repeating: 1, count: length), port: ANNOUNCE_PORT), false)
         }
-        #expect(packets.count == 1)
+        // 빈 payload만 버리고 1~8바이트 payload는 내보낸다.
+        #expect(packets.count == 9)
         manager.stop()
         adapter.stop()
     }
@@ -194,6 +193,8 @@ struct PassiveFlowTests {
         adapter.on(.beat) { _ in laterBeats += 1 }
         var malformed = [UInt8](repeating: 0, count: 0x21)
         malformed.replaceSubrange(0..<10, with: PROLINK_HEADER)
+        // PLAN §9: 위치 파서가 종류 바이트(0x0b)를 보게 고쳐서, 해석 오류 경로를 타려면 위치 패킷 종류여야 한다.
+        malformed[10] = 0x0b
         try adapter.start()
         backend.packet?(frame(malformed, port: BEAT_PORT), false)
         #expect(errors.count == 1 && errors.first is BufferRangeError)
@@ -307,6 +308,7 @@ struct PassiveFlowTests {
         emitter.on(.position) { seen.append($0) }
         var payload = [UInt8](repeating: 0, count: 0x34)
         payload.replaceSubrange(0..<10, with: PROLINK_HEADER)
+        payload[0x0a] = 0x0b
         payload[0x21] = 1
         payload.writeUInt16BE(0x0c, 0x22)
         payload.writeUInt32BE(180, 0x24)

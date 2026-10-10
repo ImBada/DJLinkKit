@@ -85,8 +85,8 @@ public func makeStatusPacket(_ device: Device) -> [UInt8] {
     //  - 0x24: 01 byte device ID
     //  - 0x7C: 04 byte firmware string
 
-    // 원본 그대로 머리말을 0x0b에 쓴다(뒤의 이름이 덮어쓴다). docs/PLAN.md §9 참고.
-    b.set(PROLINK_HEADER, 0x0b)
+    // PLAN §9: 원본의 형식 주석대로 머리말은 0에, 이름은 0x0b에 쓴다.
+    b.set(PROLINK_HEADER, 0)
     b.set([UInt8](device.name, encoding: .ascii), 0x0b)
     b.set([UInt8(truncatingIfNeeded: device.id)], 0x21)
     b.set([UInt8(truncatingIfNeeded: device.id)], 0x24)
@@ -304,22 +304,21 @@ public final class Announcer {
     private let iface: NetworkInterfaceInfo
     /// Logger instance for diagnostic output
     private let logger: any Logger
-    /// Callback invoked when the full startup protocol completes
-    private var onStartupComplete: (@DJLinkActor () -> Void)?
+    /// 시작 절차가 끝나거나 번호 정책이 거부할 때 함께 풀 ready 대기자들.
+    private var startupWaiters: [CheckedContinuation<Void, Never>] = []
     /// CLI 안전 정책이 거부한 번호. 기본 정책 nil에서는 항상 nil이다.
     public private(set) var rejectedDeviceId: DeviceID?
-    private var policyReadyWaiters: [CheckedContinuation<Void, Never>] = []
 
-    private func finishPolicyWaiters() {
-        let waiters = policyReadyWaiters
-        policyReadyWaiters = []
+    private func finishStartupWaiters() {
+        let waiters = startupWaiters
+        startupWaiters.removeAll()
         for waiter in waiters { waiter.resume() }
     }
 
     private func reject(_ id: DeviceID) {
         rejectedDeviceId = id
         stop()
-        finishPolicyWaiters()
+        finishStartupWaiters()
         onDeviceIdRejected?(id)
     }
 
@@ -365,7 +364,7 @@ public final class Announcer {
     /// Returns a promise that resolves when the startup protocol completes.
     /// Resolves immediately if fullStartup is disabled.
     ///
-    /// 원본 getter처럼 부를 때마다 기다리는 쪽을 새로 걸고 앞의 것을 덮어쓴다(마지막 것만 풀린다).
+    /// PLAN §9: 반복해서 읽어도 앞 ready 대기자를 덮어쓰지 않는다.
     public var ready: Void {
         get async {
             if rejectedDeviceId != nil { return }
@@ -376,11 +375,7 @@ public final class Announcer {
                 return
             }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                if allowsDeviceId != nil {
-                    policyReadyWaiters.append(continuation)
-                } else {
-                    onStartupComplete = { continuation.resume() }
-                }
+                startupWaiters.append(continuation)
             }
         }
     }
@@ -543,9 +538,7 @@ public final class Announcer {
         case .keepAlive:
             // Transition to keep-alive mode
             try startKeepAlive()
-            finishPolicyWaiters()
-            onStartupComplete?()
-            onStartupComplete = nil
+            finishStartupWaiters()
             return
         }
 
