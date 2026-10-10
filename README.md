@@ -55,6 +55,12 @@ swift test
   ```
 
 - 실제 음원 파일이나 암호화 픽스처가 있어야 도는 시험은 조건이 맞지 않으면 건너뛴다(원본도 같은 조건에서 본문을 건너뛴다).
+- GitHub Actions는 쓰지 않는다. 합치기 전에 로컬에서 `scripts/ci.sh`를 돌린다. `swift test`와 아래 원본 대조(`port-status.sh --strict`)를 차례로 돌리고, 하나라도 실패하면 종료 코드 1로 끝난다.
+
+  ```bash
+  UPSTREAM_DIR=~/src/upstream bash scripts/ci.sh             # 루프백 시험은 끈다
+  UPSTREAM_DIR=~/src/upstream bash scripts/ci.sh --loopback  # 루프백 시험까지
+  ```
 
 ## 원본 대조
 

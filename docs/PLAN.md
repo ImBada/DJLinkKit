@@ -214,7 +214,7 @@ let package = Package(
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `PROVENANCE.md`, `UPSTREAM.md`, `AGENTS.md`(§14), `docs/port-map.md`
 - `DJLinkTestSupport`: `FakeUDPSocket`, `FakeTCPConnection`, `TestClock`, `FakeInterfaceProvider`
 - `scripts/port-status.sh`: 원본 시험 파일별 `it(` 수와, 대응하는 Swift 파일의 `@Test` 수를 나란히 보여 주고 다르면 실패한다. 원본 위치는 `UPSTREAM_DIR` 환경 변수로 받는다.
-- CI: GitHub Actions macOS 러너에서 `swift test`와 `scripts/port-status.sh`(원본은 고정 커밋으로 받는다)
+- CI: `swift test`와 `scripts/port-status.sh`를 돌린다. 처음에는 GitHub Actions macOS 러너로 했고, 2026-10-10부터 GitHub Actions는 끄고 로컬 `scripts/ci.sh`로 돌린다.
 - SQLCipher.swift 패키지에 product가 있는지 확인(§7)
 - 펌웨어 근거가 있는 곳을 다시 찾아 `PROVENANCE.md`에 적는다(§10)
 

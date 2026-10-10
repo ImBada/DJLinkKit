@@ -3,11 +3,12 @@
 # 하나라도 다르면 exit 1로 끝난다. (PLAN §8 끝 조건)
 #
 # 사용법:
-#   UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh [--stage N]
+#   UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh [--stage N] [--strict]
 #
 #   UPSTREAM_DIR  alphatheta-connect, onelibrary-connect, metadata-connect가
 #                 나란히 있는 부모 폴더 (기본값 ~/src/upstream)
 #   --stage N     PLAN §8 표의 단계 N(1~8) 파일만 본다
+#   --strict      원본이 고정 커밋이 아니면 경고 대신 exit 2로 끝난다(scripts/ci.sh가 쓴다)
 #
 # 종료 코드: 0 = 모두 같음, 1 = 하나라도 다름, 2 = 사용법·환경 오류
 set -euo pipefail
@@ -17,13 +18,15 @@ UPSTREAM_DIR="${UPSTREAM_DIR/#\~/$HOME}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 STAGE=""
+STRICT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage)
       [ $# -ge 2 ] || { echo "오류: --stage에는 단계 번호가 필요하다" >&2; exit 2; }
       STAGE="$2"; shift 2 ;;
     --stage=*) STAGE="${1#--stage=}"; shift ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    --strict) STRICT=1; shift ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "오류: 알 수 없는 인자 $1" >&2; exit 2 ;;
   esac
 done
@@ -32,7 +35,7 @@ case "$STAGE" in
   *) echo "오류: --stage는 1~8이어야 한다 (받은 값: $STAGE)" >&2; exit 2 ;;
 esac
 
-# 고정 커밋 확인 (다르면 경고만 한다)
+# 고정 커밋 확인 (다르면 경고만 한다. --strict면 실패)
 check_pin() {
   local repo="$1" pin="$2" head
   if [ ! -d "$UPSTREAM_DIR/$repo" ]; then
@@ -41,7 +44,11 @@ check_pin() {
   head="$(git -C "$UPSTREAM_DIR/$repo" rev-parse HEAD 2>/dev/null || echo unknown)"
   case "$head" in
     "$pin"*) ;;
-    *) echo "경고: $repo 가 고정 커밋($pin)이 아니다 (현재 ${head:0:7}). UPSTREAM.md 참고" >&2 ;;
+    *)
+      if [ "$STRICT" = 1 ]; then
+        echo "오류: $repo 가 고정 커밋($pin)이 아니다 (현재 ${head:0:7}). UPSTREAM.md 참고" >&2; exit 2
+      fi
+      echo "경고: $repo 가 고정 커밋($pin)이 아니다 (현재 ${head:0:7}). UPSTREAM.md 참고" >&2 ;;
   esac
 }
 check_pin alphatheta-connect 7496991060a38951c2119db13c26b3da7c075bfa
