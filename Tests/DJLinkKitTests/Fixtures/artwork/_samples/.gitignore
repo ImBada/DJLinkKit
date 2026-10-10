@@ -1,0 +1,4 @@
+# 실제 음원 파일(sample.mp3, sample.m4a, sample.flac)을 여기에 두면 통합 시험이 돈다.
+# 개인 곡 정보가 들어갈 수 있으므로 저장소에 올리지 않는다.
+*
+!.gitignore

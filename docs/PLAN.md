@@ -214,7 +214,7 @@ let package = Package(
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `PROVENANCE.md`, `UPSTREAM.md`, `AGENTS.md`(§14), `docs/port-map.md`
 - `DJLinkTestSupport`: `FakeUDPSocket`, `FakeTCPConnection`, `TestClock`, `FakeInterfaceProvider`
 - `scripts/port-status.sh`: 원본 시험 파일별 `it(` 수와, 대응하는 Swift 파일의 `@Test` 수를 나란히 보여 주고 다르면 실패한다. 원본 위치는 `UPSTREAM_DIR` 환경 변수로 받는다.
-- CI: GitHub Actions macOS 러너에서 `swift test`와 `scripts/port-status.sh`(원본은 고정 커밋으로 받는다)
+- CI: `swift test`와 `scripts/port-status.sh`를 돌린다. 처음에는 GitHub Actions macOS 러너로 했고, 2026-10-10부터 GitHub Actions는 끄고 로컬 `scripts/ci.sh`로 돌린다.
 - SQLCipher.swift 패키지에 product가 있는지 확인(§7)
 - 펌웨어 근거가 있는 곳을 다시 찾아 `PROVENANCE.md`에 적는다(§10)
 
@@ -241,6 +241,15 @@ let package = Package(
 - `makeStatusPacket`(`src/virtualcdj/index.ts:48`)이 정의만 있고 쓰이지 않는다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
+
+옮기면서 찾아 그대로 둔 원본 버그(2026-10-10, 자세한 것은 [port-notes.md](port-notes.md)):
+
+- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견줘 id 4 이상이면 비트가 서지 않는다. 실기에서 `play`·`pause` 대상이 어긋나는지 먼저 확인한다.
+- mixstatus: 같은 trackId 중복을 막는 `return`이 `cancelSetEnding`보다 앞에 있어 같은 곡을 다시 틀면 30초 뒤 `setEnded`가 난다 / `isSetActive`가 false로 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않는다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없다.
+- network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다. `disconnect()`가 돌려주는 `this.close`는 바인딩되지 않아 부르면 TypeError다(Swift는 정상 동작).
+- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠진다(USB 입력은 신뢰할 수 없다) / 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4, 실기 확인 필요) / 알 수 없는 cue type도 버튼이 있으면 hot_cue / 장치 제거 때 첫 DB만 닫는다 / OneLibrary 열기 실패 때 임시 파일이 남는다.
+- metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 `toString('ascii')` 때문에 맞지 않는다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽힌다 / 빈 값만 있어도 결과가 null이 아니다 / APIC의 BOM 검사가 MIME 바이트를 읽는다 / v2.3 확장 헤더 크기에 4바이트가 빠진다.
+- virtualcdj: `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않는다 / `getDeviceEnsured`가 장치가 먼저 와도 타이머를 지우지 않는다 / `makeStatusPacket`이 머리말을 0x0b에 쓴다 / stage 0x06 패킷이 55바이트다.
 
 ## 10. 라이선스·출처
 
@@ -286,7 +295,14 @@ let package = Package(
 
 - 공연이나 리허설 중인 네트워크에서 돌리지 않는다.
 - 같은 Mac에서 rekordbox·rekordboxAgent가 켜져 있으면 UDP 50000~50002를 잡지 않는다. 잡으면 rekordbox LINK가 망가질 수 있다. `djlink`는 시작할 때 이것을 확인하고 거부한다. 이 확인은 CLI·앱 쪽 규칙이며 라이브러리 동작(1:1)에는 넣지 않는다.
-- 가상 CDJ 번호는 7 이상만 쓴다(CLI 기본값). 1~6은 실기 확인에서 일부러 고른 경우만 쓴다.
+- 가상 CDJ 번호는 7 이상만 쓴다(CLI 기본값). 1~6은 실기 확인에서 일부러 고른 경우만 쓴다. 번호가 겹쳐 다시 고를 때도 같다(허용하지 않는 번호로는 announce하기 전에 멈춘다).
+- 메모(remotedb 질의 번호 예외, 바꾸지 않음): 위 7 이상 규칙은 announce 번호에 대한 것이다.
+  remotedb 메시지 안의 장치 번호는 원본 `pickRemoteDbQueryId`가 1~6 중에서 고른다.
+  CDJ가 1~6만 답하기 때문이며 원본 주석에 CDJ-3000 실기 확인(2026-08-30)이 있다.
+  그래서 가상 CDJ가 7 이상이어도 remotedb 질의에는 같은 랙의 다른 CDJ 번호(없으면 비어 있는 1~6)가 실린다.
+  1:1이라 고치지 않았고, CLI는 연결할 때 고른 번호를 한 줄 로그로 남긴다.
+  실기에서 이 번호가 CDJ에 어떻게 보이는지 확인하고, 바꿀지는 사용자가 정한다.
+- 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 원본 재생 상태 패킷(§9)을 실기로 확인하기 전까지 `--unverified-playstate` 없이는 거부한다.
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
 - macOS 로컬 네트워크 권한:
   - 라이브러리는 Info.plist를 가질 수 없다.
@@ -302,6 +318,11 @@ let package = Package(
   4. `port-status`와 시험이 통과하는지 본다.
   5. `UPSTREAM.md`를 갱신한다.
 - 새 차이에 펌웨어 분석 근거가 생기면 `PROVENANCE.md`에 더한다.
+- 브랜치(2026-10-10):
+  - `port/one-to-one`은 원본 버그까지 그대로 둔 1:1 기준선이다. 지우지 않고 남긴다.
+  - main은 기준선에 §9에서 고친 것을 더한 쪽이다.
+  - 새 릴리스는 `port/one-to-one`에 먼저 옮기고, 시험과 `port-status`가 통과하면 main에 합친다.
+  - 합칠 때 §9에서 고친 곳과 겹치면 고친 쪽을 남긴다. 새 원본 시험의 기대값이 고친 동작과 다르면 그 시험 위에 `// PLAN §9:` 주석을 단다.
 
 ## 13. DJCrate에 붙이기 (1:1 완료 뒤, DJCrate 저장소 이슈로)
 
