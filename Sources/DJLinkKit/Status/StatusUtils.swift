@@ -181,6 +181,9 @@ public func positionFromPacket(_ packet: [UInt8]) throws -> CDJStatus.PositionSt
     return position
 }
 
+/// 믹서가 비트 포트(50001)로 보내는 on-air 패킷의 종류 바이트(0x0a 자리).
+public let ON_AIR_PACKET_TYPE: UInt8 = 0x03
+
 /// Parse on-air status packet from DJM mixer.
 /// The mixer broadcasts which channels are currently audible.
 /// Supports both 4-channel (subtype 0x00) and 6-channel (subtype 0x03) variants.
@@ -199,7 +202,9 @@ public func onAirFromPacket(_ packet: [UInt8]) throws -> CDJStatus.OnAirStatus? 
     let lenr = try packet.readUInt16BE(0x22)
 
     // Check for 4-channel variant (subtype 0x00, length 0x0009)
-    if subtype == 0x00 && lenr == 0x0009 && packet.count >= 0x2e {
+    // PLAN §9: DJM-900NXS2(2026-10-14 실기)의 4채널 패킷은 subtype이 0x02이고 0x2d(45)바이트다.
+    // 원본은 subtype 0x00과 0x2e바이트 이상만 받아 실제 패킷을 버렸다. 데이터 9바이트는 0x2c에서 끝난다.
+    if (subtype == 0x00 || subtype == 0x02) && lenr == 0x0009 && packet.count >= 0x2d {
         let deviceId = Int(packet[0x21])
         let channels = [
             1: packet[0x24] != 0x00,

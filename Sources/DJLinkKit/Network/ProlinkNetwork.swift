@@ -287,7 +287,8 @@ public func bringOnline(
     }
     let stagehandMode = config?.connectMethod == .stagehand
     let deviceManager = DeviceManager(announceSocket, clock: clock)
-    let statusEmitter = StatusEmitter(statusSocket, stagehandMode: stagehandMode, clock: clock)
+    let statusEmitter = StatusEmitter(
+        statusSocket, beatSocket: beatSocket, stagehandMode: stagehandMode, clock: clock)
     let positionEmitter = PositionEmitter(beatSocket, stagehandMode: stagehandMode)
     tx.finish()
     return ProlinkNetwork(

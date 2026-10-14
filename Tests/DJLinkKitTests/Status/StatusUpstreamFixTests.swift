@@ -54,3 +54,73 @@ struct StatusUpstreamFixTests {
         #expect(positions.count == 1)
     }
 }
+
+/// DJM-900NXS2가 비트 포트(50001)로 보낸 실제 4채널 on-air 패킷(2026-10-14 실기, 45바이트). 채널 2·3이 on-air다.
+private let DJM_900NXS2_ON_AIR: [UInt8] = {
+    let hex = "5173707431576d4a4f4c03444a4d2d3930304e5853320000000000000000000102210009000101000000000000"
+    return stride(from: 0, to: hex.count, by: 2).map {
+        let start = hex.index(hex.startIndex, offsetBy: $0)
+        return UInt8(hex[start..<hex.index(start, offsetBy: 2)], radix: 16)!
+    }
+}()
+
+private func expectDJM900NXS2(_ onAir: CDJStatus.OnAirStatus?) {
+    #expect(onAir?.deviceId == 33)
+    #expect(onAir?.channels == [1: false, 2: true, 3: true, 4: false])
+    #expect(onAir?.isSixChannel == false)
+}
+
+@Suite("on-air 원본 버그 수정")
+@DJLinkActor
+struct StatusOnAirUpstreamFixTests {
+    @Test("DJM-900NXS2가 보내는 45바이트 4채널 on-air 패킷을 읽는다")
+    func parsesDJM900NXS2Packet() throws {
+        #expect(DJM_900NXS2_ON_AIR.count == 0x2d)
+        expectDJM900NXS2(try onAirFromPacket(DJM_900NXS2_ON_AIR))
+    }
+
+    @Test("비트 포트로 온 on-air 패킷을 onAir로 낸다")
+    func reportsOnAirFromBeatPort() {
+        let beatSocket = FakeUDPSocket()
+        let emitter = StatusEmitter(FakeUDPSocket(), beatSocket: beatSocket)
+        var received: [CDJStatus.OnAirStatus] = []
+        emitter.on(.onAir) { received.append($0) }
+        beatSocket.emitMessage(DJM_900NXS2_ON_AIR)
+        #expect(received.count == 1)
+        expectDJM900NXS2(received.first)
+    }
+
+    @Test("비트 포트에서는 종류가 0x03이 아닌 패킷을 on-air로 읽지 않는다", arguments: [UInt8(0x28), 0x0b, 0x02, 0x06])
+    func ignoresOtherTypesOnBeatPort(_ type: UInt8) {
+        let beatSocket = FakeUDPSocket()
+        let emitter = StatusEmitter(FakeUDPSocket(), beatSocket: beatSocket)
+        var received = 0
+        emitter.on(.onAir) { _ in received += 1 }
+        var packet = DJM_900NXS2_ON_AIR
+        packet[0x0a] = type
+        beatSocket.emitMessage(packet)
+        #expect(received == 0)
+    }
+
+    @Test("bringOnline은 비트 소켓으로 온 on-air 패킷도 상태 이벤트로 낸다")
+    func bringOnlineListensOnBeatSocket() async throws {
+        let factory = FakeSocketFactory()
+        let network = try await bringOnline(
+            socketFactory: factory, interfaceProvider: FakeInterfaceProvider(), clock: TestClock())
+        network.configure(
+            .init(
+                iface: NetworkInterfaceInfo(
+                    address: "192.168.1.100", netmask: "255.255.255.0", family: "IPv4",
+                    mac: "00:11:22:33:44:55", internal: false, cidr: "192.168.1.100/24"),
+                vcdjId: 7))
+        try network.connect()
+        let statusEmitter = try #require(network.statusEmitter)
+        var received: [CDJStatus.OnAirStatus] = []
+        statusEmitter.on(.onAir) { received.append($0) }
+        // bringOnline이 만드는 소켓 순서는 announce, beat, status다.
+        factory.udpSockets[1].emitMessage(DJM_900NXS2_ON_AIR)
+        #expect(received.count == 1)
+        expectDJM900NXS2(received.first)
+        try await network.close()
+    }
+}
