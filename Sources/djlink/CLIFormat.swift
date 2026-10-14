@@ -47,6 +47,11 @@ func formatPosition(_ p: CDJStatus.PositionState) -> String {
         "position device=\(p.deviceId) \(formatMilliseconds(p.playhead)) / \(p.trackLength)s pitch=\(formatNumber(p.pitch))% bpm=\(bpm)"
 }
 
+/// 비트 한 줄. 곡 BPM과 피치를 적용한 계산 BPM을 구분한다.
+func formatBeat(_ beat: CDJStatus.BeatState) -> String {
+    "beat device=\(beat.deviceId) beat=\(beat.beatInMeasure) bpm=\(formatNumber(beat.trackBPM)) pitch=\(formatNumber(beat.pitch))% effective-bpm=\(formatNumber(beat.effectiveBPM))"
+}
+
 /// on-air 한 줄. 채널은 번호 순.
 func formatOnAir(_ o: CDJStatus.OnAirStatus) -> String {
     let channels = o.channels.keys.sorted().map { "\($0)=\(o.channels[$0] == true ? "on" : "off")" }

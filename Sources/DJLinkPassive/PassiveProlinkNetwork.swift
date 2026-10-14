@@ -21,6 +21,7 @@ public final class PassiveProlinkNetwork {
     public let deviceManager: PassiveDeviceManager
     public let statusEmitter: PassiveStatusEmitter
     public let positionEmitter: PassivePositionEmitter
+    public let beatEmitter: PassiveBeatEmitter
     public let localdb: PassiveLocalDatabase
     private var remoteDatabase: PassiveRemoteDatabase?
     private var mixstatusProcessor: MixstatusProcessor?
@@ -45,6 +46,7 @@ public final class PassiveProlinkNetwork {
             adapter, config: config.deviceTimeout.map { .init(deviceTimeout: $0) }, clock: clock)
         statusEmitter = PassiveStatusEmitter(adapter)
         positionEmitter = PassivePositionEmitter(adapter)
+        beatEmitter = PassiveBeatEmitter(adapter)
         localdb = PassiveLocalDatabase(
             deviceManager, statusEmitter, preference: config.databasePreference ?? .auto, backend: localDBBackend,
             platform: platform, clock: clock, fetcher: localDBFetcher)
@@ -54,6 +56,7 @@ public final class PassiveProlinkNetwork {
         deviceManager.stop()
         statusEmitter.stop()
         positionEmitter.stop()
+        beatEmitter.stop()
         localdb.stop()
         remoteDatabase?.stop()
         adapter.stop()

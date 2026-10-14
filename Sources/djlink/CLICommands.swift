@@ -215,26 +215,30 @@ extension CLISession {
     private func runStatus(options: CLICommonOptions, all: Bool, positionIntervalMs: Int) async throws -> Int32 {
         let network = try await openNetwork(options: options)
         try await join(options: options)
-        guard let statusEmitter = network.statusEmitter, let positionEmitter = network.positionEmitter else {
+        guard let statusEmitter = network.statusEmitter, let positionEmitter = network.positionEmitter,
+            let beatEmitter = network.beatEmitter
+        else {
             throw CLIRuntimeError("Failed to connect to the network")
         }
         attachStatusPrinters(
-            statusEmitter: statusEmitter, positionEmitter: positionEmitter, all: all,
+            statusEmitter: statusEmitter, positionEmitter: positionEmitter, beatEmitter: beatEmitter, all: all,
             positionIntervalMs: positionIntervalMs)
-        output.log(.await, "Printing status, precise position and on-air (Ctrl-C to stop)")
+        output.log(.await, "Printing status, beats, precise position and on-air (Ctrl-C to stop)")
         await abort.wait()
         return CLIExitCode.interrupted
     }
 
-    /// 상태·정밀 위치·on-air·미디어 슬롯을 한 줄씩 찍는다. 줄이는 규칙은 `StatusLineFilter`·`LineThrottle`.
+    /// 상태·비트·정밀 위치·on-air·미디어 슬롯을 한 줄씩 찍는다. 비트는 패킷마다 낸다.
     private func attachStatusPrinters(
-        statusEmitter: StatusEmitter, positionEmitter: PositionEmitter, all: Bool, positionIntervalMs: Int
+        statusEmitter: StatusEmitter, positionEmitter: PositionEmitter, beatEmitter: BeatEmitter,
+        all: Bool, positionIntervalMs: Int
     ) {
         let printer = StatusPrinter(output: output, clock: runtime.clock, all: all, interval: positionIntervalMs)
         statusEmitter.on(.status) { printer.status($0) }
         statusEmitter.on(.onAir) { printer.onAir($0) }
         statusEmitter.on(.mediaSlot) { printer.mediaSlot($0) }
         positionEmitter.on(.position) { printer.position($0) }
+        beatEmitter.on(.beat) { printer.beat($0) }
     }
 
     // MARK: metadata
@@ -413,12 +417,13 @@ extension CLISession {
         network.statusEmitter.on(.onAir) { printer.onAir($0) }
         network.statusEmitter.on(.mediaSlot) { printer.mediaSlot($0) }
         network.positionEmitter.on(.position) { printer.position($0) }
+        network.beatEmitter.on(.beat) { printer.beat($0) }
         await abort.wait()
         return CLIExitCode.interrupted
     }
 }
 
-/// 상태·정밀 위치·on-air·미디어 슬롯을 한 줄씩 찍는 처리기. 줄이는 규칙은 `StatusLineFilter`·`LineThrottle`.
+/// 상태·비트·정밀 위치·on-air·미디어 슬롯을 한 줄씩 찍는 처리기.
 @DJLinkActor
 private final class StatusPrinter {
     private let output: any CLIOutput
@@ -438,6 +443,8 @@ private final class StatusPrinter {
     }
 
     func onAir(_ value: CDJStatus.OnAirStatus) { output.writeLine(formatOnAir(value)) }
+
+    func beat(_ value: CDJStatus.BeatState) { output.writeLine(formatBeat(value)) }
 
     func mediaSlot(_ value: MediaSlotInfo) { output.writeLine(formatMediaSlot(value)) }
 
