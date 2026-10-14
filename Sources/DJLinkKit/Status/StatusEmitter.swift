@@ -75,6 +75,7 @@ public final class StatusEmitter: EventEmitting {
 
     /// - Parameters:
     ///   - statusSocket: A UDP socket to receive CDJ status packets on
+    ///   - beatSocket: 비트 포트(50001) 소켓. 주면 그 포트로 오는 믹서 on-air 패킷(0x03)도 읽는다(PLAN §9).
     ///   - stagehandMode: Enable Stagehand-only mixer-state parsing. Off by
     ///     default so 'active' and passive connections behave exactly as they did
     ///     before Stagehand was added — the 0x39 layout is reverse-engineered from a
@@ -84,6 +85,7 @@ public final class StatusEmitter: EventEmitting {
     ///   - parsers: 패킷 파서. 기본은 실제 파서.
     public init(
         _ statusSocket: any UDPSocket,
+        beatSocket: (any UDPSocket)? = nil,
         stagehandMode: Bool = false,
         clock: any DJLinkClock = SystemClock.shared,
         parsers: Parsers = .live
@@ -95,6 +97,18 @@ public final class StatusEmitter: EventEmitting {
         statusSocket.onMessage { [weak self] message, _ in
             self?.handleStatus(message)
         }
+        // PLAN §9: 믹서는 on-air 패킷을 비트 포트(50001)로 보낸다(DJM-900NXS2 실기, 2026-10-14).
+        // 원본은 상태 소켓에서만 읽어 하나도 받지 못했다.
+        beatSocket?.onMessage { [weak self] message, _ in
+            self?.handleBeat(message)
+        }
+    }
+
+    /// 비트 포트에는 비트·정밀 위치 같은 다른 패킷도 오므로 종류가 on-air(0x03)인 것만 읽는다.
+    private func handleBeat(_ message: [UInt8]) {
+        guard message.count > 0x0a, message[0x0a] == ON_AIR_PACKET_TYPE else { return }
+        guard let onAir = try? parsers.onAirFromPacket(message) else { return }
+        emitter.emit(.onAir, onAir)
     }
 
     private func handleStatus(_ message: [UInt8]) {
@@ -147,7 +161,8 @@ public final class StatusEmitter: EventEmitting {
         let media = try await mediaSlotQueryLock.runExclusive { () async throws -> MediaSlotInfo in
             try await udpSend(self.statusSocket, request, STATUS_PORT, device.ip.address)
 
-            return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaSlotInfo, any Error>) in
+            return try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<MediaSlotInfo, any Error>) in
                 let waiter = MediaSlotWaiter()
 
                 let timeout = self.clock.setTimeout(.ms(10000)) {

@@ -244,7 +244,8 @@ func makeStage06Packet(_ device: Device, _ peerCount: Int) throws(BufferRangeErr
     parts += [0x01]
     parts += ints(device.macAddr)
     parts += device.ip.toArray()
-    parts += [0x30]
+    // PLAN §9: 원본은 여기에 0x30을 한 바이트 더 넣어 55바이트가 되고 장치 수가 0x31로 밀렸다.
+    // CDJ-2000nexus·DJM-900NXS2 실기(2026-10-14)의 0x06은 54바이트이고 0x30이 장치 수다.
     parts += [peerCount]
     parts += [0x00, 0x00, 0x00, 0x01]
     parts += [isHighPlayerNumber ? 0x64 : 0x00]

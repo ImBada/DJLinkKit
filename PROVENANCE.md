@@ -70,7 +70,9 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 
 | 날짜·장비 | 알아낸 것 | 방법 | 우리 쪽 쓴 곳 | 비고 |
 |---|---|---|---|---|
-| 2026-10-14, CDJ-2000nexus 1대(1번) | 재생 상태 패킷(0x02, 50001)의 마지막 네 칸은 플레이어 1~4의 것이고 0 = 시작, 1 = 정지(cue), 2 = 그대로다 | 네 칸만 바꾼 패킷을 하나씩 보내고(`01 02 02 02`, `02 02 02 02`, `00 02 02 02`) CDJ 상태 패킷의 재생 상태를 읽었다 | `Sources/DJLinkControl/Control.swift`(`makePlaystatePacket`), 시험 `ControlUpstreamFixTests.swift` | **분석 아님(실기 관찰).** 제3자 공개 프로토콜 설명(dysentery)과도 맞는다. 문서 원문은 옮기지 않았다. 덱이 한 대라 다른 칸의 "그대로"는 1번 칸으로만 확인했다 |
+| 2026-10-14, CDJ-2000nexus 1대(1번), 뒤에 2대 | 재생 상태 패킷(0x02, 50001)의 마지막 네 칸은 플레이어 1~4의 것이고 0 = 시작, 1 = 정지(cue), 2 = 그대로다. CDJ는 자기 칸만 읽는다 | 네 칸만 바꾼 패킷을 하나씩 보내고(`01 02 02 02`, `02 02 02 02`, `00 02 02 02`) CDJ 상태 패킷의 재생 상태를 읽었다. 두 대일 때 한 덱에 보낸 패킷이 다른 덱을 움직이지 않는 것을 봤다 | `Sources/DJLinkControl/Control.swift`(`makePlaystatePacket`), 시험 `ControlUpstreamFixTests.swift` | **분석 아님(실기 관찰).** 제3자 공개 프로토콜 설명(dysentery)과도 맞는다. 문서 원문은 옮기지 않았다 |
+| 2026-10-14, DJM-900NXS2(33번) | 4채널 on-air 패킷은 종류 0x03, 45바이트, `0x20` = 0x02, 길이 칸 0x0009이고 비트 포트(50001)로 브로드캐스트된다 | 50000~50002를 듣기만 하는 UDP 소켓으로 받은 패킷을 비교했다. 받은 패킷 하나를 시험 픽스처로 쓴다(믹서 이름과 채널 표시뿐이다) | `Sources/DJLinkKit/Status/StatusUtils.swift`(`onAirFromPacket`), `StatusEmitter.swift`, `Sources/DJLinkPassive/PassiveStatus.swift`, 시험 `StatusUpstreamFixTests.swift`·`PassiveStatusUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 6채널 변형은 장비가 없어 원본 그대로다 |
+| 2026-10-14, CDJ-2000nexus 2대, DJM-900NXS2 | keep-alive(0x06)는 54바이트, 길이 칸 0x0036, `0x30` = 장치 수, `0x31`–`0x33` = 0, `0x34` = 장치 종류로 보이는 값(CDJ 0x01, DJM 0x03) | 위와 같은 듣기 전용 소켓으로 받은 세 장비의 0x06을 비교했다 | `Sources/DJLinkKit/VirtualCDJ/Announcer.swift`(`makeStage06Packet`), 시험 `VirtualCDJKeepAliveUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 마지막 바이트(`0x35`)는 CDJ 0x00, DJM 0x31이었고 원본 값(번호 5 이상이면 0x64)을 그대로 둔다 |
 
 ## 요약
 
