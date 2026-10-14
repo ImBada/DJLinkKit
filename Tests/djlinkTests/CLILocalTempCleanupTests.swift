@@ -70,6 +70,102 @@ struct CLILocalTempCleanupTests {
         #expect(inner.files == ["/fake-tmp/other.db"], "CLI가 쓰지 않은 파일은 건드리지 않는다")
     }
 
+    @Test("라이브러리가 DB 본체를 먼저 지워도 종료 정리는 WAL·SHM·journal을 지운다")
+    func sideFilesAfterLibraryUnlink() async throws {
+        let h = CLIHarness()
+        let inner = RecordingLocalFileSystem()
+        var runtime = h.makeRuntime()
+        runtime.localFileSystem = inner
+        let session = CLISession(runtime: runtime, output: h.output, abort: h.abort)
+        let system = session.localFileSystem
+        try system.writeFileSync(first, [1])
+        let sideFiles = Set(CLIGuardedLocalFileSystem.sidecarSuffixes.map { first + $0 })
+        let unrelated: Set<String> = [second, second + "-wal", second + "-shm", first + ".backup"]
+        inner.files.formUnion(sideFiles.union(unrelated))
+        try system.unlinkSync(first)
+        #expect(system.writtenPaths.isEmpty, "본체 삭제 후 기존 쓰기 목록의 동작은 유지한다")
+        #expect(inner.files == sideFiles.union(unrelated))
+        await session.cleanup()
+        #expect(inner.files == unrelated)
+        system.removeWrittenFiles()
+        #expect(inner.files == unrelated, "중복 정리에서도 다른 DB나 유사 이름의 파일은 보존한다")
+    }
+
+    @Test("본체가 이미 없어도 소유한 부속 파일은 정리한다")
+    func missingDatabaseStillCleansSideFiles() throws {
+        let inner = RecordingLocalFileSystem()
+        let system = CLIGuardedLocalFileSystem(abort: CLIAbort(), inner: inner)
+        try system.writeFileSync(first, [1])
+        inner.files.remove(first)
+        inner.files.formUnion(CLIGuardedLocalFileSystem.sidecarSuffixes.map { first + $0 })
+        system.removeWrittenFiles()
+        #expect(inner.files.isEmpty)
+        #expect(system.writtenPaths.isEmpty)
+        system.removeWrittenFiles()
+        #expect(inner.files.isEmpty)
+    }
+
+    @Test("본체 삭제가 실패해도 부속 파일을 지우고 다음 정리에서 본체를 재시도한다")
+    func failedDatabaseCleanupCanBeRetried() throws {
+        let inner = RecordingLocalFileSystem()
+        let system = CLIGuardedLocalFileSystem(abort: CLIAbort(), inner: inner)
+        try system.writeFileSync(first, [1])
+        inner.files.formUnion(CLIGuardedLocalFileSystem.sidecarSuffixes.map { first + $0 })
+        inner.unlinkFailures = [first]
+        system.removeWrittenFiles()
+        #expect(inner.files == [first])
+        inner.unlinkFailures = []
+        system.removeWrittenFiles()
+        #expect(inner.files.isEmpty)
+        system.removeWrittenFiles()
+        #expect(inner.files.isEmpty)
+    }
+
+    @Test("부속 파일 하나의 삭제 실패가 다른 정리를 막지 않고 다음 정리에서 복구된다")
+    func failedSideFileCleanupCanBeRetried() throws {
+        let inner = RecordingLocalFileSystem()
+        let system = CLIGuardedLocalFileSystem(abort: CLIAbort(), inner: inner)
+        try system.writeFileSync(first, [1])
+        try system.writeFileSync(second, [2])
+        inner.files.formUnion(CLIGuardedLocalFileSystem.sidecarSuffixes.flatMap { [first + $0, second + $0] })
+        try system.unlinkSync(first)
+        inner.unlinkFailures = [first + "-wal"]
+        system.removeWrittenFiles()
+        #expect(inner.files == [first + "-wal"])
+        inner.unlinkFailures = []
+        system.removeWrittenFiles()
+        #expect(inner.files.isEmpty)
+    }
+
+    @Test("CLI가 쓰지 않은 본체의 unlink는 그 부속 파일을 정리 대상으로 만들지 않는다")
+    func unrelatedUnlinkDoesNotOwnSideFiles() throws {
+        let inner = RecordingLocalFileSystem()
+        let system = CLIGuardedLocalFileSystem(abort: CLIAbort(), inner: inner)
+        let unrelated: Set<String> = [second + "-wal", second + "-shm"]
+        inner.files = unrelated.union([second])
+        try system.unlinkSync(second)
+        try system.writeFileSync(first, [1])
+        system.removeWrittenFiles()
+        #expect(inner.files == unrelated)
+        #expect(!inner.unlinks.contains(second + "-wal"))
+        #expect(!inner.unlinks.contains(second + "-shm"))
+    }
+
+    @Test("중단 토큰이 없어도 정리가 시작된 뒤 새 임시 파일을 만들지 않는다")
+    func cleanupRefusesLaterWrites() throws {
+        let abort = CLIAbort()
+        let inner = RecordingLocalFileSystem()
+        let system = CLIGuardedLocalFileSystem(abort: abort, inner: inner)
+        try system.writeFileSync(first, [1])
+        system.removeWrittenFiles()
+        #expect(!abort.isAborted)
+        #expect(throws: CLIAborted.self) { try system.writeFileSync(second, [2]) }
+        #expect(system.writtenPaths.isEmpty)
+        #expect(inner.files.isEmpty)
+        system.removeWrittenFiles()
+        #expect(!inner.unlinks.contains(second), "정리 뒤 거부한 쓰기는 소유 경로에도 등록하지 않는다")
+    }
+
     @Test("nothing is tracked when the write is refused after an abort")
     func abortedWriteIsNotTracked() {
         let abort = CLIAbort()

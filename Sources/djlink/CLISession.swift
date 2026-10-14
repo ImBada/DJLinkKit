@@ -450,6 +450,9 @@ final class CLIGuardedLocalFileSystem: LocalDBFileSystem {
     private let inner: any LocalDBFileSystem
     /// 쓰기를 시작한 파일(반쯤 쓰다 실패한 것도 포함). 라이브러리가 지운 것은 빠진다.
     private(set) var writtenPaths: [String] = []
+    /// 본체가 먼저 삭제돼도 부속 파일을 정리할 수 있게 이 실행이 쓴 경로의 소유권은 유지한다.
+    private var ownedPaths: [String] = []
+    private var cleanupStarted = false
 
     /// SQLite가 DB 옆에 만들 수 있는 부속 파일.
     static let sidecarSuffixes = ["-journal", "-wal", "-shm"]
@@ -463,7 +466,9 @@ final class CLIGuardedLocalFileSystem: LocalDBFileSystem {
 
     func writeFileSync(_ path: String, _ data: [UInt8]) throws {
         try abort.check()
+        guard !cleanupStarted else { throw CLIAborted() }
         if !writtenPaths.contains(path) { writtenPaths.append(path) }
+        if !ownedPaths.contains(path) { ownedPaths.append(path) }
         try inner.writeFileSync(path, data)
     }
 
@@ -472,9 +477,11 @@ final class CLIGuardedLocalFileSystem: LocalDBFileSystem {
         writtenPaths.removeAll { $0 == path }
     }
 
-    /// 아직 남은 임시 파일을 지운다(이미 없거나 지우지 못하면 넘어간다). 여러 번 불러도 안전하다.
+    /// 소유한 본체·부속 파일을 정리한다. 정리 후 쓰기를 막고, 삭제 실패는 다음 호출에서 다시 시도한다.
     func removeWrittenFiles() {
-        let paths = writtenPaths
+        cleanupStarted = true
+        // 파일 시스템에는 존재 확인 창구가 없으므로 누락·삭제 실패 모두 넘어가고 소유 경로는 남긴다.
+        let paths = ownedPaths
         writtenPaths = []
         for path in paths {
             try? inner.unlinkSync(path)
