@@ -138,6 +138,7 @@ final class FakePcapBackend: PcapBackend {
     private(set) var closed = false
     var openError: (any Error)?
     private(set) var errorHandler: (@DJLinkActor (any Error) -> Void)?
+    private var packetHandler: (@DJLinkActor ([UInt8], Bool) -> Void)?
 
     nonisolated init() {}
 
@@ -148,7 +149,9 @@ final class FakePcapBackend: PcapBackend {
         opened.append(device)
     }
 
-    func onPacket(_ handler: @escaping @DJLinkActor ([UInt8], Bool) -> Void) {}
+    func onPacket(_ handler: @escaping @DJLinkActor ([UInt8], Bool) -> Void) { packetHandler = handler }
+
+    func emitPacket(_ packet: [UInt8]) { if !closed { packetHandler?(packet, false) } }
 
     func onError(_ handler: @escaping @DJLinkActor (any Error) -> Void) { errorHandler = handler }
 

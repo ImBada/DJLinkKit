@@ -32,7 +32,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
             명령:
               devices     장치 목록(announce만 듣는다, 아무것도 보내지 않는다)
               watch       원본 cli 흐름: 참여 → 곡이 바뀔 때마다 제목 출력(--download-dir를 주면 파일도 받는다)
-              status      상태·정밀 위치·on-air 출력
+              status      상태·비트·정밀 위치·on-air 출력
               metadata    remotedb/db로 메타데이터·파형·그리드·큐 요약 출력
               fetch       NFS로 파일 받기(export.pdb, exportLibrary.db, ANLZ 등)
               mixstatus   MixstatusProcessor 이벤트 출력
@@ -70,7 +70,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
         return """
             사용법: djlink status [--all] [--position-interval-ms N] [공통 옵션]
 
-            상태, 정밀 위치(CDJ-3000 이상), on-air를 한 줄씩 출력한다. 상태는 핵심 값이 바뀔 때만 낸다.
+            상태, 비트, 정밀 위치(CDJ-3000 이상), on-air를 한 줄씩 출력한다. 상태는 핵심 값이 바뀔 때만 내고 비트는 매번 낸다.
 
             옵션:
             \(commonOptionsHelp)
@@ -145,7 +145,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
         return """
             사용법: djlink passive --iface NAME [--position-interval-ms N]
 
-            libpcap으로 NAME 인터페이스의 PRO DJ LINK 패킷을 보기만 한다. 아무것도 보내지 않는다.
+            libpcap으로 NAME 인터페이스의 PRO DJ LINK 장치·상태·비트·정밀 위치·on-air를 보기만 한다. 아무것도 보내지 않는다.
             BPF 접근 권한(보통 root 또는 ChmodBPF)이 필요하다.
 
             옵션:
