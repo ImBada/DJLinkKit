@@ -141,56 +141,81 @@ extension CLISession {
         let processor = MixstatusProcessor(clock: runtime.clock)
         statusEmitter.on(.status) { processor.handleState($0) }
 
-        final class LastTrackIds {
-            var ids: [Int: Int] = [:]
-        }
-        let lastTid = LastTrackIds()
-        statusEmitter.on(.status) { [self] state in
-            if lastTid.ids[state.deviceId] == state.trackId { return }
-            lastTid.ids[state.deviceId] = state.trackId
-            // 원본과 다름: 곡이 없는 상태(trackId 0)는 조회하지 않는다. 실기에 쓸데없는 질의를 보내지 않으려는 것이다.
-            if state.trackId == 0 { return }
-            spawn { await self.handleTrackChange(state, db: db, downloadDir: downloadDir) }
-        }
+        attachWatchTrackHandlers(network: network, statusEmitter: statusEmitter, db: db, downloadDir: downloadDir)
 
         await abort.wait()
         return CLIExitCode.interrupted
     }
 
-    func handleTrackChange(_ state: CDJStatus.State, db: any NetworkDatabase, downloadDir: String?) async {
+    /// 원본 대응 시험을 바꾸지 않고 가짜 DB로 실제 watch 이벤트 연결도 확인할 수 있게 분리했다.
+    func attachWatchTrackHandlers(
+        network: ProlinkNetwork, statusEmitter: StatusEmitter, db: any NetworkDatabase, downloadDir: String?
+    ) {
+        let tracker = WatchTrackTracker(clock: runtime.clock)
+        let statusSubscription = statusEmitter.on(.status) { [self] state in
+            guard !abort.isAborted, let ticket = tracker.begin(state) else { return }
+            spawn {
+                let succeeded = await self.handleTrackChange(
+                    state, db: db, downloadDir: downloadDir, isCurrent: { tracker.isCurrent(ticket) })
+                if tracker.finish(ticket, succeeded: succeeded) {
+                    self.output.log(.warn, "track \(state.trackId): 조회가 3회 실패했다. 곡이나 연결이 바뀌면 다시 시도한다")
+                }
+            }
+        }
+        let disconnected = network.deviceManager.on(.disconnected) { tracker.deviceChanged($0.id) }
+        let connected = network.deviceManager.on(.connected) { tracker.deviceChanged($0.id) }
+        abort.onAbort {
+            tracker.stop()
+            statusEmitter.off(statusSubscription)
+            network.deviceManager.off(disconnected)
+            network.deviceManager.off(connected)
+        }
+    }
+
+    /// 메타데이터 성공과 선택적 파일 다운로드 실패를 구별해 성공한 제목을 다시 조회하지 않는다.
+    @discardableResult
+    func handleTrackChange(
+        _ state: CDJStatus.State, db: any NetworkDatabase, downloadDir: String?,
+        isCurrent: @escaping @DJLinkActor () -> Bool = { true }
+    ) async -> Bool {
+        var metadataSucceeded = false
         do {
             try abort.check()
+            guard isCurrent() else { return false }
             // 곡이 있는 장치가 인터페이스 서브넷 밖이면(다른 LAN에서 먼저 들은 같은 번호의 장치 등) 질의하지 않는다.
             if let outside = deviceOutsideScope(id: state.trackDeviceId) {
                 output.log(.warn, "장치 \(outside.id) [\(outside.ip.address)]는 서브넷 밖이라 질의하지 않는다")
-                return
+                return false
             }
             let track = try await db.getMetadata(
                 .init(
                     deviceId: state.trackDeviceId, trackSlot: state.trackSlot, trackType: state.trackType,
                     trackId: state.trackId))
             try abort.check()
+            guard isCurrent() else { return false }
             guard let track else {
                 output.log(.warn, "no track")
-                return
+                return false
             }
             output.writeLine("\(state.trackId) \(track.title)")
+            metadataSucceeded = true
 
             // 원본은 파일을 현재 폴더에 무조건 쓰지만, 우리 CLI는 --download-dir를 준 경우에만 쓴다(PLAN §11).
-            guard let downloadDir else { return }
+            guard let downloadDir else { return true }
             if let violation = checkNeverRead(track.filePath) {
                 output.log(.warn, "받지 않는다: \(violation.message)")
-                return
+                return true
             }
             guard let fileName = safeDownloadFileName(track.fileName) else {
                 output.log(.warn, "파일 이름이 올바르지 않아 받지 않는다: \(track.fileName)")
-                return
+                return true
             }
             let buf = try await db.getFile(
                 .init(
                     deviceId: state.trackDeviceId, trackSlot: state.trackSlot, trackType: state.trackType,
                     track: track))
-            guard let buf else { return }
+            guard isCurrent() else { return false }
+            guard let buf else { return true }
             // 같은 파일 이름이 다른 장치·곡에서 와도 부딪치지 않게 장치·슬롯·곡 번호를 넣는다.
             let slotName = getSlotName(state.trackSlot) ?? String(state.trackSlot.rawValue)
             let name = "\(state.trackDeviceId)-\(slotName)-\(state.trackId)-\(fileName)"
@@ -199,15 +224,19 @@ extension CLISession {
             try abort.check()
             do {
                 try await publishFile(buf, path: target, directory: downloadDir)
+                guard isCurrent() else { return false }
                 output.writeLine("Copied \(name)")
             } catch is CLIFileExistsError {
+                guard isCurrent() else { return false }
                 output.log(.warn, "이미 있어 덮어쓰지 않는다: \(target)")
             }
         } catch is CLIAborted {
-            return
+            return false
         } catch {
+            guard isCurrent() else { return false }
             output.log(.error, "track \(state.trackId): \(error)")
         }
+        return metadataSucceeded
     }
 
     // MARK: status
