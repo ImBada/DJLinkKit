@@ -354,10 +354,7 @@ extension CLISession {
 
     private func runControl(options: CLICommonOptions, request: CLIControlRequest) async throws -> Int32 {
         // 파서가 이미 거른 것을 실행 직전에 한 번 더 확인한다.
-        if request.action != .load,
-            let violation = checkPlayStateAllowed(
-                deviceId: request.deviceId, unverifiedPlaystate: request.unverifiedPlaystate)
-        {
+        if request.action != .load, let violation = checkPlayStateAllowed(deviceId: request.deviceId) {
             output.log(.error, violation.message)
             return CLIExitCode.refused
         }

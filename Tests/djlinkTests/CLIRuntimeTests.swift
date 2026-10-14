@@ -486,25 +486,20 @@ struct CLIRuntimeControlTests {
         #expect(h.allSocketsClosed)
     }
 
-    @Test("play and pause are refused at execution time too, before any socket opens")
+    @Test("play and pause to a player without a slot are refused at execution time too, before any socket opens")
     func playPauseRefusedAtRuntime() async {
         let h = CLIHarness()
-        let device5 = CLIControlRequest(
-            action: .pause, deviceId: 5, load: nil, confirm: "CDJ-3000", unverifiedPlaystate: true)
+        let device5 = CLIControlRequest(action: .pause, deviceId: 5, load: nil, confirm: "CDJ-3000")
         #expect(await h.start(.control(CLICommonOptions(), device5)).value == 2)
-        let unflagged = CLIControlRequest(action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000")
-        #expect(await h.start(.control(CLICommonOptions(), unflagged)).value == 2)
-        let device4 = CLIControlRequest(
-            action: .play, deviceId: 4, load: nil, confirm: "CDJ-3000", unverifiedPlaystate: true)
-        #expect(await h.start(.control(CLICommonOptions(), device4)).value == 2)
+        let device6 = CLIControlRequest(action: .play, deviceId: 6, load: nil, confirm: "CDJ-3000")
+        #expect(await h.start(.control(CLICommonOptions(), device6)).value == 2)
         #expect(h.fakeFactory.udpSockets.isEmpty)
     }
 
     @Test("an allowed play reaches only the target through the beat socket")
     func allowedPlay() async throws {
         let h = CLIHarness()
-        let request = CLIControlRequest(
-            action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000", unverifiedPlaystate: true)
+        let request = CLIControlRequest(action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000")
         let task = h.start(.control(CLICommonOptions(iface: "en7"), request))
         await h.settle()
         try h.announce(try cdj(2, "192.168.1.21"))
@@ -515,6 +510,8 @@ struct CLIRuntimeControlTests {
         #expect(sent.count == 1)
         #expect(sent.first?.address == "192.168.1.21")
         #expect(sent.first?.port == BEAT_PORT)
+        // 2번 칸에만 시작(0)을 싣고 다른 플레이어는 그대로(2) 둔다.
+        #expect(sent.first.map { Array($0.message.suffix(4)) } == [0x02, 0x00, 0x02, 0x02])
     }
 }
 

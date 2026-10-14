@@ -157,31 +157,12 @@ func checkControlConfirmation(device: Device, confirm: String) -> CLISafetyViola
 
 // MARK: - 재생 상태 패킷
 
-/// 능동(비-Stagehand) 연결의 `play`·`pause`가 쓰는 재생 상태 패킷은 원본 버그를 그대로 옮겼다(docs/PLAN.md §9).
-/// 칸 번호(0~3)를 `device.id`와 견주고 나머지 칸을 0으로 채운다. 공개된 프로토콜 설명으로 0은 "재생 시작"이라
-/// 장치 번호가 어긋나면 다른 덱이 움직일 수 있다. 실기로 확인하기 전에는 거부하고,
-/// 명시적인 위험 확인 플래그를 줘도 1~4번 장치만, 그리고 play와 pause가 서로 다른 패킷이 되는 번호만 허용한다.
-func checkPlayStateAllowed(deviceId: Int, unverifiedPlaystate: Bool) -> CLISafetyViolation? {
-    guard unverifiedPlaystate else {
-        return CLISafetyViolation(
-            message:
-                "play·pause는 실기로 확인하기 전까지 보내지 않는다: 원본 재생 상태 패킷이 칸 번호(0~3)를 장치 번호와 그대로 견주고 나머지 칸을 0(재생 시작)으로 채워, 다른 덱이 움직이거나 pause가 play와 같은 패킷이 될 수 있다(docs/PLAN.md §9). 위험을 알고 시험용 장비에서 확인하려면 --unverified-playstate를 같이 준다"
-        )
-    }
+/// 능동(비-Stagehand) 연결의 `play`·`pause`가 쓰는 재생 상태 패킷에는 1~4번 플레이어 칸만 있다(docs/PLAN.md §9).
+/// 그 밖의 번호에는 보내지 않는다. 라이브러리도 거부하지만 소켓을 열기 전에 먼저 거른다.
+func checkPlayStateAllowed(deviceId: Int) -> CLISafetyViolation? {
     guard 1...4 ~= deviceId else {
         return CLISafetyViolation(
-            message: "--unverified-playstate는 1~4번 장치에만 쓸 수 있다(대상 \(deviceId)번): 패킷에 칸이 없는 번호는 거부한다")
-    }
-    let device = { (id: Int) in
-        Device(name: VIRTUAL_CDJ_NAME, id: id, type: .cdj, macAddr: [0, 0, 0, 0, 0, 0], ip: try! Address4("10.0.0.1"))
-    }
-    let host = device(DEFAULT_VCDJ_ID)
-    let play = try? makePlaystatePacket(hostDevice: host, device: device(deviceId), playState: .playing)
-    let pause = try? makePlaystatePacket(hostDevice: host, device: device(deviceId), playState: .cued)
-    guard let play, let pause, play != pause else {
-        return CLISafetyViolation(
-            message:
-                "장치 \(deviceId)번은 원본 재생 상태 패킷에 칸이 없어 play와 pause가 같은 패킷(모든 칸 0 = 재생 시작)이 된다. 보내지 않는다")
+            message: "play·pause는 1~4번 플레이어에만 보낼 수 있다(대상 \(deviceId)번): 재생 상태 패킷에는 1~4번 칸만 있다")
     }
     return nil
 }
