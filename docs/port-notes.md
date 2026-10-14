@@ -154,3 +154,8 @@ cap 0.2.1의 동작은 npm tarball의 `lib/Decoders.js`·`src/binding.cc`를 읽
 ## 1:1 완료 뒤 더한 기능
 
 - 비트 0x28([#7](https://github.com/ImBada/DJLinkKit/issues/7)): 원본에 수신 기능이 없어, CDJ-2000nexus 실기 캡처로 확인한 96바이트 형식의 장치 번호·마디 안 비트·곡 BPM·피치를 읽는 `beatFromPacket`과 `CDJStatus.BeatState`를 더했다. `ProlinkNetwork.beatEmitter`·패시브 `beatEmitter`의 `.beat` 이벤트와 CLI status/passive에서 제공한다. 피치를 적용한 BPM은 계산값이며, 정밀 위치나 비트 예측 시간은 제공하지 않는다. 기존 상태·위치·on-air와 원본 대응 시험은 유지하고 1:1 기준선 브랜치에는 이 기능을 넣지 않는다.
+
+## CLI 연결 복구 고치기(1:1 완료 뒤)
+
+- 임시 DB([#16](https://github.com/ImBada/DJLinkKit/issues/16)): 우리 CLI의 소유 경로 목록을 본체의 존재 여부와 분리해, 본체가 먼저 삭제돼도 부속 파일을 종료 때 정리한다. 라이브러리 API와 1:1 기준선은 바꾸지 않는다.
+- watch([#17](https://github.com/ImBada/DJLinkKit/issues/17)): 원본 cli의 곡 ID만 비교하는 중복 억제를 원본 장치·슬롯·종류·곡 ID와 연결 수명으로 구분한다. 실패는 제한된 간격·횟수로 다시 조회하고, 이전 상태의 늦은 응답과 파일 게시 안내는 버린다. 원본 대응 시험은 유지하고 우리 CLI 회귀 시험으로 확인한다.

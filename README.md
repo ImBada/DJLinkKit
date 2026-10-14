@@ -8,10 +8,10 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 - 1:1 포트의 0~9단계 코드를 모두 옮겼다.
 - 원본 시험 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)를 모두 옮겼고, 모두 통과한다. 원본 `it` 수와 옮긴 `@Test` 수가 파일마다 같다(`scripts/port-status.sh`).
-- main은 1:1 기준선에, 옮기면서 찾은 원본 버그 21건을 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
-- 전체 시험 993개(DJLinkKit 757, DJLinkPassive 53, DJLinkControl 18, djlink CLI 165)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
+- main은 1:1 기준선에, 옮기면서 찾은 원본 버그 22건을 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
+- 전체 시험 1,008개(DJLinkKit 757, DJLinkPassive 53, DJLinkControl 18, djlink CLI 180)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
 - **실기 확인은 일부만 했다.** CDJ-2000nexus 2대와 DJM-900NXS2로 장치 목록, 참여, 상태, 비트, on-air, 메타데이터, NFS, 곡 올리기, play·pause, mixstatus를 확인했다(2026-10-14, 기록은 [docs/PLAN.md](docs/PLAN.md) §8). CDJ-3000, 6채널 믹서, remotedb 질의, 번호 겹침, pcap 캡처는 아직이다. 시험은 가짜 소켓과 합성 데이터로 돈다. 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
-- 현재 장비에서 CDJ LAN·Mac LAN 재연결, USB 재삽입, 덱 전원 재시작도 확인했다(2026-10-14~15). 장치·상태·메타데이터 복귀는 확인했으나, 임시 DB 부속 파일 잔존([#16](https://github.com/ImBada/DJLinkKit/issues/16))과 watch의 같은 곡 ID 재조회 누락([#17](https://github.com/ImBada/DJLinkKit/issues/17))은 아직 고치지 않았다. 상세 결과는 PLAN §8에 있다.
+- 현재 장비에서 CDJ LAN·Mac LAN 재연결, USB 재삽입, 덱 전원 재시작도 확인했다(2026-10-14~15). 장치·상태·메타데이터 복귀는 확인했으나, 이때 발견한 임시 DB 부속 파일 잔존([#16](https://github.com/ImBada/DJLinkKit/issues/16))과 watch의 같은 곡 ID 재조회 누락([#17](https://github.com/ImBada/DJLinkKit/issues/17))도 고쳤고 회귀 시험과 로컬 CI가 통과했다. 수정된 같은 watch에서 전원 재시작 후 같은 곡 재조회와 정상 종료 후 부속 파일 잔존 수 0을 확인했다. 상세 결과는 PLAN §8에 있다.
 - 원본과 다르게 옮긴 곳, 1:1 기준선에 일부러 그대로 옮긴 원본 버그는 [docs/port-notes.md](docs/port-notes.md)에 있다.
 
 ## 구성
@@ -93,6 +93,8 @@ UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh --stage 4  # 단계 하�
 | `passive --iface NAME` | libpcap으로 보기만 하기(BPF 권한 필요) |
 
 비트 수신은 CDJ-2000nexus에서 확인한 96바이트 0x28 형식을 지원한다. `network.beatEmitter`와 패시브 네트워크의 `beatEmitter`에서 `.beat`를 구독하면 장치 번호·마디 안 비트·곡 BPM·피치를 받는다. `effectiveBPM`은 곡 BPM에 피치 비율을 적용한 계산값이다. CLI `status`와 `passive`는 비트마다 `beat device=… beat=… bpm=… pitch=… effective-bpm=…`를 출력한다. 정밀 위치와 비트 예측 시간은 별개다. 능동 수신은 두 CDJ에서 CLI 실기로 확인했고, 패시브 수신 경로는 가짜 pcap 백엔드로 시험했다. 실제 pcap 확인은 [#6](https://github.com/ImBada/DJLinkKit/issues/6)에 남긴다. 앞부분 시간 필드와 다른 기종은 해석·검증 범위에 포함하지 않는다([#7](https://github.com/ImBada/DJLinkKit/issues/7)).
+
+watch는 곡 ID뿐 아니라 원본 장치·슬롯·곡 종류의 변경과 장치 재접속을 구분해 제목을 다시 조회한다. 메타데이터 조회 실패는 다음 상태 패킷에서 1초 이상 간격으로 최대 두 번 재시도한다. 최초 포함 3회가 모두 실패하면 새 곡이나 새 연결이 될 때까지 멈춘다. 성공한 조회와 진행 중인 조회는 반복 상태 패킷 때문에 중복 실행하지 않는다.
 
 CLI가 지키는 안전 규칙(docs/PLAN.md §11):
 
