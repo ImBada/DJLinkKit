@@ -54,6 +54,7 @@ public final class ProlinkNetwork {
     public let deviceManager: DeviceManager
     private let networkStatusEmitter: StatusEmitter
     private let networkPositionEmitter: PositionEmitter
+    private let networkBeatEmitter: BeatEmitter
     private var logger: any Logger
     private var config: NetworkConfig?
     private var connection: ConnectionService?
@@ -72,6 +73,7 @@ public final class ProlinkNetwork {
         config: NetworkConfig? = nil,
         announceSocket: any UDPSocket, beatSocket: any UDPSocket, statusSocket: any UDPSocket,
         deviceManager: DeviceManager, statusEmitter: StatusEmitter, positionEmitter: PositionEmitter,
+        beatEmitter: BeatEmitter? = nil,
         socketFactory: any SocketFactory = LiveSocketFactory.shared,
         interfaceProvider: any InterfaceProvider = SystemInterfaceProvider(),
         clock: any DJLinkClock = SystemClock.shared, dependencies: NetworkDependencies = .init()
@@ -84,6 +86,7 @@ public final class ProlinkNetwork {
         self.deviceManager = deviceManager
         self.networkStatusEmitter = statusEmitter
         self.networkPositionEmitter = positionEmitter
+        self.networkBeatEmitter = beatEmitter ?? BeatEmitter(beatSocket)
         self.socketFactory = socketFactory
         self.interfaceProvider = interfaceProvider
         self.clock = clock
@@ -191,6 +194,7 @@ public final class ProlinkNetwork {
     }
 
     public func close() async throws {
+        networkBeatEmitter.stop()
         // Promise.all처럼 모두 시작하고, 하나가 실패하면 나머지 종료를 취소하지 않는다.
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             var remaining = 3
@@ -219,6 +223,7 @@ public final class ProlinkNetwork {
     public func isConnected() -> Bool { state == .connected }
     public var statusEmitter: StatusEmitter? { state == .connected ? networkStatusEmitter : nil }
     public var positionEmitter: PositionEmitter? { state == .connected ? networkPositionEmitter : nil }
+    public var beatEmitter: BeatEmitter? { state == .connected ? networkBeatEmitter : nil }
     public var virtualDevice: Device? { connection?.vcdj.device }
     public var db: (any NetworkDatabase)? { connection?.database }
     public var localdb: (any NetworkLocalDatabase)? { connection?.localdb }
@@ -290,10 +295,12 @@ public func bringOnline(
     let statusEmitter = StatusEmitter(
         statusSocket, beatSocket: beatSocket, stagehandMode: stagehandMode, clock: clock)
     let positionEmitter = PositionEmitter(beatSocket, stagehandMode: stagehandMode)
+    let beatEmitter = BeatEmitter(beatSocket)
     tx.finish()
     return ProlinkNetwork(
         config: config, announceSocket: announceSocket, beatSocket: beatSocket, statusSocket: statusSocket,
         deviceManager: deviceManager, statusEmitter: statusEmitter, positionEmitter: positionEmitter,
+        beatEmitter: beatEmitter,
         socketFactory: socketFactory, interfaceProvider: interfaceProvider, clock: clock, dependencies: dependencies)
 }
 
