@@ -116,16 +116,12 @@ struct CLISafetyTests {
         for path in allowed { #expect(checkNeverRead(path) == nil, "\(path)") }
     }
 
-    @Test("play and pause are refused without the flag and allowed only where the packets differ")
-    func playStateRisk() throws {
-        for id in [1, 2, 3, 4, 7] {
-            let violation = try #require(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: false))
-            #expect(violation.message.contains("--unverified-playstate"))
-        }
-        // 플래그가 있어도 1~4번만, 그중 패킷이 구별되는 1~3번만 허용한다.
-        for id in [1, 2, 3] { #expect(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: true) == nil) }
-        for id in [0, 4, 5, 6, 7, 17, 32] {
-            #expect(checkPlayStateAllowed(deviceId: id, unverifiedPlaystate: true) != nil, "\(id)")
+    @Test("play and pause are allowed only for players 1-4, which have a slot in the packet")
+    func playStateRange() throws {
+        for id in [1, 2, 3, 4] { #expect(checkPlayStateAllowed(deviceId: id) == nil, "\(id)") }
+        for id in [0, 5, 6, 7, 17, 32] {
+            let violation = try #require(checkPlayStateAllowed(deviceId: id), "\(id)")
+            #expect(violation.message.contains("1~4번 플레이어"))
         }
     }
 

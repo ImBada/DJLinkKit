@@ -64,6 +64,14 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 | `CHANGELOG.md:90` | 위 A의 상태 필드 변경(`9331cac`)을 가리킴 | 상태 플래그, 피치 네 값, 패킷 카운터를 "CDJ-3000 펌웨어에서" 문서화했다는 변경 기록 | 옮기지 않음 | A의 `types.ts`·`utils.ts` 행과 같은 근거다 |
 | `README.md:188-190`, `package.json`의 keywords, `src/localdb/kaitai/*.ksy` 머리말 | 제3자 공개 분석 | Pro DJ Link 프로토콜(dysentery·beat-link), rekordbox DB 형식(henrybetts·flesniak, Deep Symmetry crate-digger)을 리버스 엔지니어링한 제3자의 작업에 감사 표시를 한 것 | `THIRD_PARTY_NOTICES.md`에 감사 대상으로 밝혀 둠 | **분석 아님.** 공개된 제3자 문서이며 펌웨어 분석이 아니다. `.ksy`는 옮기지 않는다 |
 
+## D. 우리 실기 확인으로 알아낸 것
+
+원본에 없고, 우리가 시험용 장비에서 패킷을 보내고 장치가 돌려준 상태 패킷을 비교해 알아낸 것이다. 기록은 [docs/PLAN.md](docs/PLAN.md) §8 "실기 확인 기록"에 있다.
+
+| 날짜·장비 | 알아낸 것 | 방법 | 우리 쪽 쓴 곳 | 비고 |
+|---|---|---|---|---|
+| 2026-10-14, CDJ-2000nexus 1대(1번) | 재생 상태 패킷(0x02, 50001)의 마지막 네 칸은 플레이어 1~4의 것이고 0 = 시작, 1 = 정지(cue), 2 = 그대로다 | 네 칸만 바꾼 패킷을 하나씩 보내고(`01 02 02 02`, `02 02 02 02`, `00 02 02 02`) CDJ 상태 패킷의 재생 상태를 읽었다 | `Sources/DJLinkControl/Control.swift`(`makePlaystatePacket`), 시험 `ControlUpstreamFixTests.swift` | **분석 아님(실기 관찰).** 제3자 공개 프로토콜 설명(dysentery)과도 맞는다. 문서 원문은 옮기지 않았다. 덱이 한 대라 다른 칸의 "그대로"는 1번 칸으로만 확인했다 |
+
 ## 요약
 
 판정 결과를 건수로 정리한 것이다. "곳"은 위 표의 행을 센 것이다.

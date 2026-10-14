@@ -77,8 +77,6 @@ struct CLIControlRequest: Equatable, Sendable {
     var load: Load?
     /// 대상 장치 이름. 정확히 같아야 보낸다(docs/PLAN.md §11).
     var confirm: String
-    /// `play`·`pause`를 실기로 확인하기 전에 보내겠다는 명시적 위험 확인(`--unverified-playstate`).
-    var unverifiedPlaystate = false
     /// 명령 전체 제한 시간(초).
     var timeoutSeconds = defaultControlTimeoutSeconds
 
@@ -153,7 +151,7 @@ private func spec(for subcommand: CLISubcommand) -> OptionSpec {
             values: commonValueOptions.union([
                 "device", "source-device", "slot", "track-id", "track-type", "confirm", "timeout",
             ]),
-            flags: commonFlagOptions.union(["unverified-playstate"]), positionals: 1)
+            flags: commonFlagOptions, positionals: 1)
     case .passive:
         OptionSpec(values: ["iface", "position-interval-ms"])
     }
@@ -391,11 +389,8 @@ private func parseControl(_ parsed: ParsedOptions) throws(CLIUsageError) -> CLIC
     let device = try parseInt(
         "device", try requireValue(parsed, "device", subcommand: subcommand), in: 1...MAX_DEVICE_ID,
         subcommand: subcommand)
-    let unverified = parsed.flags.contains("unverified-playstate")
-    if action == .load {
-        if unverified { throw CLIUsageError("--unverified-playstate는 play·pause에만 쓴다", subcommand: subcommand) }
-    } else if let violation = checkPlayStateAllowed(deviceId: device, unverifiedPlaystate: unverified) {
-        // 안전 규칙: 원본 재생 상태 패킷을 실기로 확인하기 전에는 play·pause를 거부한다(docs/PLAN.md §9).
+    if action != .load, let violation = checkPlayStateAllowed(deviceId: device) {
+        // 재생 상태 패킷에 칸이 없는 번호에는 play·pause를 보내지 않는다(docs/PLAN.md §9).
         throw CLIUsageError(violation.message, subcommand: subcommand)
     }
     let timeout = try parseTimeout(parsed, default: defaultControlTimeoutSeconds, subcommand: subcommand)
@@ -425,6 +420,5 @@ private func parseControl(_ parsed: ParsedOptions) throws(CLIUsageError) -> CLIC
     return .control(
         options,
         CLIControlRequest(
-            action: action, deviceId: device, load: load, confirm: confirm, unverifiedPlaystate: unverified,
-            timeoutSeconds: timeout))
+            action: action, deviceId: device, load: load, confirm: confirm, timeoutSeconds: timeout))
 }

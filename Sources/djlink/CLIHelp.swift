@@ -18,7 +18,7 @@ private let safetyHelp = """
       - PIONEER/extracted, PIONEER/CDP, djprofile.nxs는 어떤 경로로도(메타데이터·파형·분석 조회 안의 NFS 읽기 포함) 읽지 않는다.
       - Ctrl-C(SIGHUP·SIGTERM 포함)를 누르면 독립 중단 플래그를 세우고 소켓을 닫고 진행 중인 파일 쓰기와 임시 파일을 정리한다. 두 번째 신호는 즉시 끝내고, 중단 뒤 3초 안에 정리가 안 되면 강제 종료한다(임시 파일이 남을 수 있다).
       - 제어 명령은 --confirm "<장치 이름>"이 대상 장치 이름과 정확히 같을 때만 보낸다.
-      - play·pause는 실기로 확인하기 전까지 거부한다(--unverified-playstate를 줘도 1~4번 장치 가운데 패킷이 구별되는 번호만).
+      - play·pause는 1~4번 플레이어에만 보낸다(재생 상태 패킷에 1~4번 칸만 있다).
     """
 
 func helpText(_ subcommand: CLISubcommand?) -> String {
@@ -123,16 +123,13 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
         return """
             사용법:
               djlink control load  --device N --slot usb|sd|rb --track-id ID [--source-device M] [--track-type rb|unanalyzed] --confirm "<장치 이름>"
-              djlink control play  --device N --confirm "<장치 이름>" --unverified-playstate
-              djlink control pause --device N --confirm "<장치 이름>" --unverified-playstate
+              djlink control play  --device N --confirm "<장치 이름>"
+              djlink control pause --device N --confirm "<장치 이름>"
 
             공연 중인 장비를 움직이는 명령이다. --confirm이 대상 장치 이름(devices에 보이는 이름)과 정확히 같지 않으면 아무것도 보내지 않는다.
             대상 장치를 확인하기 전에는 가상 CDJ로 참여하지 않는다.
-            play·pause는 기본으로 거부한다(종료 코드 2). 원본 makePlaystatePacket이 칸 번호(0~3)를 장치 번호와 그대로 견주고
-            나머지 칸을 0으로 채우는데, 공개된 프로토콜 설명으로 0은 "재생 시작"이라 다른 덱이 움직이거나
-            pause가 play와 같은 패킷이 될 수 있기 때문이다(docs/PLAN.md §9). 실기로 확인하기 전에는 시험용 장비에서
-            위험을 알고 --unverified-playstate를 같이 줄 때만 보내며, 그때도 1~4번 장치 가운데 play와 pause가 서로 다른
-            패킷이 되는 번호만 허용한다. 보낸 뒤 출력되는 after: 줄로 실제 장치가 움직였는지 확인한다.
+            play·pause는 재생 상태 패킷에 칸이 있는 1~4번 플레이어에만 보내고, 다른 플레이어 칸은 "그대로"로 채운다
+            (docs/PLAN.md §9). 5번 이상은 거부한다(종료 코드 2). 보낸 뒤 출력되는 after: 줄로 실제 장치가 움직였는지 확인한다.
 
             옵션:
               --device N            명령을 받을 장치 번호
@@ -141,7 +138,6 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
               --slot usb|sd|rb      load: 곡이 있는 슬롯
               --track-id ID         load: 곡 번호
               --track-type TYPE     load: rb(기본) 또는 unanalyzed
-              --unverified-playstate  play·pause: 확인하지 않은 재생 상태 패킷을 보내는 위험을 알고 있다는 표시
               --timeout SEC         명령 전체 제한 시간(1~3600, 기본 \(defaultControlTimeoutSeconds)). 넘으면 정리하고 종료 코드 1
             \(commonOptionsHelp)
             """

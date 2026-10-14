@@ -231,6 +231,15 @@ let package = Package(
   7. 마지막에 따로 제어 명령
 - 캡처: 확인하면서 받은 패킷을 pcap으로 남겨 회귀 시험 픽스처로 쓴다. 개인 곡이 없는 시험용 USB로만 캡처한다.
 
+**실기 확인 기록**
+
+- 2026-10-14, CDJ-2000nexus 1대(1번), 믹서 없음, Mac `en14`(169.254.0.0/16), 가상 CDJ 7번. sudo가 없어 pcap 캡처와 `passive`는 하지 못했다.
+  - 됨: 장치 목록, 7번으로 참여, 상태(재생 상태·곡·BPM·피치·master·마디 안 비트), `watch`, 메타데이터·비트 그리드·파형·큐, NFS로 `export.pdb`·`exportLibrary.db` 받기, `djprofile.nxs` 거부, 곡 올리기, Ctrl-C 정리(종료 코드 130, 남은 소켓 없음).
+  - 메타데이터는 remotedb가 아니라 NFS로 받은 USB DB에서 왔다. CDJ의 rekordbox 곡은 원본도 localdb로 읽는다(`getTrackLookupStrategy`). 그래서 remotedb 질의 번호(§11 메모)는 이번에 보지 못했다.
+  - 원본 재생 상태 패킷으로 1번에 `pause`를 보내면 계속 재생했다. 네 칸을 하나씩 바꿔 보내 칸 i가 플레이어 i+1이고 0 = 시작, 1 = 정지(cue), 2 = 그대로임을 확인하고 고쳤다(§9). 고친 패킷으로 play·pause가 두 번씩 맞게 동작했다.
+  - mixstatus는 믹서가 없으면 on-air가 꺼져 있어, 기본 설정(`useOnAirStatus`)에서는 `stopped`만 나고 `nowPlaying`·`setStarted`는 나지 않는다(원본과 같다).
+  - 남은 것: 믹서(on-air 포트, mixstatus), pcap(stage 0x06 길이, 비트 패킷 0x28, 인터페이스가 사라질 때의 패시브), 분석하지 않은 곡(remotedb 질의 번호), 가상 CDJ 하나 더(번호 겹침), CDJ-3000(정밀 위치), 두 덱 이상에서 play·pause가 다른 덱을 건드리지 않는지.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다.
@@ -246,9 +255,12 @@ let package = Package(
 - metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 맞지 않았다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽혔다 / 값이 모두 비어도 결과가 null이 아니었다 / APIC의 BOM 검사 위치(겉으로 드러나는 동작 변화 없음) / ID3 v2.3 확장 헤더 크기에 4바이트가 빠졌다.
 - passive: UDP 길이를 두 번 빼서 payload 끝 8바이트가 잘리고 표준 announce가 short format으로 읽혔다.
 
+**고친 것**(2026-10-14, 실기 확인 뒤)
+
+- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견주고 나머지 칸을 0(시작)으로 채웠다. 대상이 한 칸 어긋나 1번에 보낸 `pause`가 1번을 계속 재생시켰고(CDJ-2000nexus 실기), 다른 플레이어 칸에는 시작을 실었다. 이제 칸 `device.id - 1`에 명령을 싣고 나머지 칸은 2(그대로)로 채운다. 칸이 없는 번호(1~4 밖)와 재생·cue 밖의 재생 상태는 보내지 않고 오류를 낸다(원본은 0, 즉 시작을 보냈다). `djlink`의 `--unverified-playstate`는 없앴고 `play`·`pause`는 1~4번에만 보낸다. 두 덱 이상에서 다른 덱이 그대로인지는 아직 실기로 보지 못했다.
+
 **실기 확인 뒤 정할 것**
 
-- 제어: 재생 상태 패킷(`src/control/index.ts`)이 칸 번호(0–3)를 `device.id`와 견주고 나머지 칸을 0으로 채운다. 대상이 한 칸 어긋나고, 공개된 프로토콜 설명으로는 0이 "재생 시작"이라 다른 덱을 움직일 수 있다. `djlink`는 확인 전까지 `--unverified-playstate` 없이 `play`·`pause`를 거부한다.
 - on-air 패킷을 상태 소켓(50002)에서만 읽는다(`src/status/index.ts:122`). beat-link는 50001에서 읽는다. 실기 캡처로 확인한 뒤 정한다.
 - localdb: 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4).
 - virtualcdj: stage 0x06 패킷이 55바이트다.
@@ -312,7 +324,7 @@ let package = Package(
   그래서 가상 CDJ가 7 이상이어도 remotedb 질의에는 같은 랙의 다른 CDJ 번호(없으면 비어 있는 1~6)가 실린다.
   1:1이라 고치지 않았고, CLI는 연결할 때 고른 번호를 한 줄 로그로 남긴다.
   실기에서 이 번호가 CDJ에 어떻게 보이는지 확인하고, 바꿀지는 사용자가 정한다.
-- 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 원본 재생 상태 패킷(§9)을 실기로 확인하기 전까지 `--unverified-playstate` 없이는 거부한다.
+- 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 재생 상태 패킷에 칸이 있는 1~4번 플레이어에만 보낸다(§9, 2026-10-14 실기 확인 뒤 고침).
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
 - macOS 로컬 네트워크 권한:
   - 라이브러리는 Info.plist를 가질 수 없다.

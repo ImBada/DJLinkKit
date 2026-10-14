@@ -8,9 +8,9 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 - 1:1 포트의 0~9단계 코드를 모두 옮겼다.
 - 원본 시험 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)를 모두 옮겼고, 모두 통과한다. 원본 `it` 수와 옮긴 `@Test` 수가 파일마다 같다(`scripts/port-status.sh`).
-- main은 1:1 기준선에, 옮기면서 찾은 원본 버그 18건을 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
-- 전체 시험 968개(DJLinkKit 743, DJLinkPassive 49, DJLinkControl 13, djlink CLI 163)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
-- **실기 확인은 아직 하지 않았다.** 모든 시험은 가짜 소켓과 합성 데이터로 돈다. 실제 CDJ·믹서와 맞춰 본 적이 없으므로 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
+- main은 1:1 기준선에, 옮기면서 찾은 원본 버그 19건을 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
+- 전체 시험 972개(DJLinkKit 743, DJLinkPassive 49, DJLinkControl 18, djlink CLI 162)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
+- **실기 확인은 일부만 했다.** CDJ-2000nexus 한 대(믹서 없음)로 장치 목록, 참여, 상태, 메타데이터, NFS, 곡 올리기, play·pause를 확인했다(2026-10-14, 기록은 [docs/PLAN.md](docs/PLAN.md) §8). 믹서, CDJ-3000, 여러 덱, 패킷 캡처는 아직이다. 시험은 가짜 소켓과 합성 데이터로 돈다. 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
 - 원본과 다르게 옮긴 곳, 1:1 기준선에 일부러 그대로 옮긴 원본 버그는 [docs/port-notes.md](docs/port-notes.md)에 있다.
 
 ## 구성
@@ -88,7 +88,7 @@ UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh --stage 4  # 단계 하�
 | `metadata --device N --slot usb\|sd --track-id ID` | 메타데이터·그리드·파형·큐 요약 |
 | `fetch --device N --slot usb\|sd --path PATH --out FILE` | NFS로 파일 하나 받기(이미 있으면 거부) |
 | `mixstatus` | MixstatusProcessor 이벤트 |
-| `control load ... --confirm "<장치 이름>"` | 곡 올리기. `play`·`pause`는 `--unverified-playstate` 없이는 거부 |
+| `control load\|play\|pause ... --confirm "<장치 이름>"` | 곡 올리기·재생·정지. `play`·`pause`는 1~4번 플레이어에만 |
 | `passive --iface NAME` | libpcap으로 보기만 하기(BPF 권한 필요) |
 
 CLI가 지키는 안전 규칙(docs/PLAN.md §11):
@@ -112,9 +112,9 @@ CLI가 지키는 안전 규칙(docs/PLAN.md §11):
     이 방식을 바꿀지는 사용자가 정한다(docs/PLAN.md §11 메모).
 - 제어 명령은 `--confirm`이 대상 장치 이름과 정확히 같을 때만 보낸다.
     대상을 확인하기 전에는 가상 CDJ로 참여하지 않는다.
-- `control play`·`control pause`는 거부한다(종료 코드 2).
-    원본 재생 상태 패킷이 칸 번호(0~3)를 장치 번호와 그대로 견주고 나머지 칸을 0(재생 시작)으로 채워 다른 덱이 움직이거나 `pause`가 `play`와 같은 패킷이 될 수 있다(docs/PLAN.md §9).
-    실기로 확인하기 전에는 시험용 장비에서 위험을 알고 `--unverified-playstate`를 같이 줄 때만 보내고, 그때도 1~3번 장치(play와 pause 패킷이 서로 다른 번호)에만 보낸다.
+- `control play`·`control pause`는 1~4번 플레이어에만 보낸다. 5번 이상은 거부한다(종료 코드 2).
+    재생 상태 패킷에는 1~4번 플레이어 칸만 있고, 대상 칸에만 명령을 싣고 다른 칸은 "그대로"로 채운다.
+    원본은 칸이 한 칸 어긋나고 나머지를 "재생 시작"으로 채워, `pause`가 대상을 멈추지 못하고 다른 플레이어 칸에 시작을 실었다. CDJ-2000nexus 실기로 확인하고 고쳤다(docs/PLAN.md §9).
 - `PIONEER/extracted`·`PIONEER/CDP`·`djprofile.nxs`는 `fetch`뿐 아니라 메타데이터·파형·분석·앨범아트 조회 안의 모든 NFS 읽기에서 거부한다.
     경로 구성 요소 끝의 `.`·공백은 걷어낸 뒤 비교하고(`PIONEER.`는 `PIONEER`), FAT 8.3 짧은 이름 별칭 꼴(`EXTRAC~1`, `DJPROF~1.NXS`처럼 이름 8자 이하가 `~숫자`로 끝나는 것)은 긴 이름을 알 수 없으므로 거부한다. 그 꼴이 아닌 `~`(예: `a~b.mp3`)는 막지 않는다.
     그래서 이름에 `~`가 든 곡 파일도 받지 않는다.

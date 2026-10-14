@@ -54,12 +54,12 @@ struct CLIApplicationTests {
         #expect(await app.run(["bogus"]) == 2)
         #expect(await app.run(["watch", "--vcdj-id", "3"]) == 2)
         #expect(await app.run(["control", "play", "--device", "1"]) == 2)
-        #expect(await app.run(["control", "play", "--device", "1", "--confirm", "CDJ-3000"]) == 2)
+        #expect(await app.run(["control", "play", "--device", "5", "--confirm", "CDJ-3000"]) == 2)
         #expect(await app.run(["watch", "--iface", "-h"]) == 2)
         #expect(executor.commands.isEmpty)
         #expect(output.errorLines.contains { $0.contains("--allow-player-id") })
         #expect(output.errorLines.contains { $0.contains("--confirm") })
-        #expect(output.errorLines.contains { $0.contains("--unverified-playstate") })
+        #expect(output.errorLines.contains { $0.contains("1~4번 플레이어") })
     }
 
     @Test("rekordbox running stops every network command before it starts")

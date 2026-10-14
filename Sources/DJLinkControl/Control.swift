@@ -2,21 +2,33 @@
 import DJLinkKit
 
 /// 원본 `Options`의 `playState`는 `Cued | Playing`만 받지만 TS 형이라 Swift에서는 `PlayState`를 그대로 받는다.
-/// 표에 없는 값은 원본에서 `undefined`가 되어 `Uint8Array.from`이 0으로 바꾼다.
-private func stateMapValue(_ playState: CDJStatus.PlayState) -> UInt8 {
+/// PLAN §9: 원본은 표에 없는 값을 `undefined`로 두어 `Uint8Array.from`이 0(시작)으로 바꿨다. 이제 nil로 돌려 거부한다.
+private func stateMapValue(_ playState: CDJStatus.PlayState) -> UInt8? {
     switch playState {
     case .cued: 0x01
     case .playing: 0x00
-    default: 0x00
+    default: nil
     }
 }
+
+/// 재생 상태 패킷에서 그 플레이어를 그대로 두는 값.
+private let PLAYSTATE_NO_CHANGE: UInt8 = 0x02
 
 /// Generates the packet used to control the playstate of CDJs in active connection mode
 public func makePlaystatePacket(
     hostDevice: Device,
     device: Device,
     playState: CDJStatus.PlayState
-) throws(BufferRangeError) -> [UInt8] {
+) throws -> [UInt8] {
+    // PLAN §9: 칸 i는 플레이어 i+1의 것이고 0 = 시작, 1 = 정지(cue), 2 = 그대로다.
+    // 원본은 칸 번호(0-3)를 `device.id`와 견주고 나머지 칸을 0으로 채워, 대상이 한 칸 어긋나고
+    // 다른 플레이어에게 시작을 보냈다(CDJ-2000nexus 실기 확인, 2026-10-14). 칸이 없는 번호는 보내지 않는다.
+    guard (1...4).contains(device.id) else {
+        throw DJLinkError("playstate packets only have slots for players 1-4 (got \(device.id))")
+    }
+    guard let value = stateMapValue(playState) else {
+        throw DJLinkError("playstate packets only carry playing or cued (got \(playState))")
+    }
     var packet: [UInt8] = []
     packet += PROLINK_HEADER
     packet += [0x02]
@@ -24,8 +36,7 @@ public func makePlaystatePacket(
     packet += [0x01, 0x00]
     packet += [UInt8(truncatingIfNeeded: hostDevice.id)]
     packet += [0x00, 0x04]
-    // 원본 그대로: 칸 번호(0-3)와 `device.id`를 견준다.
-    packet += (0..<4).map { $0 == device.id ? stateMapValue(playState) : 0 }
+    packet += (1...4).map { $0 == device.id ? value : PLAYSTATE_NO_CHANGE }
     return packet
 }
 

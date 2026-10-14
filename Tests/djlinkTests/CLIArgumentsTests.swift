@@ -229,68 +229,53 @@ struct CLIArgumentsTests {
         }
     }
 
-    @Test("control play and pause are refused without --unverified-playstate")
-    func controlPlayPauseRefused() {
-        for action in ["play", "pause"] {
-            do {
-                _ = try parseArguments(["control", action, "--device", "2", "--confirm", "CDJ-3000"])
-                Issue.record("\(action)이 거부되지 않았다")
-            } catch {
-                #expect(error.subcommand == .control)
-                #expect(error.message.contains("--unverified-playstate"))
-                #expect(error.message.contains("docs/PLAN.md §9"))
-            }
-        }
-    }
-
-    @Test("control play and pause with the flag take only the device and confirm")
+    @Test("control play and pause take only the device and confirm")
     func controlPlayPause() throws {
-        let command = try parseArguments([
-            "control", "play", "--device", "2", "--confirm", "CDJ-3000", "--unverified-playstate",
-        ])
+        let command = try parseArguments(["control", "play", "--device", "2", "--confirm", "CDJ-3000"])
         #expect(
             command
                 == .control(
                     CLICommonOptions(),
-                    CLIControlRequest(
-                        action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000", unverifiedPlaystate: true)))
+                    CLIControlRequest(action: .play, deviceId: 2, load: nil, confirm: "CDJ-3000")))
         #expect(throws: CLIUsageError("--slot은 load에만 쓴다", subcommand: .control)) {
-            try parseArguments([
-                "control", "pause", "--device", "2", "--slot", "usb", "--confirm", "CDJ-3000", "--unverified-playstate",
-            ])
+            try parseArguments(["control", "pause", "--device", "2", "--slot", "usb", "--confirm", "CDJ-3000"])
         }
     }
 
-    @Test("even with the flag, play and pause only go to devices 1-3 where the packets differ")
+    @Test("play and pause only go to players 1-4, which have a slot in the playstate packet")
     func controlPlayPauseDeviceRange() throws {
         for action in ["play", "pause"] {
-            for id in [1, 2, 3] {
+            for id in [1, 2, 3, 4] {
                 #expect(
-                    try parseArguments([
-                        "control", action, "--device", String(id), "--confirm", "x", "--unverified-playstate",
-                    ]) != .help(nil))
+                    try parseArguments(["control", action, "--device", String(id), "--confirm", "x"]) != .help(nil))
             }
-            // 4번은 원본 패킷에 칸이 없어 play와 pause가 같은 패킷이 된다. 5 이상과 0은 범위 밖이다.
-            for id in [4, 5, 6, 17, 32, 0, 33] {
+            // 5 이상은 패킷에 칸이 없다. 0과 33은 장치 번호 범위 밖이다.
+            for id in [5, 6, 17, 32, 0, 33] {
                 #expect(throws: CLIUsageError.self, "\(action) \(id)") {
-                    try parseArguments([
-                        "control", action, "--device", String(id), "--confirm", "x", "--unverified-playstate",
-                    ])
+                    try parseArguments(["control", action, "--device", String(id), "--confirm", "x"])
                 }
             }
         }
+        do {
+            _ = try parseArguments(["control", "pause", "--device", "5", "--confirm", "CDJ-3000"])
+            Issue.record("5번이 거부되지 않았다")
+        } catch {
+            #expect(error.subcommand == .control)
+            #expect(error.message.contains("1~4번 플레이어"))
+        }
     }
 
-    @Test("--unverified-playstate is only for play and pause")
-    func unverifiedFlagOnLoad() {
-        #expect(throws: CLIUsageError("--unverified-playstate는 play·pause에만 쓴다", subcommand: .control)) {
-            try parseArguments([
+    @Test("the old --unverified-playstate flag is no longer accepted")
+    func unverifiedFlagRemoved() {
+        for arguments in [
+            ["control", "play", "--device", "2", "--confirm", "x", "--unverified-playstate"],
+            [
                 "control", "load", "--device", "2", "--slot", "usb", "--track-id", "9", "--confirm", "x",
                 "--unverified-playstate",
-            ])
-        }
-        #expect(throws: CLIUsageError.self) {
-            try parseArguments(["status", "--unverified-playstate"])
+            ],
+            ["status", "--unverified-playstate"],
+        ] {
+            #expect(throws: CLIUsageError.self, "\(arguments)") { try parseArguments(arguments) }
         }
     }
 
