@@ -150,3 +150,7 @@
 - Ethernet은 MAC 뒤의 단일 `81 00` VLAN 태그만 건너뛰며, type/length 값이 1536 미만이면 type은 없다(`lib/Decoders.js:1–59`).
 
 cap 0.2.1의 동작은 npm tarball의 `lib/Decoders.js`·`src/binding.cc`를 읽어 맞췄다(코드는 옮기지 않았다). 출처와 MIT 고지는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있다.
+
+## 1:1 완료 뒤 더한 기능
+
+- 비트 0x28([#7](https://github.com/ImBada/DJLinkKit/issues/7)): 원본에 수신 기능이 없어, CDJ-2000nexus 실기 캡처로 확인한 96바이트 형식의 장치 번호·마디 안 비트·곡 BPM·피치를 읽는 `beatFromPacket`과 `CDJStatus.BeatState`를 더했다. `ProlinkNetwork.beatEmitter`·패시브 `beatEmitter`의 `.beat` 이벤트와 CLI status/passive에서 제공한다. 피치를 적용한 BPM은 계산값이며, 정밀 위치나 비트 예측 시간은 제공하지 않는다. 기존 상태·위치·on-air와 원본 대응 시험은 유지하고 1:1 기준선 브랜치에는 이 기능을 넣지 않는다.

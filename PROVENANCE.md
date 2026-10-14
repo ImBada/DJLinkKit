@@ -73,6 +73,14 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 | 2026-10-14, CDJ-2000nexus 1대(1번), 뒤에 2대 | 재생 상태 패킷(0x02, 50001)의 마지막 네 칸은 플레이어 1~4의 것이고 0 = 시작, 1 = 정지(cue), 2 = 그대로다. CDJ는 자기 칸만 읽는다 | 네 칸만 바꾼 패킷을 하나씩 보내고(`01 02 02 02`, `02 02 02 02`, `00 02 02 02`) CDJ 상태 패킷의 재생 상태를 읽었다. 두 대일 때 한 덱에 보낸 패킷이 다른 덱을 움직이지 않는 것을 봤다 | `Sources/DJLinkControl/Control.swift`(`makePlaystatePacket`), 시험 `ControlUpstreamFixTests.swift` | **분석 아님(실기 관찰).** 제3자 공개 프로토콜 설명(dysentery)과도 맞는다. 문서 원문은 옮기지 않았다 |
 | 2026-10-14, DJM-900NXS2(33번) | 4채널 on-air 패킷은 종류 0x03, 45바이트, `0x20` = 0x02, 길이 칸 0x0009이고 비트 포트(50001)로 브로드캐스트된다 | 50000~50002를 듣기만 하는 UDP 소켓으로 받은 패킷을 비교했다. 받은 패킷 하나를 시험 픽스처로 쓴다(믹서 이름과 채널 표시뿐이다) | `Sources/DJLinkKit/Status/StatusUtils.swift`(`onAirFromPacket`), `StatusEmitter.swift`, `Sources/DJLinkPassive/PassiveStatus.swift`, 시험 `StatusUpstreamFixTests.swift`·`PassiveStatusUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 6채널 변형은 장비가 없어 원본 그대로다 |
 | 2026-10-14, CDJ-2000nexus 2대, DJM-900NXS2 | keep-alive(0x06)는 54바이트, 길이 칸 0x0036, `0x30` = 장치 수, `0x31`–`0x33` = 0, `0x34` = 장치 종류로 보이는 값(CDJ 0x01, DJM 0x03) | 위와 같은 듣기 전용 소켓으로 받은 세 장비의 0x06을 비교했다 | `Sources/DJLinkKit/VirtualCDJ/Announcer.swift`(`makeStage06Packet`), 시험 `VirtualCDJKeepAliveUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 마지막 바이트(`0x35`)는 CDJ 0x00, DJM 0x31이었고 원본 값(번호 5 이상이면 0x64)을 그대로 둔다 |
+| 2026-10-14, CDJ-2000nexus 2대(1·2번), DJM-900NXS2 | 비트 포트(50001)의 0x28은 96바이트, `0x20` = 0x00, `0x22`의 u16 BE = 0x003c. `0x21` = 장치 번호, `0x54`의 u32 BE = 피치 비율(0x100000이 1배), `0x5a`의 u16 BE / 100 = 곡 BPM, `0x5c` = 마디 안 비트(1~4) | UDP 수신 소켓으로 덱마다 33개씩 받았다. 상태 패킷과 비교해 1번은 BPM 166·피치 약 -2.45%, 2번은 BPM 168·약 -0.15%가 맞고 비트가 1→2→3→4로 순환하는 것을 확인했다. 두 덱 모두 cue로 돌아간 뒤 0x28이 멈췄다 | `Status/BeatTypes.swift`, `BeatUtils.swift`, `BeatEmitter.swift`, `Sources/DJLinkPassive/PassiveBeat.swift`, 시험 `BeatTests.swift`·`PassiveBeatTests.swift`·`CLIBeatTests.swift` | **분석 아님(패킷 캡처).** 지원은 관찰한 96바이트 변형에 한정한다. `effectiveBPM`은 곡 BPM × 피치 비율의 계산값이다. 앞부분 시간 필드의 의미, 양수 피치·sync·역재생·다른 기종은 실기 미확인이다 |
+
+### 0x28 비트 패킷에서 확인한 범위
+
+- 피치 원시값은 1번 `0x000f9ba5`, 2번 `0x000ff9db`였다. `(raw / 0x100000 - 1) × 100`은 각각 -2.4500846863%, -0.1500129700%이고 상태 패킷의 두 자리 표시와 일치한다.
+- 곡 BPM 원시값은 `0x40d8`(16600), `0x41a0`(16800)이었다. 피치를 적용한 계산 BPM은 각각 약 161.93·167.75다. 패킷에서 별도의 실제 BPM 필드를 찾았다는 뜻은 아니다.
+- 수신 간격 중앙값은 약 369.53ms·357.49ms였다. `0x24`의 u32 값은 약 361~362·357~358이어서 이 값을 그대로 실제 다음 비트까지 남은 밀리초로 해석하지 않는다. `0x24`~`0x53`의 시간값·예약 영역과 `0x5f`의 중복 장치 번호처럼 보이는 값은 API에 넣지 않았다.
+- 공개 시험에는 기종 이름과 비트·템포 값뿐인 실제 패킷 두 개를 쓴다. 출발지 IP·MAC·곡 이름·경로·토큰은 포함하지 않는다. 원시 수신 기록과 기존 CLI 제어 로그는 저장소 밖에 둔다.
 
 ## 요약
 

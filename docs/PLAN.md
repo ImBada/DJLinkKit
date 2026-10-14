@@ -244,7 +244,13 @@ let package = Package(
   - on-air: DJM-900NXS2는 on-air 패킷(0x03, 45바이트, `0x20` = 0x02)을 50001로 보낸다. 원본은 50002에서만 읽고 4채널은 `0x20` = 0x00·46바이트 이상만 받아 하나도 읽지 못했다. 고친 뒤 `status`에 on-air 줄이 나오고 CDJ 상태의 on-air 표시와 맞는다(§9).
   - keep-alive(0x06): CDJ-2000nexus·DJM-900NXS2 모두 54바이트이고 `0x30`이 장치 수다. 우리 것은 55바이트였다. 고친 뒤에도 CDJ가 가상 CDJ에 상태를 보내고 제어가 된다(§9).
   - mixstatus: on-air인 2번 재생 → `set started`·`now playing`, on-air가 아닌 1번 재생은 보고하지 않음, 정지 30초 뒤 `set ended`, 같은 덱·같은 곡으로 다시 재생 → `set started`·`now playing`(PR #3 고치기 확인).
-- 남은 것: pcap(sudo, 비트 패킷 0x28, 인터페이스가 사라질 때의 패시브), 분석하지 않은 곡(remotedb 질의 번호), 가상 CDJ 하나 더(번호 겹침), CDJ-3000(정밀 위치), 6채널 믹서(on-air 6채널 변형).
+- 남은 것: pcap(sudo, 전체 캡처, 인터페이스가 사라질 때의 패시브), 분석하지 않은 곡(remotedb 질의 번호), 가상 CDJ 하나 더(번호 겹침), CDJ-3000(정밀 위치), 6채널 믹서(on-air 6채널 변형).
+- 2026-10-14(비트 패킷 표본), 같은 CDJ-2000nexus 2대와 DJM-900NXS2, Mac `en8`, 가상 CDJ 7번.
+  - 기존 CLI로 각 덱을 재생·cue로 바꾸며 듣기 전용 UDP 소켓으로 0x28을 덱마다 33개씩 받았다. 모두 96바이트였다. 장치 번호·마디 안 비트·곡 BPM·피치는 CDJ 상태와 맞고 정지하면 비트 패킷이 멈췄다.
+  - 1번은 BPM 166·피치 약 -2.45%, 2번은 BPM 168·약 -0.15%였고 두 덱 모두 1~4로 순환했다. 2번의 첫 시도에는 platter-held 상태여서 표본이 없었고, 다시 재생해 정상 표본을 받았다. 끝난 뒤 두 덱은 cue 상태이며 2번이 master다.
+  - 확인한 필드로 `CDJStatus.BeatState`·`beatFromPacket`·능동/패시브 `beatEmitter`와 CLI 비트 출력을 추가했다([이슈 #7](https://github.com/ImBada/DJLinkKit/issues/7)). 사용자 완료 신호 뒤 새 시험 15개와 전체 로컬 CI(993개, 조건부 시험 포함)가 실패 없이 통과했고 원본 시험 622개·44개 파일도 모두 일치했다. 독립 코드 리뷰에서 결함은 나오지 않았다.
+  - 새 CLI `status`로 덱을 하나씩 재생해 각 16개 비트를 받았다. 마디 안 비트가 1~4로 순환하고 정지 뒤 0x28 출력은 멈췄으며 on-air도 67개 함께 받았다. Ctrl-C 종료 코드 130과 소켓 정리를 확인했다. 실제 패시브 캡처는 BPF 권한이 없어 [#6](https://github.com/ImBada/DJLinkKit/issues/6)에 남긴다.
+  - 앞부분 시간 필드, 양수 피치·sync·역재생과 다른 기종은 미확인이다. 상세 근거는 PROVENANCE §D에 둔다.
 
 ## 9. 1:1 이후 고칠 것
 
@@ -274,7 +280,7 @@ let package = Package(
 
 **기능 추가·검토 필요**
 
-- 비트 패킷(0x28)을 읽는 코드가 없다(기능 추가, 실기 캡처로 형식을 확인한 뒤).
+- 비트 패킷(0x28): CDJ-2000nexus의 96바이트 형식과 장치 번호·마디 안 비트·곡 BPM·피치를 캡처로 확인했다. 능동·패시브 비트 이벤트와 CLI 출력을 추가했고 회귀 시험과 능동 CLI 실기를 확인했다. 실제 패시브 캡처는 #6에서 확인한다([#7](https://github.com/ImBada/DJLinkKit/issues/7)). 정밀 위치나 실제 다음 비트까지의 시간은 제공하지 않는다.
 - localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
