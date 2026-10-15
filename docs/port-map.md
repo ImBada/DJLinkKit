@@ -366,6 +366,7 @@
 | `Tests/DJLinkPassiveTests/PassivePcapUpstreamFixTests.swift` | 8 | **main.** PLAN §9 패시브 캡처 중 인터페이스가 사라지면 오류로 멈춤(#8) |
 | `Tests/DJLinkPassiveTests/PassivePositionUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 위치 파서의 종류 바이트 검사 |
 | `Tests/DJLinkPassiveTests/PassiveStatusUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 on-air(비트 포트 50001) |
+| `Tests/DJLinkPassiveTests/PassiveCaptureTests.swift` | 2 | **main.** 실기 pcap 프레임(MAC 가림)이 패시브 경로를 지나는 것(#6) |
 | `Tests/DJLinkKitTests/Status/BeatTests.swift` | 9 | **main.** 비트 0x28 해석과 능동 `BeatEmitter` 연결(#7, PROVENANCE §D) |
 | `Tests/DJLinkPassiveTests/PassiveBeatTests.swift` | 3 | **main.** 패시브 비트 이벤트 연결과 종료(#7) |
 | `Tests/djlinkTests/CLIBeatTests.swift` | 3 | **main.** CLI `status`·`passive`의 비트 출력(#7) |
@@ -377,11 +378,11 @@
 |---|---|---|---|---|
 | `DJLinkKitTests` | 580 | 183 | 763 | 683 |
 | `DJLinkControlTests` | 11 | 7 | 18 | 13 |
-| `DJLinkPassiveTests` | 31 | 36 | 67 | 48 |
+| `DJLinkPassiveTests` | 31 | 38 | 69 | 48 |
 | `djlinkTests` | 0 | 180 | 180 | 163 |
-| 합 | 622 | 406 | 1,028 | 907 |
+| 합 | 622 | 408 | 1,030 | 907 |
 
-1:1 기준선(`port/one-to-one`)의 선언 수는 907개다(위 표의 마지막 칸, #26의 PSSI 시험 2개를 2026-10-16 기준선에도 더해 905개에서 늘었다). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 907개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 519개까지 합친 전체 선언 수 1,547개와 조건부 30개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 README "시험"에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
+1:1 기준선(`port/one-to-one`)의 선언 수는 907개다(위 표의 마지막 칸, #26의 PSSI 시험 2개를 2026-10-16 기준선에도 더해 905개에서 늘었다). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 907개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 519개까지 합친 전체 선언 수 1,549개와 조건부 30개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 README "시험"에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
 
 ## 4. 우리가 더한 Swift 파일 (원본에 대응하는 파일이 없다)
 
