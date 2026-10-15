@@ -16,7 +16,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 
 ## 진행과 검증 관문
 
-현재 **빌드·대응 시험·전체 회귀 검증, CDJ-2000nexus 기본 MP3/WAV 실기 확인, #20 레거시 큐 실기 확인을 마쳤다.** 지금 선언된 `DJLinkExport*` 시험은 518개다(원본 대응 502, 자체 회귀 16). 이 중 `.disabled`가 4개, `DJLINK_LOOPBACK_TESTS`에 따라 도는 것이 루프백 8개와 소켓 가드 2개다. 날짜별 실행 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있고, 2026-10-15 기본 실행(`scripts/ci.sh`)에서 1,509개가 통과하고 26개를 건너뛰었다(루프백 모드는 [#33](https://github.com/ImBada/DJLinkKit/issues/33) 참고). 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
+현재 **빌드·대응 시험·전체 회귀 검증, CDJ-2000nexus 기본 MP3/WAV 실기 확인, #20 레거시 큐 실기 확인을 마쳤다.** 지금 선언된 `DJLinkExport*` 시험은 518개다(원본 대응 502, 자체 회귀 16). 이 중 `.disabled`가 4개, `DJLINK_LOOPBACK_TESTS`에 따라 도는 것이 루프백 8개와 소켓 가드 2개다. 날짜별 실행 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있고, 2026-10-15 기본 실행(`scripts/ci.sh`)에서 1,509개가 통과하고 26개를 건너뛰었다(루프백 시험은 `scripts/ci.sh --loopback`이 따로 돌린다, [#33](https://github.com/ImBada/DJLinkKit/issues/33)). 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
 
 1. 원본 시험 파일 하나를 Swift 파일 하나로 대응하고 입력·기대값을 유지한다. Rust 시험 함수 이름을 `@Test("함수 이름")`으로 유지한다.
 2. 코드를 옮긴다. 원본 버그는 그대로 두고 개선 제안은 PLAN §9에 기록한다.
