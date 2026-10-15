@@ -35,6 +35,23 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 Linux는 지원하지 않는다.
 
+## 패키지로 쓰기
+
+다른 SwiftPM 패키지에서 원격 의존으로 받는다. 태그는 정확한 버전으로 고정한다.
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/ImBada/DJLinkKit", exact: "0.1.0"),
+],
+targets: [
+    .target(name: "MyApp", dependencies: [.product(name: "DJLinkKit", package: "DJLinkKit")]),
+]
+```
+
+- SQLCipher는 외부 패키지 `SQLCipher.swift` 4.19.0으로 받는다. 같은 SQLCipher를 쓰는 패키지는 자기 바이너리 타깃(`.binaryTarget(name: "SQLCipher", …)`)을 두지 말고 같은 외부 패키지에 의존해야 한다. 바이너리 타깃을 두면 SwiftPM이 `SQLCipher` 타깃 이름 충돌로 그래프를 거부한다.
+- 저장소 전체가 GPL-2.0-or-later다. 이 패키지를 링크한 앱도 GPL 조건을 따라야 한다.
+- 두 저장소를 함께 고칠 때는 쓰는 쪽에서 `swift package edit DJLinkKit --path <DJLinkKit 경로>`로 로컬 사본을 쓰고, 끝나면 `swift package unedit DJLinkKit`로 되돌린다.
+
 ## 안전 안내
 
 이 패키지는 실제 장비가 있는 네트워크에 참여한다. 다음을 지킨다.
