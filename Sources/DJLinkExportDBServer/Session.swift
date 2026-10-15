@@ -225,10 +225,13 @@ private enum Menu {
         guard m.arguments.count >= 2, case .number = m.arguments[0],
             case let .number(track) = m.arguments[1]
         else { return Self.hot_cue_bank_unavailable(m) }
-        // 실기(CDJ-2000nexus, 2026-10-15): 시간순으로 섞어 보내면 앞의 memory 개수만큼을 메모리 큐로 읽어
-        // Hot Cue A가 메모리 목록에 들어가고 A 버튼이 꺼졌다. 메모리 큐를 먼저, 핫큐를 뒤에 보낸다.
-        let cues = catalog.usb_cues(track)
-        return Self.usb_cue_reply(m, cues.filter { $0.slot == 0 } + cues.filter { $0.slot != 0 })
+        return Self.usb_cue_reply(m, Self.memory_cues_first(catalog.usb_cues(track)))
+    }
+    // 실기(CDJ-2000nexus, 2026-10-15·16): CDJ는 0x4702의 앞쪽 memory 개수만큼을 메모리 큐로 읽는다. 시간순으로 섞어
+    // 보내면 Hot Cue A가 메모리 목록에 들어가 A 버튼이 꺼졌다. 읽기(#20)와 편집 응답(#32) 모두 메모리 큐를 먼저,
+    // 핫큐를 뒤에 보낸다. 각 묶음 안의 순서는 그대로다.
+    private static func memory_cues_first(_ cues: [UsbCue]) -> [UsbCue] {
+        cues.filter { $0.slot == 0 } + cues.filter { $0.slot != 0 }
     }
     private func save_cue(_ m: Message) -> [Message] {
         guard m.arguments.count >= 5, case .number = m.arguments[0], case let .number(track) = m.arguments[1],
@@ -242,7 +245,8 @@ private enum Menu {
         guard let cue = parse_legacy_cue(record, sidecar),
             catalog.edit(op != 0 ? .saveCue(track: track, cue: cue) : .deleteCue(track: track, cue: cue))
         else { return Self.hot_cue_bank_unavailable(m) }
-        return Self.usb_cue_reply(m, catalog.usb_cues(track))
+        // PLAN §9/#32: 원본은 편집 뒤 목록을 시간순 그대로 보내 CDJ가 핫큐 하나를 메모리 큐로 읽었다.
+        return Self.usb_cue_reply(m, Self.memory_cues_first(catalog.usb_cues(track)))
     }
     private static func analysis_write_refusal(_ m: Message) -> [Message]? {
         func ext(_ value: UInt32, _ expected: String) -> Bool {
