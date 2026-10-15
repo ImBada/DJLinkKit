@@ -339,8 +339,9 @@ public struct Phrase: Equatable, Sendable {
     public var index: Int
     /// Beat number where this phrase begins
     public var beat: Int
+    // 원본 형은 number지만, mood가 high·mid·low 밖이면 Kaitai kind 객체에 id가 없어 실제 값은 undefined(nil)다.
     /// Raw phrase kind value from rekordbox
-    public var kind: Int
+    public var kind: Int?
     /// Human-readable phrase type (e.g., "Intro", "Verse 1", "Chorus")
     public var phraseType: String
     /// Whether this phrase has a fill-in section (non-zero if present)
@@ -348,7 +349,7 @@ public struct Phrase: Equatable, Sendable {
     /// Beat number where the fill-in begins (if present)
     public var fillBeat: Int?
 
-    public init(index: Int, beat: Int, kind: Int, phraseType: String, fill: Int? = nil, fillBeat: Int? = nil) {
+    public init(index: Int, beat: Int, kind: Int?, phraseType: String, fill: Int? = nil, fillBeat: Int? = nil) {
         self.index = index
         self.beat = beat
         self.kind = kind
