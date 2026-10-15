@@ -44,6 +44,7 @@ Linux는 지원하지 않는다.
 - 같은 Mac에서 rekordbox나 rekordboxAgent가 켜져 있으면 쓰지 않는다. UDP 50000~50002를 잡으면 rekordbox LINK가 망가질 수 있다.
 - **Link Export(`DJLinkExport`)는 이 검사를 스스로 하지 않는다.** CLI(`djlink`)와 달리 서버를 띄우는 호스트 앱이 규칙을 지켜야 한다. 서버는 rekordbox처럼 17·18번(무선 41번)으로 참여하고, UDP 50000~50002, TCP 12523, portmap 50111, NFS 2049를 연다. 같은 Mac의 rekordbox·rekordboxAgent와 NFS 서버(`nfsd`)를 끄고, 시험용 네트워크에서 인터페이스를 지정해 띄운다. 자세한 규칙은 [docs/LINK-EXPORT-PLAN.md](docs/LINK-EXPORT-PLAN.md) "호스트 안전 규칙".
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 `DJLinkControl`에 따로 들어 있고, 공연 중인 장비를 움직인다. 필요한 곳에만 넣는다.
+- macOS 27에서는 일반 프로세스가 `getifaddrs`로 읽는 인터페이스 MAC이 `02:00:00:00:00:00`으로 가려진다. 가상 CDJ와 Link Export는 이 값을 announce·keep-alive에 그대로 싣는다(원본도 같은 시스템 호출을 쓴다). CDJ-2000nexus는 이 값으로도 받아 줬지만, Mac 여러 대를 같은 망에 붙이면 모두 같은 MAC을 알린다([#41](https://github.com/ImBada/DJLinkKit/issues/41)).
 
 ## 시험
 

@@ -331,6 +331,7 @@ let package = Package(
 - localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
+- MAC(#41, §11): IOKit `IOEthernetInterface`의 부모 항목 `IOMACAddress`는 권한 없이 실제 MAC을 준다(2026-10-16 macOS 27에서 확인). 이것으로 바꾸면 원본과 다르고, OS가 일부러 가린 값을 다른 길로 읽는 것이다. CDJ가 가린 값을 받아 주는 동안은 원본대로 둔다. Mac 여러 대를 한 망에 붙이는 용도가 생기면 다시 정한다.
 
 **Link Export 원본에서 유지하는 동작**(2026-10-15, 아직 수정하지 않음)
 
@@ -416,6 +417,7 @@ let package = Package(
   실기에서 이 번호가 CDJ에 어떻게 보이는지 확인하고, 바꿀지는 사용자가 정한다.
 - 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 재생 상태 패킷에 칸이 있는 1~4번 플레이어에만 보낸다(§9, 2026-10-14 실기 확인 뒤 고침).
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
+- MAC(#41): macOS 27.0.1에서 일반 프로세스가 `getifaddrs`의 AF_LINK로 읽으면 `en0`·`en8` 모두 `02:00:00:00:00:00`이 나온다(`ifconfig`는 실제 값). `SystemInterfaceProvider`가 이 값을 그대로 써서 가상 CDJ(7번)와 Link Export(17번)가 announce·keep-alive에 이 MAC을 싣는다(2026-10-16 pcap). 원본(Node `os.networkInterfaces`)도 같은 시스템 호출이다. CDJ-2000nexus는 이 값으로도 두 장치를 받아 줬다. Mac 여러 대가 같은 망에 있으면 같은 MAC을 알리고, Stagehand 모드의 MAC(OUI + 하위 3바이트)도 모두 같아진다. 바꿀지는 §9 "기능 추가·검토 필요"에 둔다.
 - macOS 로컬 네트워크 권한:
   - 라이브러리는 Info.plist를 가질 수 없다.
   - 터미널에서 돌린 `djlink`는 권한을 자동으로 받는다. 그래서 앱에서는 결과가 다를 수 있고, DJCrate에 붙일 때 따로 확인한다(§13).
