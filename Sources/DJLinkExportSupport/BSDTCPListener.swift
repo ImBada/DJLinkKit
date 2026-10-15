@@ -1,6 +1,6 @@
-import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
+import DJLinkKit
 // rbxport의 TCP listen/accept 전송을 위한 macOS 경계. 패킷·세션 코덱과 분리한다.
 import Darwin
 @preconcurrency import Dispatch

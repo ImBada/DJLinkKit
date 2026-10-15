@@ -41,7 +41,7 @@ func helpText(_ subcommand: CLISubcommand?) -> String {
 
             `djlink <명령> --help`로 명령별 도움말을 본다.
             끝나는 법: Ctrl-C. 종료 코드는 0 정상, 1 실행 실패(제한 시간 초과 포함), 2 사용법·안전 규칙 거부, 130 중단(Ctrl-C).
-            watch·status·mixstatus·passive는 Ctrl-C로만 끝나므로 늘 130이다.
+            watch·status·mixstatus·passive는 Ctrl-C로 끝내면 130이다. 번호 거부·장치를 찾지 못함·캡처 오류는 1이다.
 
             \(safetyHelp)
             """

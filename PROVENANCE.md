@@ -74,6 +74,7 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 | 2026-10-14, DJM-900NXS2(33번) | 4채널 on-air 패킷은 종류 0x03, 45바이트, `0x20` = 0x02, 길이 칸 0x0009이고 비트 포트(50001)로 브로드캐스트된다 | 50000~50002를 듣기만 하는 UDP 소켓으로 받은 패킷을 비교했다. 받은 패킷 하나를 시험 픽스처로 쓴다(믹서 이름과 채널 표시뿐이다) | `Sources/DJLinkKit/Status/StatusUtils.swift`(`onAirFromPacket`), `StatusEmitter.swift`, `Sources/DJLinkPassive/PassiveStatus.swift`, 시험 `StatusUpstreamFixTests.swift`·`PassiveStatusUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 6채널 변형은 장비가 없어 원본 그대로다 |
 | 2026-10-14, CDJ-2000nexus 2대, DJM-900NXS2 | keep-alive(0x06)는 54바이트, 길이 칸 0x0036, `0x30` = 장치 수, `0x31`–`0x33` = 0, `0x34` = 장치 종류로 보이는 값(CDJ 0x01, DJM 0x03) | 위와 같은 듣기 전용 소켓으로 받은 세 장비의 0x06을 비교했다 | `Sources/DJLinkKit/VirtualCDJ/Announcer.swift`(`makeStage06Packet`), 시험 `VirtualCDJKeepAliveUpstreamFixTests.swift` | **분석 아님(패킷 캡처).** 마지막 바이트(`0x35`)는 CDJ 0x00, DJM 0x31이었고 원본 값(번호 5 이상이면 0x64)을 그대로 둔다 |
 | 2026-10-14, CDJ-2000nexus 2대(1·2번), DJM-900NXS2 | 비트 포트(50001)의 0x28은 96바이트, `0x20` = 0x00, `0x22`의 u16 BE = 0x003c. `0x21` = 장치 번호, `0x54`의 u32 BE = 피치 비율(0x100000이 1배), `0x5a`의 u16 BE / 100 = 곡 BPM, `0x5c` = 마디 안 비트(1~4) | UDP 수신 소켓으로 덱마다 33개씩 받았다. 상태 패킷과 비교해 1번은 BPM 166·피치 약 -2.45%, 2번은 BPM 168·약 -0.15%가 맞고 비트가 1→2→3→4로 순환하는 것을 확인했다. 두 덱 모두 cue로 돌아간 뒤 0x28이 멈췄다 | `Status/BeatTypes.swift`, `BeatUtils.swift`, `BeatEmitter.swift`, `Sources/DJLinkPassive/PassiveBeat.swift`, 시험 `BeatTests.swift`·`PassiveBeatTests.swift`·`CLIBeatTests.swift` | **분석 아님(패킷 캡처).** 지원은 관찰한 96바이트 변형에 한정한다. `effectiveBPM`은 곡 BPM × 피치 비율의 계산값이다. 앞부분 시간 필드의 의미, 양수 피치·sync·역재생·다른 기종은 실기 미확인이다 |
+| 2026-10-15, CDJ-2000nexus 2번 덱 (#20 실기 확인) | 레거시 큐 목록 응답(0x4702)에서 CDJ는 응답이 알리는 hot 개수·memory 개수와 상관없이 **앞쪽 memory 개수만큼의 레코드를 메모리 큐로 읽는** 것으로 보인다. 그래서 메모리 큐(버튼 0)를 먼저, 핫큐를 뒤에 보내야 한다 | 큐 구성만 다른 합성곡(큐 없음, 메모리만, 핫큐만, 섞음 시간순, 섞음 메모리 먼저)을 같은 MP3와 같은 서버로 로드해 화면·물리 버튼·CALL 동작과 애플리케이션 소켓 송수신 기록을 비교했다. 시간순으로 섞은 입력은 메모리 목록이 [0초, A, 10초]가 되어 A 버튼이 꺼지고 CALL ▶가 A로 이동하며 E-8302가 났다. 메모리 큐를 먼저 보내자 메모리 큐·루프·A/B/C가 모두 정상이었다 | `Sources/DJLinkExportDBServer/Session.swift`(`cue_list`), 시험 `LegacyCueReadTests.swift` | **분석 아님(실기 관찰, 애플리케이션 소켓 기록).** 관측과 맞는 가설이며 CDJ 내부를 분석한 것이 아니다. 시스템 pcap은 권한이 없어 못 했다. 다른 기종·펌웨어는 미확인이다. 근거 기록은 [docs/LINK-EXPORT-LEGACY-CUES.md](docs/LINK-EXPORT-LEGACY-CUES.md) |
 
 ### 0x28 비트 패킷에서 확인한 범위
 
@@ -111,7 +112,7 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 | `rbl-core/src/xml.rs`, `rbl-db/src/details.rs`, `export_info.rs`, `fixture.rs`, `rbl-fakecdj/src/lib.rs` | 서버 입력 값형·스마트 목록 XML 스캐너·합성 시험 준비·클라이언트 요청 절차. 실제 사용자 DB·경로·곡 정보를 새 fixture로 넣지 않는다 | `DJLinkExportModel/Xml`, `Details`, `ExportInfo`; Export 통합 시험 준비 코드 |
 | `alphatheta-connect-rs/src/status/utils.rs` @ `b54d9e9c53059f11e04f4de9898f4abae3b46480` | MIT 공개 클라이언트 상태 파서의 패킷 길이 및 반올림 규칙 | `DJLinkExport/Beacon`의 기존 Swift 클라이언트 파서 어댑터 |
 
-Deep Symmetry 문서·`.ksy` 원문은 복사하지 않는다. 원본 캡처는 외부 고정 체크아웃에서 읽어 시험하고 공개 저장소에 복사하지 않는다. 이번 서버 실기 결과는 아직 없다.
+Deep Symmetry 문서·`.ksy` 원문은 복사하지 않는다. 원본 캡처는 외부 고정 체크아웃에서 읽어 시험하고 공개 저장소에 복사하지 않는다. 이 표의 근거는 원본의 것이고, 우리 서버의 실기 결과는 아래 두 절에 따로 적는다.
 
 ### Link Export 실기 추가 관측 (2026-10-15)
 
@@ -119,4 +120,4 @@ CDJ-2000nexus와 합성 신호 WAV의 애플리케이션 TCP/UDP 송수신을 �
 
 ### 레거시 큐 읽기 계약 연결 (#20, 실기 확인)
 
-기존 MIT alphatheta-connect 고정 커밋 `7496991060a38951c2119db13c26b3da7c075bfa`의 `src/remotedb/message/types.ts`·`queries.ts`와 이식된 클라이언트 응답 파서가 정의한 `0x2104`/`0x4702` 읽기 계약을 사용한다. GPL rbxport의 기존 `usb_cue_reply` 레코드·sidecar 생성기를 재사용해 빠진 조회 dispatch를 더했다. 이전 실기의 요청 문맥은 합성 데이터 회귀의 입력으로 썼다. 추가 회귀 7개와 전체 CI는 통과했고 CDJ의 실제 요청·응답까지 확인했다. 화면·버튼 확인 결과는 [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 구분한다. 펌웨어·rekordbox 실행 파일 분석은 하지 않았다.
+기존 MIT alphatheta-connect 고정 커밋 `7496991060a38951c2119db13c26b3da7c075bfa`의 `src/remotedb/message/types.ts`·`queries.ts`와 이식된 클라이언트 응답 파서가 정의한 `0x2104`/`0x4702` 읽기 계약을 사용한다. GPL rbxport의 기존 `usb_cue_reply` 레코드·sidecar 생성기를 재사용해 빠진 조회 dispatch를 더했다. 이전 실기의 요청 문맥은 합성 데이터 회귀의 입력으로 썼다. 추가 회귀 8개와 전체 CI는 통과했고 CDJ-2000nexus의 실제 요청·응답과 화면·버튼 동작(메모리 큐·루프·A/B/C 호출)까지 확인했다. 이때 알아낸 큐 순서 규칙은 위 §D에 적었다. 확인한 것과 확인하지 못한 것은 [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 구분한다. 펌웨어·rekordbox 실행 파일 분석은 하지 않았다.

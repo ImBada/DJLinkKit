@@ -159,6 +159,7 @@ public func readLocalDBAnlz(_ bytes: [UInt8]) throws -> [LocalDBAnlzSection] {
             let size = try u32(12)
             // 원본 Kaitai는 항목마다 len_entry_bytes - 9바이트를 건너뛰므로 9보다 작으면 항목 읽기에 실패한다.
             guard count == 0 || size >= 9 else { throw DJLinkError("Invalid ANLZ phrase length") }
+            // PLAN §9(#26): 1:1 기준선은 mood가 1~3 밖이면 EXT 전체를 실패시켰다.
             // 원본 Kaitai song_structure_entry: phrase_number u2, beat_number u2, kind,
             // (len_entry_bytes - 9)바이트 건너뜀, fill_in u1, fill_in_beat_number u2.
             // kind는 mood가 high·mid·low(1~3)일 때만 u2이고 그 밖에는 0바이트 unknown_tag다.

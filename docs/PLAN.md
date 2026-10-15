@@ -12,7 +12,7 @@
   - remotedb로 메타데이터·파형·그리드·큐·재생 목록 받기
   - NFS로 파일 받기, USB DB(`export.pdb`·`exportLibrary.db`)와 ANLZ 읽기
   - 앨범아트·태그, mixstatus, 제어 명령, 패시브(pcap) 모드, CLI
-- 원본 시험 531개(41개 파일)를 하나씩 옮겨 모두 통과시킨다. 원본 저장소에 기대고 있는 두 저장소의 시험도 함께 옮긴다(§2).
+- 원본 시험 532개(41개 파일)를 하나씩 옮겨 모두 통과시킨다. 원본 저장소에 기대고 있는 두 저장소의 시험도 함께 옮긴다(§2).
 - 펌웨어 분석에 근거한 원본 지식도 옮긴다(§10).
 
 **범위 밖**
@@ -68,7 +68,7 @@
 
 - 원본 파일 하나는 Swift 시험 파일 하나로 옮긴다.
 - 원본 `describe`는 `@Suite`로, `it('문구')`는 `@Test("문구")`로 옮긴다. 문구는 원본 영어 그대로 둔다.
-- 원본에 `it.each`·`describe.each`는 없다(고정 커밋 기준).
+- 원본의 매개변수 시험은 두 곳이다. `tests/utils/index.spec.ts`의 jest-each(`each([...]).it(...)`)와 metadata-connect `test/label.test.ts`의 `it.each`다. 각각 `@Test(arguments:)` 하나로 옮겼고, `port-status.sh`도 한 개로 센다. `describe.each`는 없다(고정 커밋 기준).
 
 ## 5. 구조
 
@@ -93,7 +93,7 @@ let package = Package(
         .target(name: "DJLinkControl", dependencies: ["DJLinkKit"]),
         .systemLibrary(name: "CPcap"),  // module.modulemap에서 link "pcap"
         .target(name: "DJLinkPassive", dependencies: ["DJLinkKit", "CPcap"]),
-        .executableTarget(name: "djlink", dependencies: ["DJLinkKit", "DJLinkControl"]),
+        .executableTarget(name: "djlink", dependencies: ["DJLinkKit", "DJLinkControl", "DJLinkPassive"]),
         .target(name: "DJLinkTestSupport", dependencies: ["DJLinkKit"]),
         .testTarget(name: "DJLinkKitTests", dependencies: ["DJLinkKit", "DJLinkTestSupport"], resources: [.copy("Fixtures")]),
         .testTarget(name: "DJLinkControlTests", dependencies: ["DJLinkControl", "DJLinkTestSupport"]),
@@ -101,6 +101,8 @@ let package = Package(
     ]
 )
 ```
+
+위 `Package.swift`는 0단계 스케치다. 지금의 `Package.swift`는 `djlink`가 `DJLinkPassive`에도 의존하고(`passive` 명령), Link Export 타깃(`DJLinkExport*`, [LINK-EXPORT-PLAN.md](LINK-EXPORT-PLAN.md))과 `djlinkTests`가 더해졌다.
 
 타깃 사이에서만 보여야 하는 내부 API는 `package` 접근 수준으로 둔다.
 
@@ -192,12 +194,12 @@ let package = Package(
 
 - `scripts/port-status.sh`에서 원본 `it(` 수와 옮긴 `@Test` 수가 같다.
 - 그 단계와 앞 단계의 시험이 모두 통과한다.
-- 실제 소켓을 연 시험이 0개다.
+- 기본 실행(`swift test`)에서 실제 소켓을 연 시험이 0개다. 예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험이다. DJLinkKit의 6개와 Link Export의 8개가 127.0.0.1에만 소켓을 열고 LAN에는 아무것도 보내지 않는다(§11).
 
 | 단계 | 원본 | 원본 시험(파일: 개수) | 합 |
 |---|---|---|---|
 | 0 뼈대 | — | — | 0 |
-| 1 기초·상태 | `constants`·`types`·`entities`, `utils/`, `devices/`, `status/` | `tests/utils/index` 8, `tests/devices/index` 7, `tests/devices/utils` 3, `tests/status/utils` 14, `tests/status/position` 7, `tests/status/on-air` 8, `src/status/stagehand-gating` 2 | 49 |
+| 1 기초·상태 | `constants`·`types`·`entities`, `utils/`, `devices/`, `status/` | `tests/utils/index` 9(jest-each 매개변수 시험 1개 포함), `tests/devices/index` 7, `tests/devices/utils` 3, `tests/status/utils` 14, `tests/status/position` 7, `tests/status/on-air` 8, `src/status/stagehand-gating` 2 | 50 |
 | 2 가상 CDJ·네트워크 | `virtualcdj/`, `network.ts`, `index.ts` | `src/virtualcdj/heartbeat` 7, `tests/virtualcdj/conflict` 11, `device-id` 25, `stagehand` 8, `startup` 23, `wire-selection` 8, `tests/network/stagehand-identity` 2 | 84 |
 | 3 remotedb·NFS | `remotedb/`, `nfs/` | `tests/remotedb/connection` 4, `fields` 13, `src/nfs/index` 16, `tests/nfs/path` 14 | 47 |
 | 4 localdb | `localdb/`, onelibrary-connect | `tests/localdb/`: `anlz-2ex-integration` 20, `anlz-parsers-2ex` 18, `anlz-parsers-cue-nulls` 2, `anlz-parsers-cues` 3, `anlz-parsers-extended-cues` 5, `anlz-parsers-song-structure` 5, `anlz-parsing` 31, `database-fallback` 12, `database-loading` 22, `edge-cases` 44, `load-anlz-vocal-config` 10, `onelibrary-adapter` 62. 여기에 onelibrary-connect 시험 1개 파일 | 234 + α |
@@ -206,7 +208,7 @@ let package = Package(
 | 7 제어 | `control/` | `tests/control/load` 2, `stagehand` 9 | 11 |
 | 8 패시브 | `passive/` | `tests/passive/alphatheta` 22, `pcap-adapter` 9 | 31 |
 | 9 CLI·실기 확인 | `cli/` | — | 0 |
-| 합 | | 41개 파일 | 531 + α |
+| 합 | | 41개 파일 | 532 + α |
 
 **0단계 할 일**
 
@@ -271,16 +273,16 @@ let package = Package(
 
 ## 9. 1:1 이후 고칠 것
 
-1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다.
+1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
 
 **고친 것**(2026-10-10, PR #2)
 
 - status: 정밀 위치 파서가 패킷 종류 바이트(0x0a = 0x0b)를 보지 않아 같은 50001 포트의 비트 패킷도 위치로 읽었다(`src/status/utils.ts:132`). 능동·패시브 모두 고쳤다.
-- devices: `getDeviceEnsured`가 장치가 먼저 와도 시간 제한 타이머를 지우지 않았다.
+- devices: `getDeviceEnsured`가 장치가 먼저 와도 시간 제한 타이머를 지우지 않았다. 능동·패시브 모두 고쳤다(패시브는 #23).
 - virtualcdj: announcer의 `ready`를 다시 부르면 앞서 기다리던 쪽이 풀리지 않았다 / `makeStatusPacket`이 머리말을 0x0b에 썼다(정의만 있고 쓰이지 않는 함수).
 - network: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않았다.
 - mixstatus: 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 났다 / `isSetActive`가 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않았다 / `setMayStop`이 두 번 불리면 앞 타이머를 지울 수 없었다 / 같은 데크에서 같은 곡으로 새 세트를 시작하면 `nowPlaying`·`setStarted`가 모두 나지 않았다(중복 억제 `lastEmittedTrackId`가 세트가 끝나도 남았다, PR #3).
-- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠졌다(이제 오류), 쪽 번호 비교로 비단조 사슬에서 일찍 끝나거나 빈 후보 뒤로 읽었다(이제 링크를 따라 마지막 쪽·빈 후보에서 종료) / 장치 제거 때 첫 DB만 닫았다 / OneLibrary 열기에 실패하면 임시 파일이 남았다.
+- localdb: PDB 쪽 사슬이 순환하면 무한 루프에 빠졌다(이제 오류), 쪽 번호 비교로 비단조 사슬에서 일찍 끝나거나 빈 후보 뒤로 읽었다(이제 링크를 따라 마지막 쪽·빈 후보에서 종료) / 장치 제거 때 첫 DB만 닫았다 / OneLibrary 열기에 실패하면 임시 파일이 남았다. 뒤의 둘은 능동·패시브 모두 고쳤다(패시브는 #23).
 - metadata-connect·artwork: mp4 문자열 atom(`©nam` 등)이 맞지 않았다 / ID3 프레임 ID 앞부분 비교로 `TCOM`·`TCOP`이 장르로 읽혔다 / 값이 모두 비어도 결과가 null이 아니었다 / APIC의 BOM 검사 위치(겉으로 드러나는 동작 변화 없음) / ID3 v2.3 확장 헤더 크기에 4바이트가 빠졌다.
 - passive: UDP 길이를 두 번 빼서 payload 끝 8바이트가 잘리고 표준 announce가 short format으로 읽혔다.
 
@@ -293,8 +295,14 @@ let package = Package(
 **고친 것**(2026-10-15, CLI 연결 복구)
 
 - CLI 임시 DB 정리: 장치 이탈 때 본체를 먼저 삭제하면 부속 파일이 정리 목록에서 빠졌다([#16](https://github.com/ImBada/DJLinkKit/issues/16)). 별도 소유 경로 목록을 유지해 본체 미존재·삭제 실패와 무관하게 정확한 WAL·SHM·journal을 종료 때 정리한다. 다른 파일은 정리하지 않으며, 정리 시작 뒤 새 임시 쓰기는 거부한다. 부속 파일 삭제 실패는 다음 정리 호출에서 재시도한다.
-- CLI watch: 원본 `src/cli/index.ts`도 재생 덱별 곡 ID만 비교하고 조회 전에 기록해, 원본 장치·슬롯·종류 변경과 같은 곡의 재접속·일시 실패를 놓쳤다([#17](https://github.com/ImBada/DJLinkKit/issues/17)). 변경 감지 키에 원본 장치·슬롯·종류·곡 ID를 넣고 재생 덱이나 원본 장치가 이탈·재발견되면 기록을 무효화한다. 실패는 다음 상태 패킷에서 1초 이상 간격으로 최초 포함 최대 3회 조회하며 새 곡·연결 전에는 횟수를 초기화하지 않는다. 이전 조회의 늦은 결과·오류·파일 게시 안내도 버린다. 선택적 다운로드 실패는 성공한 메타데이터를 재조회하게 만들지 않는다.
+- CLI watch: 원본 `src/cli/index.ts`도 재생 덱별 곡 ID만 비교하고 조회 전에 기록해, 원본 장치·슬롯·종류 변경과 같은 곡의 재접속·일시 실패를 놓쳤다([#17](https://github.com/ImBada/DJLinkKit/issues/17)). 변경 감지 키에 원본 장치·슬롯·종류·곡 ID를 넣고 재생 덱이나 원본 장치가 이탈·재발견되면 기록을 무효화한다. 실패는 다음 상태 패킷에서 1초 이상 간격으로 최초 포함 최대 3회 조회하며 새 곡·연결 전에는 횟수를 초기화하지 않는다. 이전 조회의 늦은 결과·오류·파일 게시 안내도 버린다. 선택적 다운로드 실패는 성공한 메타데이터를 재조회하게 만들지 않는다. 곡 번호가 0(곡 없음)이면 조회하지 않고 `no track`도 내지 않는다. 원본 `cli/index.ts`는 0도 그대로 조회한다(원본과 다른 점).
 - 회귀 시험 15개를 추가했다. 관련 시험 22개, 전체 로컬 CI(1,008개 선언, 조건부 시험 포함), 원본 시험 622개·44개 파일 대조가 모두 통과했다. 수정된 같은 watch에서 전원 재시작 후 원래 곡의 메타데이터 재조회가 확인됐다. 정상 종료(130) 뒤 재시작 전후의 임시 DB 본체·WAL·SHM 경로 6개 모두 잔존 수가 0이었다. 직접 파일을 지우지 않고 CLI 정리만으로 확인했다.
+
+**고친 것**(2026-10-15, 패시브·ANLZ 점검)
+
+- passive(#23): 능동 쪽에서만 고쳤던 세 건을 패시브에도 같은 방식으로 고쳤다. `getDeviceEnsured`가 장치가 먼저 오면 시간 제한 타이머를 지운다 / 장치 제거 때 그 장치의 모든 DB를 닫는다(원본은 첫 DB만 닫고 모두 지웠다) / OneLibrary 쓰기·열기에 실패하면 임시 파일을 지운다. 회귀 시험 6개를 `PassiveDevicesUpstreamFixTests`·`PassiveLocalDBUpstreamFixTests`에 더했다.
+- localdb(#22): `loadAnlz`가 PCOB·PCO2 태그마다 결과를 덮어써(`src/localdb/rekordbox/index.ts:76-83`) 핫 큐(목록 형 1)·메모리(0) 목록 중 마지막 태그만 남았다. 같은 종류 태그를 파일 순서대로 잇는다. 태그가 하나면 결과가 같고 없으면 nil이다. 패시브도 같은 `loadAnlz`를 쓴다. 회귀 시험 1개를 `LocalDBUpstreamFixTests`에 더했다.
+- localdb(#26): PSSI의 mood가 1~3 밖이면 1:1 기준선은 EXT 전체를 실패시켰다. 원본 Kaitai는 kind를 0바이트 `unknown_tag`로 읽어 항목이 2바이트 짧게 끝까지 읽는다. 원본처럼 읽고 `kind`는 nil(undefined), `phraseType`은 `Unknown`이다. 그래서 공개 형 `Phrase.kind`가 `Int?`가 되었다. 회귀 시험 2개를 더했다.
 
 **실기 확인 뒤 정할 것**
 
@@ -321,7 +329,15 @@ let package = Package(
 
 **고친 것·실기 확인**(2026-10-15, Link Export #20)
 
-- 원본 서버가 처리하지 않던 레거시 큐 목록 조회 `0x2104`를 기존 `usb_cue_reply`/`0x4702` 응답에 연결했다. 숫자 문맥·track ID를 검사하고, 읽기에서 편집 콜백을 호출하지 않는다. 메모리·A/B/C·루프·빈 목록과 기존 클라이언트 왕복 회귀 8개를 별도로 작성했다. 원본 대응 시험 469개는 변경하지 않았다. 실기(CDJ-2000nexus)에서 시간순으로 섞어 보낸 목록이 핫큐 A 버튼을 끄고 CALL ▶를 A로 보내 E-8302를 냈다. CDJ가 앞의 memory 개수만큼을 메모리 큐로 읽는 것으로 보여 읽기 응답을 메모리 큐 먼저, 핫큐 뒤로 정렬했고, 그 뒤 메모리 큐·루프·A/B/C 호출을 모두 확인했다. 첫 실기의 메모리 큐 소실은 수정 뒤 재현하지 못했다. [구현·검증 기록](LINK-EXPORT-LEGACY-CUES.md).
+- 원본 서버가 처리하지 않던 레거시 큐 목록 조회 `0x2104`를 기존 `usb_cue_reply`/`0x4702` 응답에 연결했다. 숫자 문맥·track ID를 검사하고, 읽기에서 편집 콜백을 호출하지 않는다. 메모리·A/B/C·루프·빈 목록과 기존 클라이언트 왕복 회귀 8개를 별도로 작성했다. 원본 대응 시험은 변경하지 않았다. 실기(CDJ-2000nexus)에서 시간순으로 섞어 보낸 목록이 핫큐 A 버튼을 끄고 CALL ▶를 A로 보내 E-8302를 냈다. CDJ가 앞의 memory 개수만큼을 메모리 큐로 읽는 것으로 보여 읽기 응답을 메모리 큐 먼저, 핫큐 뒤로 정렬했고, 그 뒤 메모리 큐·루프·A/B/C 호출을 모두 확인했다. 첫 실기의 메모리 큐 소실은 수정 뒤 재현하지 못했다. [구현·검증 기록](LINK-EXPORT-LEGACY-CUES.md).
+
+**고친 것**(2026-10-15, Link Export Swift 쪽)
+
+원본 rbxport의 버그가 아니라 우리 Swift 구현의 문제다. 원본 대응 시험은 바꾸지 않았고 자체 회귀 시험을 더했다.
+
+- 정렬 키(#24): 파일명·이름·앨범 메뉴의 정렬 비교자가 비교할 때마다 문자열을 접고 복원했다. 원본의 `sort_by_cached_key`처럼 행마다 키를 한 번만 만든다. 순서는 같다(UTF-8 바이트 순서, 동률은 행·밀집 id 순서). 자체 회귀 3개.
+- 스마트 목록 날짜(#25): `SmartDate.today`가 `Calendar.current`를 써서 일본력·불교력 등을 쓰는 Mac에서 연도가 달라졌다. 원본 chrono `Local`처럼 현지 시간대의 그레고리력 연월일을 쓴다. 자체 회귀 1개.
+- 실제 소켓 가드(#28): Export의 가드가 `DJLINK_LOOPBACK_TESTS`와 관계없이 시험 프로세스에서 늘 소켓을 막아 루프백 시험을 돌릴 수 없었다. DJLinkKit처럼 `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 127.0.0.1·::1 밖 주소에는 묶지 못하게 한다. 자체 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개를 더했다.
 
 ## 10. 라이선스·출처
 
@@ -359,9 +375,9 @@ let package = Package(
 
 **시험**
 
-- 시험은 실제 소켓을 열지 않는다(원본 시험도 0개다).
+- 시험은 기본적으로 실제 소켓을 열지 않는다(원본 시험도 0개다). 예외는 아래 루프백 시험뿐이다.
 - 실제 소켓을 만드는 쪽(`SocketFactory.live`)은 시험 프로세스에서 부르면 바로 실패하게 한다. DJCrate의 `TestProcess`처럼 시험 프로세스를 알아본다.
-- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다. 시험은 LAN에 아무것도 보내지 않는다.
+- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다(DJLinkKit 6개, Link Export 8개). Link Export의 실제 소켓 가드(`LiveExportSocketFactory`)도 같은 조건에서만 열고, 그때도 127.0.0.1·::1 밖 주소에는 묶지 못하게 한다(#28). 시험은 LAN에 아무것도 보내지 않는다.
 
 **실기와 CLI**
 
@@ -440,7 +456,7 @@ alphatheta-connect(TypeScript)를 Swift로 1:1 옮기는 패키지다. 계획은
 
 ## 15. 확인하지 못한 것
 
-- 원본 시험을 실제로 돌려 보지 않았다. 고정 커밋에서 531개가 모두 통과하는지 모른다. 기대값은 시험 코드에 적힌 값을 따른다.
+- 원본 시험을 실제로 돌려 보지 않았다. 고정 커밋에서 532개가 모두 통과하는지 모른다. 기대값은 시험 코드에 적힌 값을 따른다.
 - onelibrary-connect·metadata-connect의 시험 개수. 파일 수(1개, 2개)만 셌다.
 - SQLCipher.swift 패키지가 SPM product를 내주는지.
 - 펌웨어 근거 표시가 없는 원본 부분(Stagehand, CDJ-3000X 등)이 어디서 왔는지.

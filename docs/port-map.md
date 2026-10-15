@@ -4,6 +4,8 @@
 
 이 표는 1:1 포트를 마친 뒤의 실제 파일을 기준으로 다시 썼다. Swift 파일 이름은 각 파일 머리 주석(`// 원본 src/...`)과 내용을 열어 확인했다.
 
+이 문서는 alphatheta-connect 계열(`DJLinkKit`·`DJLinkControl`·`DJLinkPassive`·`djlink`)만 다룬다. Link Export(`DJLinkExport*`, rbxport 원본)의 대응은 [export-port-map.md](export-port-map.md)에 따로 있다. 이 문서의 §3·§4는 main의 현재 파일을 기준으로 하고, 1:1 기준선(`port/one-to-one`)과 다른 곳은 그렇게 적었다.
+
 ## 범례와 갱신 규칙
 
 - **상태**
@@ -176,7 +178,7 @@
 
 | 원본 파일 | Swift 파일 | 상태 |
 |---|---|---|
-| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 13개 파일로 나뉘었다. 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 한 번의 실행이 가진 네트워크·소켓·작업과 정리 `CLISession.swift`, 주입하는 바깥 세계(소켓·인터페이스·시계·파일·NFS) `CLIRuntime.swift`, 소켓 소유권·인터페이스 묶기·중단 뒤 송신 차단 `CLISocketGuard.swift`, 중단 토큰·신호 `CLIAbort.swift`, 액터와 독립된 제한 시간·강제 종료 감시 `CLIWatchdog.swift`, 덮어쓰지 않는 파일 쓰기 `CLIFileWriter.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift` | 옮김 (원본 시험 없음. 우리 시험 163개가 통과) |
+| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 14개 파일로 나뉘었다(1:1 기준선은 13개, `CLIWatchTracks.swift`는 main에서 더했다). 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 한 번의 실행이 가진 네트워크·소켓·작업과 정리 `CLISession.swift`, 주입하는 바깥 세계(소켓·인터페이스·시계·파일·NFS) `CLIRuntime.swift`, 소켓 소유권·인터페이스 묶기·중단 뒤 송신 차단 `CLISocketGuard.swift`, 중단 토큰·신호 `CLIAbort.swift`, 액터와 독립된 제한 시간·강제 종료 감시 `CLIWatchdog.swift`, 덮어쓰지 않는 파일 쓰기 `CLIFileWriter.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift`, watch의 곡별 조회 중복·재시도·늦은 결과 관리 `CLIWatchTracks.swift`(#17) | 옮김 (원본 시험 없음. 우리 시험 180개, §3) |
 
 ### 빈 구현
 
@@ -210,7 +212,7 @@
 | metadata-connect | 28 | 28 |
 | **합계 (44개 파일)** | **622** | **622** |
 
-### 단계 1 — 기초·상태 (원본 49)
+### 단계 1 — 기초·상태 (원본 50)
 
 | 원본 파일 | Swift 파일 | 상태 |
 |---|---|---|
@@ -313,7 +315,7 @@
 
 ## 3. 원본 대응이 아닌 우리 시험
 
-원본 시험에는 없고 이 패키지에서 더한 시험이다. 원본 시험의 입력·기대값은 건드리지 않고, 소켓·SQLCipher·CLI처럼 Swift 쪽에서 새로 생긴 경계를 따로 검사한다. 시험은 LAN에 아무것도 보내지 않는다(PLAN §11).
+원본 시험에는 없고 이 패키지에서 더한 시험이다. 원본 시험의 입력·기대값은 건드리지 않고, 소켓·SQLCipher·CLI처럼 Swift 쪽에서 새로 생긴 경계와 PLAN §9의 고친 동작을 따로 검사한다. 시험은 LAN에 아무것도 보내지 않는다(PLAN §11). `@Test` 개수는 선언 기준이며 main의 현재 값이다. "기준선"은 1:1 기준선(`port/one-to-one`)에도 있는 파일, "main"은 main에서 더한 파일이다.
 
 | Swift 시험 파일 | `@Test` | 하는 일 |
 |---|---|---|
@@ -321,36 +323,64 @@
 | `Tests/DJLinkKitTests/Network/NetworkFlowTests.swift` | 8 | `ProlinkNetwork`의 connect·disconnect 흐름(가짜 소켓) |
 | `Tests/DJLinkKitTests/RemoteDB/RemoteDBTransportTests.swift` | 12 | remotedb 연결을 가짜 TCP로 검사 |
 | `Tests/DJLinkKitTests/RemoteDB/LiveTCPConnectionLoopbackTests.swift` | 6 | 실제 TCP 구현을 127.0.0.1에서만 검사. `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다 |
+| `Tests/DJLinkKitTests/RemoteDB/LiveTCPConnectionInterfaceWaitTests.swift` | 3 | `destroy`가 TCP 인터페이스 해석 대기를 바로 푸는 것(소켓·경로 감시 없이) |
 | `Tests/DJLinkKitTests/NFS/NFSTransportTests.swift` | 14 | NFS RPC 전송을 가짜 UDP로 검사. CLI 안전을 위한 경로 검사 훅과 모든 클라이언트 닫기 포함 |
 | `Tests/DJLinkKitTests/Network/CLISafetyOptInTests.swift` | 12 | CLI 안전을 위한 opt-in(번호 정책, announce 대상 필터, `IP_BOUND_IF` 묶기)이 기본값에서는 원본과 같고 켜면 막는 것 |
 | `Tests/DJLinkKitTests/LocalDB/LocalDBReaderIntegrationTests.swift` | 29 | Kaitai를 대신한 PDB·ANLZ 바이트 리더의 실제 바이트 경계 |
-| `Tests/DJLinkKitTests/LocalDB/CipherDatabaseColdOpenTests.swift` | 7 | SQLCipher 처음 열기 경쟁(DJCrate의 `CipherColdOpenTests`·`CipherLab`에서 옮김, §6). 별도 시험 프로세스를 띄우는 워커 시험이 포함된다 |
+| `Tests/DJLinkKitTests/LocalDB/CipherDatabaseColdOpenTests.swift` | 7 | SQLCipher 처음 열기 경쟁(DJCrate의 `CipherColdOpenTests`·`CipherLab`에서 옮김, §6). 별도 시험 프로세스를 띄우는 워커 시험(2개)이 포함된다 |
+| `Tests/DJLinkKitTests/LocalDB/LocalDBMediaFailureSafetyTests.swift` | 1 | `throwsOnMediaQueryFailure` opt-in이 미디어 질의 실패를 오류로 전달하는 것 |
 | `Tests/DJLinkControlTests/ControlNetworkTests.swift` | 2 | `ProlinkNetwork.control`이 연결 뒤에 만들어지는 것 |
-| `Tests/DJLinkPassiveTests/PassiveFlowTests.swift` | 12 | 패시브 네트워크 전체 흐름(가짜 pcap) |
+| `Tests/DJLinkPassiveTests/PassiveFlowTests.swift` | 17 | 패시브 네트워크 전체 흐름(가짜 pcap). PLAN §9의 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)도 이 파일에 있다 |
 | `Tests/djlinkTests/CLIApplicationTests.swift` | 6 | CLI 실행 흐름과 종료 코드(가짜 실행기) |
-| `Tests/djlinkTests/CLIArgumentsTests.swift` | 23 | 인자 해석(옵션 값 삼킴 방지, `play`·`pause` 거부, `--timeout`) |
+| `Tests/djlinkTests/CLIArgumentsTests.swift` | 22 | 인자 해석(옵션 값 삼킴 방지, `play`·`pause` 거부, `--timeout`)(기준선은 23) |
 | `Tests/djlinkTests/CLIFormatTests.swift` | 14 | 출력 형식 |
 | `Tests/djlinkTests/CLISafetyTests.swift` | 11 | 안전 규칙(rekordbox 실행 확인, 가상 CDJ 번호, `--confirm`, 재생 상태 패킷, 경로 거부) |
 | `Tests/djlinkTests/CLIFileWriterTests.swift` | 17 | 덮어쓰지 않는 파일 게시(임시 폴더만 쓴다): `link`·`RENAME_EXCL`·`O_EXCL` 순서, 1MiB 조각 쓰기, 쓰기 도중 취소 |
 | `Tests/djlinkTests/CLIPublishCleanupTests.swift` | 4 | 막힌 파일 큐를 `cleanup()`·`run`이 3초까지 기다리는 것 |
 | `Tests/djlinkTests/CLISignalHandlingTests.swift` | 5 | SIGHUP 정리 경로, SIGPIPE 무시, 닫힌 파이프 출력 |
-| `Tests/djlinkTests/CLILocalTempCleanupTests.swift` | 7 | OneLibrary 임시 DB 추적·정리 |
+| `Tests/djlinkTests/CLILocalTempCleanupTests.swift` | 13 | OneLibrary 임시 DB 추적·정리(부속 파일 포함, #16)(기준선은 7) |
 | `Tests/djlinkTests/CLIRealSchedulerTests.swift` | 3 | 실제 `DispatchCLIScheduler`가 막힌 `DJLinkActor.queue`와 독립으로 도는 것(약 3초) |
 | `Tests/djlinkTests/CLINFSGlobalsTests.swift` | 1 | 전역 NFS 경로 검사 훅의 설치·해제(`.serialized`) |
-| `Tests/DJLinkKitTests/RemoteDB/LiveTCPConnectionInterfaceWaitTests.swift` | 3 | `destroy`가 TCP 인터페이스 해석 대기를 바로 푸는 것(소켓·경로 감시 없이) |
 | `Tests/djlinkTests/CLIRuntimeTests.swift` | 47 | 가짜 소켓·시계·파일·NFS로 돌린 실행 경로: 인터페이스 묶기·서브넷 제한, 번호 정책, 중단 뒤 송신·쓰기 0회, 제한 시간, 정리, 종료 코드, NFS 경로 검사 |
+| `Tests/djlinkTests/CLIDestinationSafetyTests.swift` | 5 | CLI 소켓 경계: 서브넷 밖 UDP는 0바이트, TCP는 연결하지 않고, NFS도 밖 장치를 거부하는 것 |
+| `Tests/djlinkTests/CLIIndependentAbortTests.swift` | 6 | `DJLinkActor` 큐가 막혀도 신호·제한 시간이 즉시 중단·강제 종료를 일으키는 것 |
+| `Tests/djlinkTests/CLIMediaFailureTests.swift` | 1 | 미디어 슬롯 조회 실패가 `metadata`의 종료 코드 1이 되는 것 |
+| `Tests/djlinkTests/CLINFSWaitingSafetyTests.swift` | 3 | NFS RPC 읽기·재시도 대기를 닫기·취소가 구독·타이머까지 정리하는 것 |
+| `Tests/djlinkTests/CLIReadySafetyTests.swift` | 2 | 시작 번호 거부가 ready 대기자를 모두 풀고 거부 번호를 노출하는 것 |
+| `Tests/djlinkTests/CLIStagehandSafetyTests.swift` | 1 | 지원하지 않는 안전 정책이 있으면 Stagehand를 바이트를 보내기 전에 거부하는 것 |
+| `Tests/djlinkTests/CLITCPRegistrySafetyTests.swift` | 5 | 닫힌 TCP를 장부에서 바로 지우고, 포트 조회 연결을 응답 직후 닫는 것. remotedb 질의 번호 로그 포함 |
+| `Tests/djlinkTests/CLITCPSafetyTests.swift` | 2 | 포트 조회와 DB 연결이 고른 인터페이스를 요구하고, 해석 못 하면 연결하지 않는 것 |
+| `Tests/DJLinkKitTests/Artwork/ArtworkUpstreamFixTests.swift` | 7 | **main.** PLAN §9 앨범아트 고침(mp4 atom 이름, APIC BOM, ID3 v2.3 확장 헤더) |
+| `Tests/DJLinkKitTests/MetadataConnect/MetadataConnectUpstreamFixTests.swift` | 25 | **main.** PLAN §9 metadata-connect 고침(mp4 문자열 atom, ID3 프레임 ID, 빈 값, APIC BOM, 확장 헤더) |
+| `Tests/DJLinkKitTests/Devices/DevicesUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `getDeviceEnsured` 타이머·구독 정리 |
+| `Tests/DJLinkKitTests/LocalDB/LocalDBUpstreamFixTests.swift` | 11 | **main.** PLAN §9 localdb 고침(PDB 사슬, 장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일, ANLZ 큐 태그 잇기 #22, 알 수 없는 PSSI mood #26) |
+| `Tests/DJLinkKitTests/MixStatus/MixStatusUpstreamFixTests.swift` | 7 | **main.** PLAN §9 mixstatus 고침 |
+| `Tests/DJLinkKitTests/Network/NetworkUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `bringOnline` bind 실패 때 만든 소켓 닫기 |
+| `Tests/DJLinkKitTests/Status/StatusUpstreamFixTests.swift` | 8 | **main.** PLAN §9 위치 파서의 종류 바이트 검사와 비트 포트(50001) on-air |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJKeepAliveUpstreamFixTests.swift` | 1 | **main.** PLAN §9 keep-alive 54바이트 |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJReadyUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `ready` 재호출과 번호 거부 때 대기자 풀기 |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJStatusUpstreamFixTests.swift` | 2 | **main.** PLAN §9 `makeStatusPacket` 머리말 |
+| `Tests/DJLinkControlTests/ControlUpstreamFixTests.swift` | 5 | **main.** PLAN §9 제어 재생 상태 패킷의 칸 배치 |
+| `Tests/DJLinkPassiveTests/PassiveDevicesUpstreamFixTests.swift` | 3 | **main.** PLAN §9 패시브 `getDeviceEnsured` 타이머 정리(#23) |
+| `Tests/DJLinkPassiveTests/PassiveLocalDBUpstreamFixTests.swift` | 3 | **main.** PLAN §9 패시브 localdb 고침(장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일)(#23) |
+| `Tests/DJLinkPassiveTests/PassivePositionUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 위치 파서의 종류 바이트 검사 |
+| `Tests/DJLinkPassiveTests/PassiveStatusUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 on-air(비트 포트 50001) |
+| `Tests/DJLinkKitTests/Status/BeatTests.swift` | 9 | **main.** 비트 0x28 해석과 능동 `BeatEmitter` 연결(#7, PROVENANCE §D) |
+| `Tests/DJLinkPassiveTests/PassiveBeatTests.swift` | 3 | **main.** 패시브 비트 이벤트 연결과 종료(#7) |
+| `Tests/djlinkTests/CLIBeatTests.swift` | 3 | **main.** CLI `status`·`passive`의 비트 출력(#7) |
+| `Tests/djlinkTests/CLIWatchRecoveryTests.swift` | 9 | **main.** `watch`의 재접속·재시도·늦은 결과 버리기(#17) |
 
-시험 수 합계(`@Test` 선언 기준):
+시험 수 합계(`@Test` 선언 기준, main의 현재 값):
 
-| 시험 대상 | 원본 대응 | 우리 시험 | 합 |
-|---|---|---|---|
-| `DJLinkKitTests` | 580 | 101 | 681 |
-| `DJLinkControlTests` | 11 | 2 | 13 |
-| `DJLinkPassiveTests` | 31 | 17 | 48 |
-| `djlinkTests` | 0 | 163 | 163 |
-| 합 | 622 | 283 | 905 |
+| 시험 대상 | 원본 대응 | 우리 시험 | 합 | 1:1 기준선 합 |
+|---|---|---|---|---|
+| `DJLinkKitTests` | 580 | 180 | 760 | 681 |
+| `DJLinkControlTests` | 11 | 7 | 18 | 13 |
+| `DJLinkPassiveTests` | 31 | 28 | 59 | 48 |
+| `djlinkTests` | 0 | 180 | 180 | 163 |
+| 합 | 622 | 395 | 1,017 | 905 |
 
-위 표는 1:1 기준선(`port/one-to-one`)의 선언된 `@Test` 수다. main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`)과 고친 CLI 동작이 더해져 수가 다르다(README "진행 상황"). `swift test`는 905개를 모두 돌리고, 그중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)는 건너뜀으로 센다.
+1:1 기준선(`port/one-to-one`)의 선언 수는 905개다(위 표의 마지막 칸). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 905개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 518개까지 합친 전체 선언 수 1,535개와 조건부 27개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 README "시험"에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
 
 ## 4. 우리가 더한 Swift 파일 (원본에 대응하는 파일이 없다)
 
@@ -364,8 +394,9 @@
 | `Sources/DJLinkKit/Concurrency/AsyncMutex.swift` | `async-mutex` 패키지 |
 | `Sources/DJLinkKit/Socket/BSDUDPSocket.swift` | `dgram` 소켓의 실제 구현 |
 | `Sources/DJLinkKit/Socket/LiveTCPConnection.swift`, `Sources/DJLinkKit/Socket/TCPConnection.swift` | `net.Socket`과 `promise-socket`(remotedb가 쓰는 부분) |
-| `Sources/DJLinkKit/Socket/SocketFactory.swift` | `dgram.createSocket`·`new net.Socket()`. 시험 프로세스에서 실제 소켓을 만들면 바로 실패하게 한다(PLAN §11) |
+| `Sources/DJLinkKit/Socket/SocketFactory.swift` | `dgram.createSocket`·`new net.Socket()`. 시험 프로세스에서 실제 소켓을 만들면 바로 실패하게 한다. `DJLINK_LOOPBACK_TESTS=1`일 때만 루프백 시험이 연다(PLAN §11) |
 | `Sources/DJLinkKit/Socket/InterfaceProvider.swift` | `os.networkInterfaces()` |
+| `Sources/DJLinkKit/Socket/CancellableUDPRead.swift` | 원본 `udpRead`의 취소 가능한 변형. 닫기·취소·시간 초과 때 대기자와 구독·타이머를 거둔다. 원본 `udpRead`는 그대로 두고 CLI의 RPC opt-in에서만 쓴다(CLI 안전을 위한 추가, [port-notes.md](port-notes.md) 3단계) |
 | `Sources/DJLinkKit/Utils/Address4.swift` | `ip-address` 패키지의 `Address4` |
 | `Sources/DJLinkKit/Utils/Bytes.swift` | Node `Buffer`의 읽기·쓰기(범위를 넘으면 `BufferRangeError`) |
 | `Sources/DJLinkKit/Utils/DJLinkError.swift` | `new Error(message)` |
@@ -380,8 +411,11 @@
 | `Sources/CPcap/` (`module.modulemap`, `shim.h`) | libpcap을 부르는 시스템 라이브러리 선언 |
 | `Sources/DJLinkTestSupport/` (`FakeInterfaceProvider`, `FakeTCPConnection`, `FakeUDPSocket`, `TestClock`) | 원본 시험의 `jest.mock('os')`, 가짜 소켓, `jest.useFakeTimers()`. `Mocks.swift`는 원본 `tests/utils.ts`(§2) |
 | `Sources/djlink/*.swift` | 원본 `cli/index.ts`를 나눈 것(§1 단계 9) |
+| `Sources/djlink/CLIWatchTracks.swift` | main에서 더한 파일. `watch`의 곡별 조회 중복 억제·재시도·늦은 결과 버리기(#17). 원본 `cli/index.ts`의 곡 ID만 비교하는 `lastTid` 자리 |
+| `Sources/DJLinkKit/Status/BeatTypes.swift`, `BeatUtils.swift`, `BeatEmitter.swift` | main에서 더한 파일. 원본에 없는 비트 포트(50001) 0x28 패킷 수신: `CDJStatus.BeatState`, `beatFromPacket`, `BeatEmitter`(#7, [PROVENANCE.md](../PROVENANCE.md) §D) |
+| `Sources/DJLinkPassive/PassiveBeat.swift` | main에서 더한 파일. 패시브 어댑터의 비트 포트에서 0x28만 읽는 `PassiveBeatEmitter`(#7) |
 
-시험 쪽 도우미 중 원본 대응이 없는 것: `Tests/DJLinkKitTests/DB/DBTestHelpers.swift`, `Tests/DJLinkKitTests/Network/NetworkTestHelpers.swift`, `Tests/DJLinkKitTests/LocalDB/Support/LocalDBTestDependencies.swift`(원본 시험의 `jest.mock` 자리를 주입으로 바꾼 가짜들), `Tests/DJLinkKitTests/LocalDB/Support/LocalDBPdbBuilder.swift`(§6).
+시험 쪽 도우미 중 원본 대응이 없는 것: `Tests/DJLinkKitTests/DB/DBTestHelpers.swift`, `Tests/DJLinkKitTests/Network/NetworkTestHelpers.swift`, `Tests/DJLinkKitTests/LocalDB/Support/LocalDBTestDependencies.swift`(원본 시험의 `jest.mock` 자리를 주입으로 바꾼 가짜들), `Tests/DJLinkKitTests/LocalDB/Support/LocalDBPdbBuilder.swift`(§6), `Tests/djlinkTests/CLITestHarness.swift`(CLI 시험이 쓰는 가짜 소켓·시계·파일 시스템 모음).
 
 ## 5. 이름·주입점 요약
 

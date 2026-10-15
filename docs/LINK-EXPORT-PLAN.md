@@ -8,7 +8,7 @@
 - `rbl-nfs`: XDR·RPC·파일 트리·파일 서버, 원본 시험 73개.
 - `rbl-dbserver`: 프레임·세션·메뉴·편집·TCP 서버, 원본 시험 104개.
 - `rbl-link`: 참여·광고·상태·카탈로그·분석 응답·공유 파일·서버 생명주기, 원본 시험 105개.
-- 핵심 서버의 원본 시험 합계는 321개다. 의존 ANLZ 78개와 메모리 모델 시험은 따로 센다.
+- 핵심 서버의 원본 시험 합계는 321개다. 의존 ANLZ 78개, 메모리 모델 93개, XML 스캐너 2개, 루프백 통합 8개(`rbl-fakecdj`)는 따로 센다. 원본 대응은 모두 502개이고, 루프백을 뺀 항상 도는 쪽은 494개다.
 - `rbl-anlz`: 분석 파일 파싱·재출력·grid/cue/phrase/vocal·공유 경로와 인코딩.
 - `rbl-index`: 서버가 받는 메모리 라이브러리, cue/playlist/history/tag, 정렬·검색·필터·스마트 목록·관련곡·파일 생성 시간. `rbl-core`의 XML 스캐너와 `rbl-db`의 details/export-info 값형도 포함한다.
 
@@ -16,7 +16,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 
 ## 진행과 검증 관문
 
-현재 **빌드·대응 시험·전체 회귀 검증 및 CDJ-2000nexus 기본 MP3/WAV 실기 확인 완료**이다. 실기 회귀 2개를 추가한 전체 1,479개 등록 시험에서 실패가 없고 15개는 조건에 따라 건너뛰었다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다. 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
+현재 **빌드·대응 시험·전체 회귀 검증, CDJ-2000nexus 기본 MP3/WAV 실기 확인, #20 레거시 큐 실기 확인을 마쳤다.** 지금 선언된 `DJLinkExport*` 시험은 518개다(원본 대응 502, 자체 회귀 16). 이 중 `.disabled`가 4개, `DJLINK_LOOPBACK_TESTS`에 따라 도는 것이 루프백 8개와 소켓 가드 2개다. 날짜별 실행 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있고, 현재 선언 수로 돌린 결과는 아직 적지 않았다. 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
 
 1. 원본 시험 파일 하나를 Swift 파일 하나로 대응하고 입력·기대값을 유지한다. Rust 시험 함수 이름을 `@Test("함수 이름")`으로 유지한다.
 2. 코드를 옮긴다. 원본 버그는 그대로 두고 개선 제안은 PLAN §9에 기록한다.
@@ -24,7 +24,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 4. 기존 시험 회귀까지 확인한 뒤 시험용 네트워크에서 실기 확인한다. 해당 Mac의 rekordbox·rekordboxAgent는 꺼져 있어야 하고 광고 번호는 7 이상이다.
 5. 커밋·푸시는 사용자가 요청했을 때만 한다.
 
-원본 루프백 통합 시험은 실제 소켓 대신 같은 TCP/UDP 바이트를 연결하는 가짜 전송을 주입한다. `LiveExportSocketFactory`는 시험 프로세스에서 실제 소켓 생성을 금지한다. 시간은 주입한 시계를 사용하며 Rust `Instant`에 대응하는 기본 시계는 단조 시계다.
+원본 통합 시험은 실제 소켓 대신 같은 TCP/UDP 바이트를 연결하는 가짜 전송을 주입한다. 단 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)는 `DJLINK_LOOPBACK_TESTS=1`일 때만 127.0.0.1의 실제 소켓으로 돈다. `LiveExportSocketFactory`는 시험 프로세스에서 이 환경 변수가 없으면 실제 소켓 생성을 금지하고, 있어도 127.0.0.1·::1 밖 주소에는 묶지 않는다(#28). 시험은 어느 경우에도 LAN에 아무것도 보내지 않는다. 시간은 주입한 시계를 사용하며 Rust `Instant`에 대응하는 기본 시계는 단조 시계다.
 
 ## 픽스처
 
@@ -36,11 +36,11 @@ rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 �
 
 ## 이번 단계 기록
 
-2026-10-15: 서버 코드·원본 대응 시험 469개(core 321, ANLZ 78, 모델 68, XML 2)를 작성했다. 파일별 이름·순서의 strict 정적 대조와 Swift 소스 서식 정리를 수행했다. 사용자의 이번 단계 “구현 완료” 신호 뒤 빌드·대응 시험·전체 로컬 CI를 실행해 통과했다. Export 등록 시험 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 실제 소켓·장비 조작·커밋·푸시는 실행하지 않았다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다.
+2026-10-15: 서버 코드·원본 대응 시험 469개(core 321, ANLZ 78, 모델 68, XML 2)를 작성했다. 이 469개는 처음 등록한 개수이고, 이후 모델 시험 25개를 더해 494개, 루프백 8개를 더해 502개가 되었다. 파일별 이름·순서의 strict 정적 대조와 Swift 소스 서식 정리를 수행했다. 사용자의 이번 단계 “구현 완료” 신호 뒤 빌드·대응 시험·전체 로컬 CI를 실행해 통과했다. Export 등록 시험 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 실제 소켓·장비 조작·커밋·푸시는 실행하지 않았다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다.
 
 공유 파일 변경: `Package.swift`의 별도 제품·타깃, 기존 `UDPSocket`/`BSDUDPSocket`의 서버용 send/receive 버퍼 옵션, `scripts/ci.sh`의 Export 정적 대응 검사를 추가했다. 기존 CLI가 서버를 실행하지는 않는다.
 
-실기에서는 LINK 목록·두 CDJ의 NFS 마운트·2번 CDJ의 MP3 로드/재생/CUE를 확인했다. WAV E-8305는 곡 정보의 디코더 선택 id가 1로 고정된 원본 동작 때문이었다. id=11의 단일 필드 비교로 WAV 로드/재생/CUE를 확인하고 실제 서버를 수정했다. 원본 1:1 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남기고 실기 회귀는 원본 대응 개수와 분리한다. [상세 실기 기록](LINK-EXPORT-HARDWARE.md). 레거시 큐 읽기는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 남겼다.
+실기에서는 LINK 목록·두 CDJ의 NFS 마운트·2번 CDJ의 MP3 로드/재생/CUE를 확인했다. WAV E-8305는 곡 정보의 디코더 선택 id가 1로 고정된 원본 동작 때문이었다. id=11의 단일 필드 비교로 WAV 로드/재생/CUE를 확인하고 실제 서버를 수정했다. 원본 1:1 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남기고 실기 회귀는 원본 대응 개수와 분리한다. [상세 실기 기록](LINK-EXPORT-HARDWARE.md). 레거시 큐 읽기는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에서 구현하고 실기로 확인했다([#20 기록](LINK-EXPORT-LEGACY-CUES.md)).
 
 ## 호스트 안전 규칙
 
