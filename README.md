@@ -8,7 +8,7 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 - 1:1 포트의 0~9단계 코드를 모두 옮겼다.
 - 원본 시험 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)를 모두 옮겼고, 모두 통과한다. 원본 `it` 수와 옮긴 `@Test` 수가 파일마다 같다(`scripts/port-status.sh`).
-- 전체 시험 905개(DJLinkKit 681, DJLinkPassive 48, DJLinkControl 13, djlink CLI 163)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
+- 전체 시험 907개(DJLinkKit 683, DJLinkPassive 48, DJLinkControl 13, djlink CLI 163)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
 - **실기 확인은 아직 하지 않았다.** 모든 시험은 가짜 소켓과 합성 데이터로 돈다. 실제 CDJ·믹서와 맞춰 본 적이 없으므로 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
 - 원본과 다르게 옮긴 곳, 일부러 그대로 옮긴 원본 버그는 [docs/port-notes.md](docs/port-notes.md)에 있다.
 

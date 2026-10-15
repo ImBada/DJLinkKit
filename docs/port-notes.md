@@ -81,6 +81,8 @@
 
 ## 4단계 (localdb)
 
+- PSSI: 원본 Kaitai `song_structure_entry`처럼 mood가 1~3 밖이면 kind를 0바이트 `unknown_tag`로 읽는다. 항목이 `len_entry_bytes`보다 2바이트 짧아 뒤 항목이 어긋나지만 실패하지 않는다. 결과는 원본처럼 mood `high`, kind nil(undefined), phraseType `Unknown`이고, 이 때문에 `Phrase.kind`는 `Int?`다. 처음 옮길 때는 이 경우 EXT 전체를 실패시켜 원본과 달랐다(2026-10-16 바로잡음, [#26](https://github.com/ImBada/DJLinkKit/issues/26)).
+
 - CLI 안전을 위한 추가(기본값은 원본 동작): `LocalDatabase(throwsOnMediaQueryFailure: true)`는 미디어 슬롯 질의 실패를 nil 대신 원래 오류로 전달한다.
     기본 false는 원본처럼 nil이다.
     CLI metadata는 이 옵션을 켜서 요청한 조회 실패를 종료 코드 1로 보고한다.
