@@ -97,3 +97,18 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 - 각 지식을 원본 저작자가 어떻게 얻었는지는 원본에 적힌 만큼만 안다. 위 판정은 원문 서술에 기댄 것이고, 저작자에게 확인하지 않았다.
 - `CHANGELOG.md` 전체와 `git log` 메시지는 위 낱말로만 훑었다. 낱말이 다른 서술은 놓쳤을 수 있다.
 - prolink-connect 저장소 자체는 열지 않았다.
+
+## Link Export: rbxport 1.8.0 (2026-10-15)
+
+고정 커밋 `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`의 GPL 공개 Rust 코드와 시험을 옮긴다. 직접 실행 파일 분석은 하지 않았다. 아래의 근거는 원본 저작자가 코드에 밝힌 출처이며, 우리가 새로 실측한 결과가 아니다. 원본의 관찰·추정·미확인 구분을 바꾸지 않는다.
+
+| 원본 코드 | 공개된 근거와 제한 | Swift 대응 |
+|---|---|---|
+| `rbl-link/src/join.rs`, `interface_mode.rs`, `beacon.rs`; `rbl-prolink/src/lib.rs` | 원본이 공개한 rekordbox 7.2.11 시스템 관리자 분석·캡처 기반 참여 순서, 유선/무선 후보 번호·점유 응답, 호환성 거절·장치 멤버십·identity/settings·master/load 응답. 무선 선택 타이밍 등 미확인 내용은 추측해 보완하지 않는다 | `DJLinkExport/Join`, `InterfaceMode`, `Beacon`; `DJLinkExportProtocol/Prolink` |
+| `rbl-nfs/src/lib.rs`, `vfs.rs`; `rbl-link/src/files.rs` | 원본이 공개한 libFilSiNE 분석과 CDJ-3000·XDJ 패킷 비교: 파일 핸들·read 상한·상대 경로·symlink/stat 의미. Windows drive mount 규칙은 원본에서도 추정이다 | `DJLinkExportNFS/Server`, `Vfs`; `DJLinkExport/Files` |
+| `rbl-dbserver`의 session/item/filter, `rbl-link/src/catalog.rs`, `blobs.rs` | 메뉴·정렬·My Tag·cue·VBR·분석 응답의 공개 원본 및 캡처. VBR의 1604 zero-byte 호환 값은 원본의 임시값으로 유지한다 | `DJLinkExportDBServer/*`, `DJLinkExport/Catalog`, `Blobs` |
+| `rbl-anlz/*`, `rbl-index`의 정렬·스마트 목록·관련곡 | 공개 ANLZ 관찰·인코딩과 원본의 comparator/RelatedTrackCriteria 분석 지식. 미확인 padding·빈 필드는 원본 값대로 보존한다 | `DJLinkExportANLZ/*`, `DJLinkExportModel/*` |
+| `rbl-core/src/xml.rs`, `rbl-db/src/details.rs`, `export_info.rs`, `fixture.rs`, `rbl-fakecdj/src/lib.rs` | 서버 입력 값형·스마트 목록 XML 스캐너·합성 시험 준비·클라이언트 요청 절차. 실제 사용자 DB·경로·곡 정보를 새 fixture로 넣지 않는다 | `DJLinkExportModel/Xml`, `Details`, `ExportInfo`; Export 통합 시험 준비 코드 |
+| `alphatheta-connect-rs/src/status/utils.rs` @ `b54d9e9c53059f11e04f4de9898f4abae3b46480` | MIT 공개 클라이언트 상태 파서의 패킷 길이 및 반올림 규칙 | `DJLinkExport/Beacon`의 기존 Swift 클라이언트 파서 어댑터 |
+
+Deep Symmetry 문서·`.ksy` 원문은 복사하지 않는다. 원본 캡처는 외부 고정 체크아웃에서 읽어 시험하고 공개 저장소에 복사하지 않는다. 이번 서버 실기 결과는 아직 없다.

@@ -18,7 +18,7 @@
 **범위 밖**
 
 - `src/remote/`(HTTP 서버·Hue 조명)와 `src/utils/telemetry.ts`의 Sentry 보고. 원본 시험이 0개라 시험 수는 줄지 않는다. telemetry를 부르는 자리는 아무것도 하지 않는 함수로 둔다.
-- CDJ에 라이브러리를 내주는 쪽(Link Export 서버). 원본에 없다.
+- CDJ에 라이브러리를 내주는 쪽(Link Export 서버)은 이 TypeScript 원본 포트의 범위 밖이다. 사용자의 추가 요청으로 rbxport를 원본으로 한 [별도 서버 이식 단계](LINK-EXPORT-PLAN.md)를 진행한다.
 - 1:1을 마치기 전에 기능을 더하거나 버그를 고치는 일(§9).
 
 ## 2. 원본 (고정 커밋)
@@ -307,6 +307,12 @@ let package = Package(
 - localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
+
+**Link Export 원본에서 유지하는 동작**(2026-10-15, 아직 수정하지 않음)
+
+- rbxport `Claim`의 첫/둘째 단계 선언 길이 44/50과 실제 인코딩 길이 42/48이 다르다. 원본 패킷·시험대로 보존한다.
+- 원본이 읽을 수 있는 mixer discovery subtype `0x03`도 다시 인코딩할 때는 `0x02`가 된다. 원본의 재인코딩 결과를 유지한다.
+- 스마트 목록의 `dateCreated` 조건은 원본처럼 `date_added` 컬럼을 읽고, 루트 마지막 XML 닫기 이름은 검사하지 않는다. 1:1 기준선 작성 중에는 의미를 바꾸지 않는다.
 
 ## 10. 라이선스·출처
 

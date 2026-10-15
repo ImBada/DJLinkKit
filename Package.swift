@@ -9,11 +9,13 @@ let package = Package(
         .library(name: "DJLinkKit", targets: ["DJLinkKit"]),
         .library(name: "DJLinkControl", targets: ["DJLinkControl"]),
         .library(name: "DJLinkPassive", targets: ["DJLinkPassive"]),
+        // rbxport에서 옮기는 GPL-2.0-or-later 서버. 기존 MIT 제품과 별도로 선택한다.
+        .library(name: "DJLinkExport", targets: ["DJLinkExport"]),
         .executable(name: "djlink", targets: ["djlink"]),
     ],
     dependencies: [
         // DJCrate와 같은 패키지 의존으로 맞춘다(docs/PLAN.md §7).
-        .package(url: "https://github.com/sqlcipher/SQLCipher.swift", exact: "4.19.0"),
+        .package(url: "https://github.com/sqlcipher/SQLCipher.swift", exact: "4.19.0")
     ],
     targets: [
         .target(
@@ -24,6 +26,19 @@ let package = Package(
         // module.modulemap에서 link "pcap"
         .systemLibrary(name: "CPcap"),
         .target(name: "DJLinkPassive", dependencies: ["DJLinkKit", "CPcap"]),
+        .target(name: "DJLinkExportSupport", dependencies: ["DJLinkKit"]),
+        .target(name: "DJLinkExportProtocol", dependencies: ["DJLinkKit"]),
+        .target(name: "DJLinkExportNFS", dependencies: ["DJLinkKit", "DJLinkExportSupport"]),
+        .target(name: "DJLinkExportDBServer", dependencies: ["DJLinkKit", "DJLinkExportSupport"]),
+        .target(name: "DJLinkExportModel", dependencies: ["DJLinkKit"]),
+        .target(name: "DJLinkExportANLZ", dependencies: ["DJLinkKit"]),
+        .target(
+            name: "DJLinkExport",
+            dependencies: [
+                "DJLinkKit", "DJLinkExportSupport", "DJLinkExportProtocol", "DJLinkExportNFS",
+                "DJLinkExportDBServer", "DJLinkExportModel", "DJLinkExportANLZ",
+            ]),
+        .target(name: "DJLinkExportTestSupport", dependencies: ["DJLinkExportSupport", "DJLinkTestSupport"]),
         .executableTarget(name: "djlink", dependencies: ["DJLinkKit", "DJLinkControl", "DJLinkPassive"]),
         .target(name: "DJLinkTestSupport", dependencies: ["DJLinkKit"]),
         .testTarget(
@@ -33,6 +48,18 @@ let package = Package(
         ),
         .testTarget(name: "DJLinkControlTests", dependencies: ["DJLinkControl", "DJLinkTestSupport"]),
         .testTarget(name: "DJLinkPassiveTests", dependencies: ["DJLinkPassive", "DJLinkTestSupport"]),
+        .testTarget(name: "DJLinkExportProtocolTests", dependencies: ["DJLinkExportProtocol", "DJLinkTestSupport"]),
+        .testTarget(
+            name: "DJLinkExportNFSTests",
+            dependencies: ["DJLinkExportNFS", "DJLinkExportTestSupport"]),
+        .testTarget(
+            name: "DJLinkExportDBServerTests",
+            dependencies: ["DJLinkExportDBServer", "DJLinkExportTestSupport"]),
+        .testTarget(name: "DJLinkExportModelTests", dependencies: ["DJLinkExportModel", "DJLinkTestSupport"]),
+        .testTarget(name: "DJLinkExportANLZTests", dependencies: ["DJLinkExportANLZ", "DJLinkExportTestSupport"]),
+        .testTarget(
+            name: "DJLinkExportTests",
+            dependencies: ["DJLinkExport", "DJLinkExportTestSupport"]),
         .testTarget(
             name: "djlinkTests",
             dependencies: ["djlink", "DJLinkKit", "DJLinkControl", "DJLinkPassive", "DJLinkTestSupport"]),

@@ -82,6 +82,10 @@ public protocol UDPSocket: AnyObject {
     /// `socket.setBroadcast(flag)`
     func setBroadcast(_ flag: Bool)
 
+    /// 서버 전송이 요구하는 UDP 버퍼 크기. 기존 클라이언트의 기본 설정은 유지한다.
+    func setSendBufferSize(_ bytes: Int) throws
+    func setReceiveBufferSize(_ bytes: Int) throws
+
     /// `socket.address()`. 묶이지 않았으면 nil(Node는 던진다).
     func address() -> AddressInfo?
 
@@ -95,6 +99,13 @@ public protocol UDPSocket: AnyObject {
 }
 
 extension UDPSocket {
+    public func setSendBufferSize(_ bytes: Int) throws {
+        throw DJLinkError("This socket cannot configure its send buffer")
+    }
+
+    public func setReceiveBufferSize(_ bytes: Int) throws {
+        throw DJLinkError("This socket cannot configure its receive buffer")
+    }
     public var cancelsPendingReads: Bool { false }
 
     public func setBoundInterface(name: String) throws {

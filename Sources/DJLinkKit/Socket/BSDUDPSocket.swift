@@ -238,6 +238,19 @@ final class BSDUDPSocket: UDPSocket {
         setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &value, socklen_t(MemoryLayout<Int32>.size))
     }
 
+    func setSendBufferSize(_ bytes: Int) throws { try setBufferSize(bytes, option: SO_SNDBUF) }
+    func setReceiveBufferSize(_ bytes: Int) throws { try setBufferSize(bytes, option: SO_RCVBUF) }
+
+    private func setBufferSize(_ bytes: Int, option: Int32) throws {
+        guard bytes >= 0, let bufferBytes = Int32(exactly: bytes) else {
+            throw SystemCallError(syscall: "setsockopt", errno: EINVAL)
+        }
+        var size = bufferBytes
+        guard setsockopt(fd, SOL_SOCKET, option, &size, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
+            throw SystemCallError(syscall: "setsockopt", errno: Darwin.errno)
+        }
+    }
+
     func address() -> AddressInfo? {
         var addr = sockaddr_in()
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)

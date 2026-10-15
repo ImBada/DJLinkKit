@@ -40,3 +40,16 @@ git clone https://github.com/chrisle/metadata-connect.git    && git -C metadata-
 6. main에 합친다. PLAN §9에서 고친 곳과 겹치면 고친 쪽을 남긴다.
 
 새 차이에 펌웨어 분석 근거가 생기면 [PROVENANCE.md](PROVENANCE.md)에 더한다. 시험 대응이나 파일 이름이 늘거나 바뀌면 `docs/port-map.md`와 `scripts/port-status.sh`의 대응표도 같이 고친다.
+
+## Link Export 서버 원본
+
+- [chrisle/rbxport](https://github.com/chrisle/rbxport/tree/90bfb53da59c5b2c3f0b76101601f30a6b74ab2b): 1.8.0, `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`, GPL-2.0-or-later, Copyright (c) 2026 Chris Le.
+- `rbl-prolink`, `rbl-nfs`, `rbl-dbserver`, `rbl-link`와 서버에 필요한 ANLZ·메모리 모델을 별도 `DJLinkExport` 제품으로 옮긴다. 상세 범위·검증 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md), [대응표](docs/export-port-map.md).
+- 이 원본도 읽기만 하며 Rust/npm 스크립트를 실행하지 않는다. 픽스처는 이 고정 체크아웃에서 읽는다.
+
+```bash
+git clone https://github.com/chrisle/rbxport.git ~/src/upstream/rbxport
+git -C ~/src/upstream/rbxport checkout 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
+```
+
+- rbxport가 참조하는 Rust 클라이언트의 상태 파서는 [alphatheta-connect-rs `b54d9e9c53059f11e04f4de9898f4abae3b46480`](https://github.com/chrisle/alphatheta-connect-rs/tree/b54d9e9c53059f11e04f4de9898f4abae3b46480)에서 비교했다. 기존 Swift 클라이언트와 다른 패킷 길이·반올림 경계는 Export 쪽에서 대응한다.

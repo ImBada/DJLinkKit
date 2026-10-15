@@ -22,6 +22,7 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 | `DJLinkControl` | 제어 명령(곡 올리기, 재생 상태, Stagehand 설정). 공연 중인 장비를 움직인다 |
 | `DJLinkPassive` | libpcap으로 듣기만 하는 패시브 모드(BPF 권한 필요) |
 | `djlink` | 실기 확인용 CLI(아래 "CLI") |
+| `DJLinkExport` | rbxport 기반 Link Export 서버. **빌드·시험 통과, 실기 미확인**, GPL-2.0-or-later 별도 제품([범위·계획](docs/LINK-EXPORT-PLAN.md)) |
 
 ## 상표 고지
 
@@ -153,10 +154,14 @@ TCP 포트 조회 연결은 응답 직후 닫고, 닫힌 TCP는 장부에서 제
 
 ## 원본과 라이선스
 
-MIT 라이선스다. [LICENSE](LICENSE)는 원본 alphatheta-connect의 저작권 표시(Copyright (c) 2013 Evan Purkhiser)를 그대로 두고 이 프로젝트의 줄을 더했다.
+기존 `DJLinkKit`·`DJLinkControl`·`DJLinkPassive`·`djlink` 제품은 MIT, 별도 `DJLinkExport` 코드는 GPL-2.0-or-later다. [LICENSE](LICENSE)는 원본 alphatheta-connect의 저작권 표시(Copyright (c) 2013 Evan Purkhiser)를 그대로 두고 이 프로젝트의 줄을 더했다.
 
 - 원본 저장소와 고정 커밋: [UPSTREAM.md](UPSTREAM.md)
 - 제3자 고지: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 - 펌웨어 분석에 근거한 지식의 출처와 원칙: [PROVENANCE.md](PROVENANCE.md)
 - 원본과 다르게 옮긴 곳: [docs/port-notes.md](docs/port-notes.md)
 - 옮기는 규칙: [docs/porting-guide.md](docs/porting-guide.md)
+
+## Link Export
+
+Mac 라이브러리의 곡·메타데이터·분석을 CDJ에 내주는 `DJLinkExport`를 별도 제품으로 작성했다. 원본 rbxport 1.8.0 고정 커밋과 시험을 따른다. 빌드와 원본 대응 시험 469개 검증이 끝났고(원본 ignore 2개 유지), 전체 회귀 1,477개에서 실패가 없다. 실제 CDJ 확인은 아직이며 기존 CLI에서는 서버를 실행하지 않는다. [검증 기록](docs/LINK-EXPORT-VALIDATION.md)에 범위와 건너뛴 시험을 적었다. 서버 코드의 GPL-2.0-or-later 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), 세부 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md)과 [대응표](docs/export-port-map.md)에 있다.
