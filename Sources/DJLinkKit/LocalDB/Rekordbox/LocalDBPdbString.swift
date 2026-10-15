@@ -5,7 +5,7 @@ import Foundation
 public enum PdbStringKind: String, Sendable, Hashable, CaseIterable {
     /// 첫 바이트 홀수 `((n+1)<<1)+1` + ASCII n바이트(끝 표시 없음)
     case shortASCII
-    /// `40`, u16 본문 길이, ASCII
+    /// `40`, u16 길이(머리 4 포함), `00`, ASCII
     case longASCII
     /// `90`, u16 길이(머리 4 포함), `00`, UTF-16LE
     case utf16LE
@@ -37,10 +37,12 @@ public enum PdbStringDecoder {
         }
         let length = Int(row[offset + 1]) | Int(row[offset + 2]) << 8
         if first == 0x40 {
-            guard offset + 3 + length <= row.count else {
-                throw failure("long ASCII past row end")
+            // PLAN §9(#13): 원본 Kaitai 정의는 +3부터 length바이트를 읽었다. rekordbox가 쓴 실제 export(2026-10-16)는
+            // UTF-16처럼 length가 머리 4바이트를 포함하고 +4부터 본문이어서, 앞에 NUL이 붙고 다음 문자열 3바이트를 먹었다.
+            guard length >= 4, offset + length <= row.count else {
+                throw failure("long ASCII length \(length) past row end")
             }
-            return (ascii(row[(offset + 3)..<(offset + 3 + length)]), .longASCII, 3 + length)
+            return (ascii(row[(offset + 4)..<(offset + length)]), .longASCII, length)
         }
         guard length >= 4, offset + length <= row.count else {
             throw failure("long string length \(length) past row end")

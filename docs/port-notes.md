@@ -92,7 +92,7 @@
 - 메모리 ORM은 better-sqlite3 대신 SQLCipher C API로 같은 스키마·질의를 쓴다. undefined 바인딩은 [better-sqlite3-multiple-ciphers 12.11.1](https://github.com/m4heshd/better-sqlite3-multiple-ciphers/blob/v12.11.1/src/util/data.cpp)처럼 NULL이다(id 없는 PDB 재생 목록 항목은 SQLite가 번호를 매긴다, 무효한 날짜는 NULL → `new Date(null)`처럼 epoch).
 - `LocalDBRow.int`: Int로 표현할 수 없는 NaN·무한대·범위 밖 실수는 nil(원본 JS number는 오류 없음).
 - OneLibrary `dateAdded`를 읽지 못하면 원본은 Invalid Date, Swift는 nil.
-- 원본 버그 후보: 긴 ASCII 문자열(0x40)을 +3부터 u16 length만큼 읽는다(DJCrate는 +4부터 length-4). 실제 형식은 실기로 확인해야 한다.
+- 긴 ASCII 문자열(0x40): 원본 Kaitai 정의는 +3부터 u16 length만큼 읽는다. 1:1 기준선은 그대로 두었다. rekordbox가 쓴 실제 export(2026-10-16)는 length가 머리 4바이트를 포함하고 +4부터 본문이어서, main은 +4부터 length-4바이트를 읽는다(PLAN §9, #13, DJCrate와 같다).
 - 원본 버그 그대로: PDB 쪽 사슬이 자기 자신이나 지난 쪽을 가리키면 무한 루프에 빠진다(신뢰할 수 없는 입력에서 멈춤). main에서 고침(PLAN §9): 이제 오류를 낸다.
 - 원본 버그 그대로: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다(main도 그대로, PLAN §9 검토 필요) / 장치 제거 때 첫 DB 항목만 닫고 같은 장치 항목을 모두 지운다 / OneLibrary 열기에 실패하면 임시 파일을 지우지 않는다. 뒤의 둘은 main에서 고침(PLAN §9). 패시브도 같다(#23).
 - 원본 버그 그대로: `loadAnlz`가 PCOB·PCO2 태그마다 결과를 덮어써(`src/localdb/rekordbox/index.ts:76-83`) 핫 큐(1)·메모리(0) 목록 중 마지막 태그만 남는다. main에서 고침(PLAN §9). #22: 같은 종류 태그를 파일 순서대로 잇는다. 패시브도 같은 `loadAnlz`를 쓴다.
