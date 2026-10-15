@@ -1,0 +1,232 @@
+{
+  "commit": "90bfb53da59c5b2c3f0b76101601f30a6b74ab2b",
+  "tests": [
+    {
+      "group": "core",
+      "source": "rbl-prolink/tests/packets.rs",
+      "swift": "DJLinkExportProtocolTests/PacketsTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-nfs/tests/protocol.rs",
+      "swift": "DJLinkExportNFSTests/ProtocolTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/messages.rs",
+      "swift": "DJLinkExportDBServerTests/MessagesTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/session.rs",
+      "swift": "DJLinkExportDBServerTests/SessionTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/my_tags.rs",
+      "swift": "DJLinkExportDBServerTests/MyTagsTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/cue_writes.rs",
+      "swift": "DJLinkExportDBServerTests/CueWritesTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/release.rs",
+      "swift": "DJLinkExportDBServerTests/ReleaseTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/tests/corpus.rs",
+      "swift": "DJLinkExportDBServerTests/CorpusTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/src/item.rs",
+      "swift": "DJLinkExportDBServerTests/ItemTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-dbserver/src/filter.rs",
+      "swift": "DJLinkExportDBServerTests/FilterTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/join.rs",
+      "swift": "DJLinkExportTests/JoinTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/lib.rs",
+      "swift": "DJLinkExportTests/LinkSourceTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/catalog.rs",
+      "swift": "DJLinkExportTests/CatalogTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/files.rs",
+      "swift": "DJLinkExportTests/FilesTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/interface_mode.rs",
+      "swift": "DJLinkExportTests/InterfaceModeTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/src/beacon.rs",
+      "swift": "DJLinkExportTests/BeaconUnitTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/tests/rebind.rs",
+      "swift": "DJLinkExportTests/RebindTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/tests/link.rs",
+      "swift": "DJLinkExportTests/LinkTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/tests/blobs.rs",
+      "swift": "DJLinkExportTests/BlobsTests.swift"
+    },
+    {
+      "group": "core",
+      "source": "rbl-link/tests/beacon.rs",
+      "swift": "DJLinkExportTests/BeaconTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/src/lib.rs",
+      "swift": "DJLinkExportANLZTests/AnlzTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/src/cues.rs",
+      "swift": "DJLinkExportANLZTests/CuesTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/src/grid.rs",
+      "swift": "DJLinkExportANLZTests/GridTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/src/phrase.rs",
+      "swift": "DJLinkExportANLZTests/PhraseSourceTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/src/encode.rs",
+      "swift": "DJLinkExportANLZTests/EncodeTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/tests/parse.rs",
+      "swift": "DJLinkExportANLZTests/ParseTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/tests/phrase.rs",
+      "swift": "DJLinkExportANLZTests/PhraseTests.swift"
+    },
+    {
+      "group": "anlz",
+      "source": "rbl-anlz/tests/grid_save.rs",
+      "swift": "DJLinkExportANLZTests/GridSaveTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/strings.rs",
+      "swift": "DJLinkExportModelTests/StringsTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/key.rs",
+      "swift": "DJLinkExportModelTests/KeyTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/filter.rs",
+      "swift": "DJLinkExportModelTests/FilterSourceTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/related.rs",
+      "swift": "DJLinkExportModelTests/RelatedTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/view.rs",
+      "swift": "DJLinkExportModelTests/ViewSourceTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/src/smart.rs",
+      "swift": "DJLinkExportModelTests/SmartTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/views.rs",
+      "swift": "DJLinkExportModelTests/ViewsTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/categories.rs",
+      "swift": "DJLinkExportModelTests/CategoriesTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/smartlists.rs",
+      "swift": "DJLinkExportModelTests/SmartlistsTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/unanalysed.rs",
+      "swift": "DJLinkExportModelTests/UnanalysedTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/filter.rs",
+      "swift": "DJLinkExportModelTests/FilterTests.swift"
+    },
+    {
+      "group": "xml",
+      "source": "rbl-core/src/xml.rs",
+      "swift": "DJLinkExportModelTests/XmlTests.swift"
+    }
+  ],
+  "regressions": [
+    {
+      "swift": "DJLinkExportDBServerTests/TrackInfoCompatibilityTests.swift",
+      "names": [
+        "WAV 곡 정보가 실기에서 확인한 형식 ID를 보낸다",
+        "MP3 곡 정보와 형식 미지정 입력의 기존 값이 유지된다"
+      ]
+    },
+    {
+      "swift": "DJLinkExportDBServerTests/LegacyCueReadTests.swift",
+      "names": [
+        "레거시 큐 읽기가 메모리와 A·B·C 및 루프의 개수와 레코드를 반환한다",
+        "시간순으로 섞인 메모리 큐와 핫큐도 메모리 큐를 앞에, 핫큐를 뒤에 보낸다",
+        "빈 목록과 알 수 없는 곡도 빈 큐 응답으로 왕복한다",
+        "반복 조회가 요청한 곡 ID와 트랜잭션을 구분한다",
+        "잘못된 조회 인자는 읽기나 편집 없이 사용 불가 응답을 보낸다",
+        "프레임 반올림과 별개로 sidecar가 밀리초 위치를 보존한다"
+      ]
+    },
+    {
+      "swift": "DJLinkExportTests/LegacyCueClientTests.swift",
+      "names": [
+        "기존 클라이언트가 메모리 큐·A/B/C·루프를 가짜 TCP에서 읽는다",
+        "빈 레거시 큐 응답을 기존 클라이언트가 대기 없이 해석한다"
+      ]
+    }
+  ]
+}

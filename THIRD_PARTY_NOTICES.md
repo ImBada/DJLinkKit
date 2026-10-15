@@ -1,6 +1,6 @@
 # 제3자 고지
 
-DJLinkKit에 옮겨 오거나 포함하는 코드와 문서의 출처, 라이선스 원문이다. 원본 고정 커밋은 [UPSTREAM.md](UPSTREAM.md), 펌웨어 분석에 근거한 지식의 출처는 [PROVENANCE.md](PROVENANCE.md)에 있다.
+DJLinkKit에 옮겨 오거나 포함하는 코드와 문서의 출처, 라이선스 원문이다. 이 저장소 자체는 GPL-2.0-or-later이며([COPYRIGHT.md](COPYRIGHT.md)), 아래 MIT 등 제3자 코드의 저작권 표시와 허가 문구는 지우지 않고 보존한다. 원본 고정 커밋은 [UPSTREAM.md](UPSTREAM.md), 펌웨어 분석에 근거한 지식의 출처는 [PROVENANCE.md](PROVENANCE.md)에 있다.
 
 ## 1. 원본 TypeScript 저장소 (1:1 이식의 대상)
 
@@ -1290,4 +1290,40 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
+```
+
+## Link Export 서버: rbxport 1.8.0
+
+- 출처: [chrisle/rbxport](https://github.com/chrisle/rbxport/tree/90bfb53da59c5b2c3f0b76101601f30a6b74ab2b), 고정 커밋 `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`.
+- 저작권: Copyright (c) 2026 Chris Le.
+- 라이선스: GNU General Public License, version 2 or (at your option) any later version, **GPL-2.0-or-later**. [전문](LICENSES/GPL-2.0-or-later.txt)은 원본 `crates/rbl-deck/vendor/rubberband/COPYING`에서 옮겼다.
+- 적용 범위: `Sources/DJLinkExport*`, `Tests/DJLinkExport*`의 rbxport 이식 코드, 별도 Export 전송·시험 지원 코드. `rbl-prolink`, `rbl-nfs`, `rbl-dbserver`, `rbl-link`, `rbl-anlz`, 서버에 필요한 `rbl-index` 모델과 `rbl-db` details/export-info, `rbl-core/src/xml.rs`, 통합 시험의 `rbl-fakecdj` 요청 절차를 옮긴다.
+- 2026-10-15부터 저장소 전체가 GPL-2.0-or-later이다. 기존 MIT 코드는 위 MIT 고지를 유지한 채 GPL 결과물에 합쳐 배포한다. Export 코드를 MIT로 낸 적은 없다.
+- 공개 원본의 패킷 캡처·프로토콜 및 분석 알고리즘을 사용한다. 외부 `.ksy`·Deep Symmetry 문서 원문은 옮기지 않았다. 외부 캡처 픽스처는 고정 원본에서 읽으며 이 저장소에 복사하지 않았다.
+
+### 상태 파서 의미 대응: alphatheta-connect-rs
+
+- 출처: [chrisle/alphatheta-connect-rs](https://github.com/chrisle/alphatheta-connect-rs/tree/b54d9e9c53059f11e04f4de9898f4abae3b46480), MIT.
+- `src/status/utils.rs`의 길이 검사·pitch 반올림을 비교해 `DJLinkExport/Beacon.swift`의 어댑터에 반영한다. 기존 alphatheta-connect TypeScript 포트를 재사용한다. 원본의 MIT 라이선스·저작권 표시는 아래에 유지한다.
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2013 Evan Purkhiser
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```

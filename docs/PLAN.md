@@ -18,7 +18,7 @@
 **범위 밖**
 
 - `src/remote/`(HTTP 서버·Hue 조명)와 `src/utils/telemetry.ts`의 Sentry 보고. 원본 시험이 0개라 시험 수는 줄지 않는다. telemetry를 부르는 자리는 아무것도 하지 않는 함수로 둔다.
-- CDJ에 라이브러리를 내주는 쪽(Link Export 서버). 원본에 없다.
+- CDJ에 라이브러리를 내주는 쪽(Link Export 서버)은 이 TypeScript 원본 포트의 범위 밖이다. 사용자의 추가 요청으로 rbxport를 원본으로 한 [별도 서버 이식 단계](LINK-EXPORT-PLAN.md)를 진행한다.
 - 1:1을 마치기 전에 기능을 더하거나 버그를 고치는 일(§9).
 
 ## 2. 원본 (고정 커밋)
@@ -308,11 +308,26 @@ let package = Package(
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
 
+**Link Export 원본에서 유지하는 동작**(2026-10-15, 아직 수정하지 않음)
+
+- rbxport `Claim`의 첫/둘째 단계 선언 길이 44/50과 실제 인코딩 길이 42/48이 다르다. 원본 패킷·시험대로 보존한다.
+- 원본이 읽을 수 있는 mixer discovery subtype `0x03`도 다시 인코딩할 때는 `0x02`가 된다. 원본의 재인코딩 결과를 유지한다.
+- 스마트 목록의 `dateCreated` 조건은 원본처럼 `date_added` 컬럼을 읽고, 루트 마지막 XML 닫기 이름은 검사하지 않는다. 1:1 기준선 작성 중에는 의미를 바꾸지 않는다.
+
+**고친 것**(2026-10-15, Link Export 실기)
+
+- rbxport `rbl-dbserver/src/session.rs::track_info_rows`가 첫 항목 id를 1로 고정했다. CDJ-2000nexus가 WAV에도 MP3 디코더를 선택해 E-8305가 났다. 동일한 합성 WAV와 송수신 비교에서 이 id만 11로 바꾸자 정상 로드·재생·CUE 복귀를 확인했다. 이제 `TrackDetails.file_type`을 보내고, 0인 기존 Source는 기본값 1을 유지한다. 원본 대응 시험의 입력·기대값은 바꾸지 않고 실기 회귀 2개를 더했다. 원본 그대로인 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. [실기 기록](LINK-EXPORT-HARDWARE.md).
+- 남은 레거시 큐 목록 읽기 `0x2104`는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 기록했다. 원본에도 핸들러가 없으며, 기본 MP3/WAV 재생 성공을 큐 목록 복원 검증으로 간주하지 않는다.
+
+**고친 것·실기 확인**(2026-10-15, Link Export #20)
+
+- 원본 서버가 처리하지 않던 레거시 큐 목록 조회 `0x2104`를 기존 `usb_cue_reply`/`0x4702` 응답에 연결했다. 숫자 문맥·track ID를 검사하고, 읽기에서 편집 콜백을 호출하지 않는다. 메모리·A/B/C·루프·빈 목록과 기존 클라이언트 왕복 회귀 8개를 별도로 작성했다. 원본 대응 시험 469개는 변경하지 않았다. 실기(CDJ-2000nexus)에서 시간순으로 섞어 보낸 목록이 핫큐 A 버튼을 끄고 CALL ▶를 A로 보내 E-8302를 냈다. CDJ가 앞의 memory 개수만큼을 메모리 큐로 읽는 것으로 보여 읽기 응답을 메모리 큐 먼저, 핫큐 뒤로 정렬했고, 그 뒤 메모리 큐·루프·A/B/C 호출을 모두 확인했다. 첫 실기의 메모리 큐 소실은 수정 뒤 재현하지 못했다. [구현·검증 기록](LINK-EXPORT-LEGACY-CUES.md).
+
 ## 10. 라이선스·출처
 
 **LICENSE**
 
-- MIT로 한다. 원본 LICENSE의 저작권 표시("Copyright (c) 2013 Evan Purkhiser")와 허가 문구를 그대로 두고, 우리 저작권 줄을 더한다.
+- 2026-10-15 이후 **GPL-2.0-or-later**로 통일한다(`DJLinkExport`가 GPL인 rbxport의 파생물이기 때문). 원래는 MIT였고, 원본 LICENSE의 저작권 표시("Copyright (c) 2013 Evan Purkhiser")와 허가 문구는 `LICENSES/MIT.txt`에 그대로 보존한다. 저작권 범위는 `COPYRIGHT.md`에 있다.
 
 **THIRD_PARTY_NOTICES.md**
 

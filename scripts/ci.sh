@@ -7,7 +7,7 @@
 #   UPSTREAM_DIR  원본 세 저장소가 나란히 있는 부모 폴더 (기본값 ~/src/upstream, 받는 법은 UPSTREAM.md)
 #   --loopback    루프백(127.0.0.1) 통합 시험도 돌린다(DJLINK_LOOPBACK_TESTS=1). LAN에는 아무것도 보내지 않는다.
 #
-# 하는 일: swift test → port-status --strict(원본이 고정 커밋이 아니어도 실패). 앞이 실패해도 뒤는 돈다.
+# 하는 일: swift test → TypeScript/Rust 시험 이름 정적 대응(고정 커밋 포함). 앞이 실패해도 뒤는 돈다.
 # 종료 코드: 0 = 모두 통과, 1 = 하나라도 실패, 2 = 사용법 오류
 set -euo pipefail
 
@@ -30,6 +30,9 @@ DJLINK_LOOPBACK_TESTS="$LOOPBACK" swift test || failed+=("swift test")
 
 echo "== port-status"
 bash scripts/port-status.sh --strict || failed+=("port-status")
+
+echo "== export-port-status"
+python3 scripts/export-port-status.py --strict || failed+=("export-port-status")
 
 if [ ${#failed[@]} -gt 0 ]; then
   echo "실패: ${failed[*]}" >&2
