@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// 원본: crates/rbl-link/src/catalog.rs
+// 고정 커밋: 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
 import DJLinkExportANLZ
 import DJLinkExportDBServer
 import DJLinkExportModel
 import DJLinkExportProtocol
 import DJLinkKit
 import Darwin
-// SPDX-License-Identifier: GPL-2.0-or-later
-// 원본: crates/rbl-link/src/catalog.rs
-// 고정 커밋: 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
 import Foundation
 
 public enum KeyNotation: Equatable, Sendable { case classic, alphanumeric }
@@ -86,6 +86,7 @@ private struct LinkHistory {
 private func catalogAt<T>(_ values: [T], _ at: Int) -> T? { values.indices.contains(at) ? values[at] : nil }
 private func catalogLess(_ a: String, _ b: String) -> Bool { a.utf8.lexicographicallyPrecedes(b.utf8) }
 private let MAX_ARTWORK: UInt64 = 4 * 1024 * 1024
+private let MEDIUM_ARTWORK_SUFFIX = "_m"
 private let ANALYSIS_CACHE = 32
 private let QUERY_CACHE = 24
 private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
@@ -754,7 +755,7 @@ func date_prefix(_ year: UInt32, _ month: UInt32?, _ day: UInt32?) -> String {
 func medium_artwork(_ relative: String) -> String {
     let raw = Array(relative.utf8)
     guard let dot = raw.lastIndex(of: 46), !raw[dot...].contains(47), !raw[dot...].contains(92) else { return relative }
-    return String(decoding: raw[..<dot], as: UTF8.self) + "_m" + String(decoding: raw[dot...], as: UTF8.self)
+    return String(decoding: raw[..<dot], as: UTF8.self) + MEDIUM_ARTWORK_SUFFIX + String(decoding: raw[dot...], as: UTF8.self)
 }
 func resolve_under(_ share: String, _ relative: String) -> String? {
     let relative = String(String.UnicodeScalarView(relative.unicodeScalars.drop(while: { $0 == "/" || $0 == "\\" })))

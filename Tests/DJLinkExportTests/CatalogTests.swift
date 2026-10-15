@@ -1,9 +1,9 @@
-import DJLinkExportDBServer
-import DJLinkExportModel
-import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
 // 원본: crates/rbl-link/src/catalog.rs의 tests
 // 고정 커밋: 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
+import DJLinkExportDBServer
+import DJLinkExportModel
+import DJLinkKit
 import Testing
 
 @testable import DJLinkExport
