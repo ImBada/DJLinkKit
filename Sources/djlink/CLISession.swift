@@ -218,10 +218,11 @@ final class CLISession {
         if let name = options.iface { try lock(try resolveScope(named: name)) }
         configureNFS()
         output.log(.await, "Bringing up prolink network")
-        let config = NetworkConfig(logger: CLILogger(output: output, verbose: options.verbose))
+        let logger = CLILogger(output: output, verbose: options.verbose)
+        let config = NetworkConfig(logger: logger)
         let network = try await bringOnline(
             config, socketFactory: sockets, interfaceProvider: runtime.interfaceProvider, clock: runtime.clock,
-            dependencies: guardedNetworkDependencies())
+            dependencies: guardedNetworkDependencies(logger: logger))
         self.network = network
         try abort.check()
         output.log(.success, "Network online (listening on UDP \(ANNOUNCE_PORT)-\(STATUS_PORT))")
@@ -319,7 +320,7 @@ final class CLISession {
         configureNFSPathGuard { [self] device, _, path in try guardNFS(path, device: device) }
     }
 
-    func guardedNetworkDependencies() -> NetworkDependencies {
+    func guardedNetworkDependencies(logger: any Logger = noopLogger) -> NetworkDependencies {
         NetworkDependencies(
             makeRemoteDatabase: { [output] manager, host, factory in
                 RemoteDatabase(
@@ -333,7 +334,8 @@ final class CLISession {
                             "remotedb 질의 번호 \(id)번을 쓴다(장치 \(target)에 질의, announce 번호 \(host.device.id)번과 별개로 CDJ가 답하는 1~6 중에서 고른다)"
                         )
                         return id
-                    })
+                    },
+                    logger: logger)
             },
             makeLocalDatabase: { [self] host, manager, statusEmitter, preference, clock in
                 LocalDatabase(

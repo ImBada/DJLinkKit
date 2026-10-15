@@ -38,9 +38,10 @@ public final class PassiveRemoteDatabase {
         }
         let intro = Message(transactionId: 0xfffffffe, type: .introduce, args: [RemoteDBUInt32(virtualDeviceId)])
         try await socket.write(intro.buffer)
-        let resp = try await Message.fromStream(socket, .success, tx)
+        // 소개 요청과 같은 번호(0xfffffffe)로 답한다. 다른 번호의 메시지는 건너뛴다(PLAN §9, #46).
+        let resp = try await Message.fromStream(socket, .success, tx, expectedTransactionId: 0xfffffffe)
         guard resp.type == .success else { throw DJLinkError("Failed to introduce self to device ID: \(device.id)") }
-        connections[device.id] = Connection(device: device, socket: socket)
+        connections[device.id] = Connection(device: device, socket: socket, matchesTransactionIds: true)
         tx.finish()
     }
     public func disconnectFromDevice(_ device: Device) async {
@@ -59,6 +60,11 @@ public final class PassiveRemoteDatabase {
         let lock = deviceLocks[device.id] ?? AsyncMutex()
         deviceLocks[device.id] = lock
         await lock.acquire()
+        // PLAN §9(#47): 질의 시간 제한이 닫은 연결은 버리고 새로 연결한다(능동 `RemoteDatabase.get`과 같다).
+        if let closed = connections[deviceId], !closed.isOpen {
+            closed.close()
+            connections.removeValue(forKey: deviceId)
+        }
         var conn = connections[deviceId]
         if conn == nil {
             do {
