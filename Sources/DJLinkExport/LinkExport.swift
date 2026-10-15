@@ -5,6 +5,7 @@ import DJLinkExportProtocol
 import DJLinkExportSupport
 import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbxport/crates/rbl-link/src/lib.rs (90bfb53).
 import Darwin
 import Foundation

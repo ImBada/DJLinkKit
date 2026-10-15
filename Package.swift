@@ -9,7 +9,7 @@ let package = Package(
         .library(name: "DJLinkKit", targets: ["DJLinkKit"]),
         .library(name: "DJLinkControl", targets: ["DJLinkControl"]),
         .library(name: "DJLinkPassive", targets: ["DJLinkPassive"]),
-        // rbxport에서 옮기는 GPL-2.0-or-later 서버. 기존 MIT 제품과 별도로 선택한다.
+        // rbxport에서 옮기는 서버. 저장소 전체가 GPL-2.0-or-later다(COPYRIGHT.md).
         .library(name: "DJLinkExport", targets: ["DJLinkExport"]),
         .executable(name: "djlink", targets: ["djlink"]),
     ],

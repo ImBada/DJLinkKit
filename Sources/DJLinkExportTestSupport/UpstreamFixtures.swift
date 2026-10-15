@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본의 민감할 수 있는 캡처는 공개 저장소에 복사하지 않고 고정 원본에서 그대로 읽는다.
 import Foundation
 

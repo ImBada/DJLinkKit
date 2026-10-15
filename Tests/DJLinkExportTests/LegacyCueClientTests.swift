@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본 밖 회귀: 메모리 라이브러리 → 실제 서버 세션 → 기존 클라이언트의 레거시 큐 읽기.
 import DJLinkExportDBServer
 import DJLinkExportModel

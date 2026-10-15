@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // rbxport의 Arc<Atomic*> 공유 상태를 직렬 DJLinkActor 위의 참조로 옮긴다.
 import DJLinkKit
 

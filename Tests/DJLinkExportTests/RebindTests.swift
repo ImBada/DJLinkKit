@@ -2,6 +2,7 @@ import DJLinkExportTestSupport
 import DJLinkKit
 import DJLinkTestSupport
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbl-link/tests/rebind.rs. 루프백 bind는 가짜 전송으로 옮긴다.
 import Foundation
 import Testing

@@ -1,5 +1,6 @@
 import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // rbxport 서버 전송 경계: IPv4/IPv6 BSD UDP와 직렬 이벤트 전달.
 import Darwin
 @preconcurrency import Dispatch

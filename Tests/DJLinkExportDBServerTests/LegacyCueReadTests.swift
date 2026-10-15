@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본 밖 회귀: #20, 공개 클라이언트의 0x2104/0x4702 계약과 관측된 CDJ 요청.
 import DJLinkKit
 import Testing

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // rbxport Link Export 포트를 위한 전송 경계. 기존 MIT 클라이언트 소켓 API를 재사용한다.
 import DJLinkKit
 

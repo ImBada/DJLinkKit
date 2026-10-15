@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbxport/crates/rbl-index/src/file_time.rs
 // 고정 커밋: 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
 // 생성 시각만 읽는다. 실제 파일 읽기는 호출자가 이 API를 호출할 때만 일어난다.

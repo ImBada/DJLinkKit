@@ -1,5 +1,6 @@
 import DJLinkExportSupport
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본의 루프백 서버 시험을 실제 소켓 없이 같은 요청·응답으로 연결하는 가짜 전송 계층.
 import DJLinkKit
 import DJLinkTestSupport

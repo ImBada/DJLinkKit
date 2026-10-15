@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbxport/crates/rbl-link/src/join.rs (90bfb53). Instant는 주입 시계의 밀리초로 옮긴다.
 import DJLinkExportProtocol
 

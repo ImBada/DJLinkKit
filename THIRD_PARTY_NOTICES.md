@@ -1,6 +1,6 @@
 # 제3자 고지
 
-DJLinkKit에 옮겨 오거나 포함하는 코드와 문서의 출처, 라이선스 원문이다. 원본 고정 커밋은 [UPSTREAM.md](UPSTREAM.md), 펌웨어 분석에 근거한 지식의 출처는 [PROVENANCE.md](PROVENANCE.md)에 있다.
+DJLinkKit에 옮겨 오거나 포함하는 코드와 문서의 출처, 라이선스 원문이다. 이 저장소 자체는 GPL-2.0-or-later이며([COPYRIGHT.md](COPYRIGHT.md)), 아래 MIT 등 제3자 코드의 저작권 표시와 허가 문구는 지우지 않고 보존한다. 원본 고정 커밋은 [UPSTREAM.md](UPSTREAM.md), 펌웨어 분석에 근거한 지식의 출처는 [PROVENANCE.md](PROVENANCE.md)에 있다.
 
 ## 1. 원본 TypeScript 저장소 (1:1 이식의 대상)
 
@@ -1298,7 +1298,7 @@ IN THE SOFTWARE.
 - 저작권: Copyright (c) 2026 Chris Le.
 - 라이선스: GNU General Public License, version 2 or (at your option) any later version, **GPL-2.0-or-later**. [전문](LICENSES/GPL-2.0-or-later.txt)은 원본 `crates/rbl-deck/vendor/rubberband/COPYING`에서 옮겼다.
 - 적용 범위: `Sources/DJLinkExport*`, `Tests/DJLinkExport*`의 rbxport 이식 코드, 별도 Export 전송·시험 지원 코드. `rbl-prolink`, `rbl-nfs`, `rbl-dbserver`, `rbl-link`, `rbl-anlz`, 서버에 필요한 `rbl-index` 모델과 `rbl-db` details/export-info, `rbl-core/src/xml.rs`, 통합 시험의 `rbl-fakecdj` 요청 절차를 옮긴다.
-- 루트 MIT 라이선스는 기존 MIT 제품의 코드에 계속 적용한다. Export 코드를 MIT로 재라이선스하지 않는다. Export 제품은 GPL-2.0-or-later 코드와 MIT 클라이언트 의존성을 함께 포함한다.
+- 2026-10-15부터 저장소 전체가 GPL-2.0-or-later이다. 기존 MIT 코드는 위 MIT 고지를 유지한 채 GPL 결과물에 합쳐 배포한다. Export 코드를 MIT로 낸 적은 없다.
 - 공개 원본의 패킷 캡처·프로토콜 및 분석 알고리즘을 사용한다. 외부 `.ksy`·Deep Symmetry 문서 원문은 옮기지 않았다. 외부 캡처 픽스처는 고정 원본에서 읽으며 이 저장소에 복사하지 않았다.
 
 ### 상태 파서 의미 대응: alphatheta-connect-rs

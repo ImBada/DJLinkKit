@@ -22,7 +22,7 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 | `DJLinkControl` | 제어 명령(곡 올리기, 재생 상태, Stagehand 설정). 공연 중인 장비를 움직인다 |
 | `DJLinkPassive` | libpcap으로 듣기만 하는 패시브 모드(BPF 권한 필요) |
 | `djlink` | 실기 확인용 CLI(아래 "CLI") |
-| `DJLinkExport` | rbxport 기반 Link Export 서버. **빌드·시험 통과, CDJ-2000nexus 기본 실기 확인**, GPL-2.0-or-later 별도 제품([범위·계획](docs/LINK-EXPORT-PLAN.md)) |
+| `DJLinkExport` | rbxport 기반 Link Export 서버. **빌드·시험 통과, CDJ-2000nexus 기본 실기 확인**, GPL-2.0-or-later([범위·계획](docs/LINK-EXPORT-PLAN.md)) |
 
 ## 상표 고지
 
@@ -154,7 +154,7 @@ TCP 포트 조회 연결은 응답 직후 닫고, 닫힌 TCP는 장부에서 제
 
 ## 원본과 라이선스
 
-기존 `DJLinkKit`·`DJLinkControl`·`DJLinkPassive`·`djlink` 제품은 MIT, 별도 `DJLinkExport` 코드는 GPL-2.0-or-later다. [LICENSE](LICENSE)는 원본 alphatheta-connect의 저작권 표시(Copyright (c) 2013 Evan Purkhiser)를 그대로 두고 이 프로젝트의 줄을 더했다.
+이 저장소는 **GPL-2.0-or-later**다([LICENSE](LICENSE)). `DJLinkExport`가 GPL인 rbxport의 파생물이라 저장소 전체를 GPL로 통일했다. 원본 alphatheta-connect 등 MIT 코드의 원문과 저작권 표시(Copyright (c) 2013 Evan Purkhiser 등)는 [LICENSES/MIT.txt](LICENSES/MIT.txt)와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 그대로 두었고, 범위별 저작권은 [COPYRIGHT.md](COPYRIGHT.md)에 있다. 2026-10-15 이전에 공개된 커밋의 MIT 사본은 그때의 조건이 유지된다. 이 패키지를 링크해 배포하는 프로그램은 GPL 조건을 따라야 한다.
 
 - 원본 저장소와 고정 커밋: [UPSTREAM.md](UPSTREAM.md)
 - 제3자 고지: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)

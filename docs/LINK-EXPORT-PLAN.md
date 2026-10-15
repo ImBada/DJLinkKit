@@ -32,7 +32,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 
 ## 라이선스·출처
 
-rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 표시를 둔다. 원문은 [라이선스](../LICENSES/GPL-2.0-or-later.txt), 범위와 저작권 표시는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있다. 기존 MIT 클라이언트 제품과 별도 제품으로 선택한다. 공개 원본 코드만 옮기며 펌웨어·rekordbox 실행 파일을 직접 분석하지 않는다. 원본에 적힌 분석 근거는 [PROVENANCE.md](../PROVENANCE.md)에 기록한다.
+rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 표시를 둔다. 원문은 [라이선스](../LICENSES/GPL-2.0-or-later.txt), 범위와 저작권 표시는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있다. 저장소 전체가 GPL-2.0-or-later로 통일되었다([COPYRIGHT.md](../COPYRIGHT.md)). Export는 계속 별도 제품·타깃으로 선택한다. 공개 원본 코드만 옮기며 펌웨어·rekordbox 실행 파일을 직접 분석하지 않는다. 원본에 적힌 분석 근거는 [PROVENANCE.md](../PROVENANCE.md)에 기록한다.
 
 ## 이번 단계 기록
 

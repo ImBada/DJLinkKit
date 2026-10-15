@@ -327,7 +327,7 @@ let package = Package(
 
 **LICENSE**
 
-- MIT로 한다. 원본 LICENSE의 저작권 표시("Copyright (c) 2013 Evan Purkhiser")와 허가 문구를 그대로 두고, 우리 저작권 줄을 더한다.
+- 2026-10-15 이후 **GPL-2.0-or-later**로 통일한다(`DJLinkExport`가 GPL인 rbxport의 파생물이기 때문). 원래는 MIT였고, 원본 LICENSE의 저작권 표시("Copyright (c) 2013 Evan Purkhiser")와 허가 문구는 `LICENSES/MIT.txt`에 그대로 보존한다. 저작권 범위는 `COPYRIGHT.md`에 있다.
 
 **THIRD_PARTY_NOTICES.md**
 

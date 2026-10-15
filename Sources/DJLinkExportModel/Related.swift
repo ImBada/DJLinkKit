@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbxport/crates/rbl-index/src/related.rs
 // 고정 커밋: 90bfb53da59c5b2c3f0b76101601f30a6b74ab2b
 // 원본의 관련 키·반/두 배 템포·재생 이력 순위를 옮겼다.

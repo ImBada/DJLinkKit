@@ -5,6 +5,7 @@ import DJLinkExportTestSupport
 import DJLinkKit
 import DJLinkTestSupport
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본: rbl-db/src/fixture.rs, rbl-fakecdj/src/lib.rs의 서버 시험 준비 경로.
 import Foundation
 import Testing

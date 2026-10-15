@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
 // 원본에 없는 실기 회귀: CDJ-2000nexus의 0x2102/0x3000 왕복과 합성 음원 비교(2026-10-15).
 import DJLinkKit
 import Testing
