@@ -42,6 +42,7 @@ Linux는 지원하지 않는다.
 - **가상 CDJ 번호는 7 이상만 쓴다.** 1~6은 실제 플레이어가 쓰는 번호다. 겹치면 공연 중인 플레이어가 영향을 받을 수 있다.
 - 공연이나 리허설 중인 네트워크에서 돌리지 않는다. 시험용 스위치에 장비 한두 대만 묶어서 쓴다.
 - 같은 Mac에서 rekordbox나 rekordboxAgent가 켜져 있으면 쓰지 않는다. UDP 50000~50002를 잡으면 rekordbox LINK가 망가질 수 있다.
+- **Link Export(`DJLinkExport`)는 이 검사를 스스로 하지 않는다.** CLI(`djlink`)와 달리 서버를 띄우는 호스트 앱이 규칙을 지켜야 한다. 서버는 rekordbox처럼 17·18번(무선 41번)으로 참여하고, UDP 50000~50002, TCP 12523, portmap 50111, NFS 2049를 연다. 같은 Mac의 rekordbox·rekordboxAgent와 NFS 서버(`nfsd`)를 끄고, 시험용 네트워크에서 인터페이스를 지정해 띄운다. 자세한 규칙은 [docs/LINK-EXPORT-PLAN.md](docs/LINK-EXPORT-PLAN.md) "호스트 안전 규칙".
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 `DJLinkControl`에 따로 들어 있고, 공연 중인 장비를 움직인다. 필요한 곳에만 넣는다.
 
 ## 시험

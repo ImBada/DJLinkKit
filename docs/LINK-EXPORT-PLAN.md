@@ -42,6 +42,17 @@ rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 �
 
 실기에서는 LINK 목록·두 CDJ의 NFS 마운트·2번 CDJ의 MP3 로드/재생/CUE를 확인했다. WAV E-8305는 곡 정보의 디코더 선택 id가 1로 고정된 원본 동작 때문이었다. id=11의 단일 필드 비교로 WAV 로드/재생/CUE를 확인하고 실제 서버를 수정했다. 원본 1:1 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남기고 실기 회귀는 원본 대응 개수와 분리한다. [상세 실기 기록](LINK-EXPORT-HARDWARE.md). 레거시 큐 읽기는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 남겼다.
 
+## 호스트 안전 규칙
+
+`djlink` CLI의 안전 규칙(PLAN §11)은 CLI·앱 쪽 규칙이라 라이브러리에는 넣지 않았다. Link Export에는 아직 CLI가 없으므로, `LinkExport.start`를 부르는 호스트가 다음을 지킨다.
+
+- 같은 Mac에서 rekordbox·rekordboxAgent가 돌고 있으면 시작하지 않는다. 서버가 rekordbox와 같은 포트(UDP 50000~50002, TCP 12523, portmap 50111)를 잡는다. CLI의 검사(`checkRekordboxNotRunning`)는 `djlink` 타깃 안에 있어 아직 공개하지 않았다.
+- NFS는 2049를 연다. macOS NFS 서버(`nfsd`)가 켜져 있으면 겹친다.
+- 서버는 rekordbox 범위 번호(유선 17·18, 무선 41)로 참여하며 플레이어 번호(1~6)를 쓰지 않는다.
+- 공연이나 리허설 중인 네트워크에서 띄우지 않는다. 시험용 스위치의 인터페이스를 지정해 띄운다.
+- 공유할 폴더(`share_root`) 밖의 경로는 NFS가 거부한다. 개인 라이브러리를 공유할 때는 그 폴더 아래만 노출되는지 확인한다.
+- 실기 확인 도구는 저장소 밖에 둔다(합성 곡·합성 큐만 쓴다).
+
 ## #20 레거시 큐 조회 추가 구현
 
 `0x2104` 읽기 dispatch와 별도 자체 회귀 8개를 작성했다. 실기에서 시간순으로 섞은 큐 목록이 핫큐 A 버튼을 끄고 CALL ▶ 오류(E-8302)를 낸 것을 찾아 메모리 큐 먼저·핫큐 뒤로 순서를 고쳤고, 메모리 큐·루프·A/B/C 호출을 실제 CDJ에서 확인했다. [#20 구현·검증 기록](LINK-EXPORT-LEGACY-CUES.md).
