@@ -4,7 +4,7 @@
 
 ## 현재 선언 수 (정적)
 
-아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-15 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,509개가 모두 통과했다. `--loopback`에서는 Link Export 루프백 8개와 가드 시험이 통과하지만, DJLinkKit TCP 루프백 5개가 전체 실행에서만 시간 초과로 실패한다(따로 돌리면 통과, [#33](https://github.com/ImBada/DJLinkKit/issues/33)).
+아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-15 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,509개가 모두 통과했다. `scripts/ci.sh --loopback`은 기본 시험 뒤에 루프백 시험 16개(DJLinkKit 6, Link Export 루프백 8과 가드 2)만 따로 돌리며 모두 통과한다. `DJLINK_LOOPBACK_TESTS=1 swift test`로 한 번에 다 돌리면 같은 프로세스의 SQLCipher DB 열기가 `DJLinkActor`를 몇 초씩 막아 TCP 루프백 시험이 시간 초과로 실패할 수 있다([#33](https://github.com/ImBada/DJLinkKit/issues/33)).
 
 | 시험 대상 | 선언 | 원본 대응 | 자체 시험 |
 |---|---:|---:|---:|
