@@ -92,11 +92,34 @@ public final class LiveExportSocketFactory: ExportSocketFactory {
 
     public func createTCPConnection() throws -> any TCPConnection {
         try requireLiveProcess()
-        return try LiveSocketFactory.shared.createTCPConnection()
+        let connection = try LiveSocketFactory.shared.createTCPConnection()
+        // 시험 프로세스(루프백 시험)에서는 연결 목적지를 루프백으로 제한한다. 실제 앱에서는 그대로 쓴다.
+        return TestProcess.isRunning ? LoopbackOnlyTCPConnection(connection) : connection
     }
 
     public func createTCPListener() throws -> any TCPListener {
         try requireLiveProcess()
         return try BSDTCPListener()
     }
+}
+
+/// 시험 프로세스의 루프백 시험에서 쓰는 TCP 연결. 연결 목적지를 127.0.0.1·::1로 제한하고 나머지는 그대로 넘긴다.
+@DJLinkActor
+final class LoopbackOnlyTCPConnection: TCPConnection {
+    private let base: any TCPConnection
+    init(_ base: any TCPConnection) { self.base = base }
+    func connect(port: Int, host: String) async throws {
+        try ExportLiveSocketGuard.requireLoopbackDestinationInTests(host)
+        try await base.connect(port: port, host: host)
+    }
+    func write(_ data: [UInt8]) async throws { try await base.write(data) }
+    func read(_ size: Int?) async throws -> [UInt8]? { try await base.read(size) }
+    func setTimeout(_ milliseconds: Int, onTimeout: (@DJLinkActor () -> Void)?) {
+        base.setTimeout(milliseconds, onTimeout: onTimeout)
+    }
+    var isOpen: Bool { base.isOpen }
+    func setRequiredInterface(name: String) throws { try base.setRequiredInterface(name: name) }
+    func setConnectGuard(_ check: @escaping @DJLinkActor () throws -> Void) throws { try base.setConnectGuard(check) }
+    func setCloseHandler(_ handler: @escaping @DJLinkActor () -> Void) throws { try base.setCloseHandler(handler) }
+    func destroy(_ error: (any Error)?) { base.destroy(error) }
 }

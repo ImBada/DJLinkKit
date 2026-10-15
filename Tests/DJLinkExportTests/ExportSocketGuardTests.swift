@@ -15,7 +15,7 @@ struct ExportSocketGuardTests {
         #expect(throws: DJLinkError.self) { _ = try LiveExportSocketFactory.shared.createTCPConnection() }
     }
 
-    @Test("루프백 시험에서도 TCP는 루프백 밖 주소에 묶지 않고 UDP는 루프백 밖으로 보내지 않는다", .enabled(if: TestProcess.loopbackTestsEnabled))
+    @Test("루프백 시험에서도 루프백 밖으로 묶거나 연결하거나 보내지 않는다", .enabled(if: TestProcess.loopbackTestsEnabled))
     func refusesNonLoopbackBindAndSend() async throws {
         let tcp = try LiveExportSocketFactory.shared.createTCPListener()
         await #expect(throws: DJLinkError.self) { _ = try await tcp.bind(port: 0, address: "0.0.0.0") }
@@ -26,5 +26,8 @@ struct ExportSocketGuardTests {
         }
         #expect(error is DJLinkError)
         try await udpClose(udp)
+        let connection = try LiveExportSocketFactory.shared.createTCPConnection()
+        await #expect(throws: DJLinkError.self) { try await connection.connect(port: 9, host: "192.0.2.1") }
+        connection.destroy(nil)
     }
 }

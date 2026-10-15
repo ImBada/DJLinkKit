@@ -70,7 +70,7 @@
 
 루프백을 뺀 합계는 494개다(서버 core 321, ANLZ 78, 서버 메모리 모델 93, XML 스캐너 2). 루프백 8개를 더하면 원본 대응은 502개다. 모델 시험 파일 4개(25개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없었다(그날의 기록). 새 4개 파일의 `.disabled` 2개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`, 폴더 브라우저의 `a_folder_sorts_its_tracks_and_loose_files_by_creation_together`)는 서버 범위 밖이라 이름만 유지했다. `.disabled`는 이 둘과 Beacon 2개를 합쳐 4개다. `FileCreatedTests.swift`의 활성 시험 6개는 추가한 시점에는 구현 단계라 실행하지 않았고, 그 뒤 실행 결과는 아직 적지 않았다. [검증 기록](LINK-EXPORT-VALIDATION.md).
 
-`loopback` 구분 8개(`LoopbackTests.swift`)는 실제 127.0.0.1 소켓을 열기 때문에 `DJLINK_LOOPBACK_TESTS=1`(`scripts/ci.sh --loopback`)일 때만 실행하고, 기본 실행에서는 건너뛴다. 그래서 위 494개에 넣지 않고 따로 센다. Export 소켓 가드는 루프백 시험이 아니면 실제 소켓을 막고, 시험 프로세스에서는 127.0.0.1·::1 밖 주소에 묶는 것도 막는다(#28). 가짜 CDJ 클라이언트는 가짜 소켓 버스용 `ExportIntegrationSupport.swift`와 별개로 `FakeCdjClient.swift`에 둔다.
+`loopback` 구분 8개(`LoopbackTests.swift`)는 실제 127.0.0.1 소켓을 열기 때문에 `DJLINK_LOOPBACK_TESTS=1`(`scripts/ci.sh --loopback`)일 때만 실행하고, 기본 실행에서는 건너뛴다. 그래서 위 494개에 넣지 않고 따로 센다. Export 소켓 가드는 루프백 시험이 아니면 실제 소켓을 막고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다)(#28). 가짜 CDJ 클라이언트는 가짜 소켓 버스용 `ExportIntegrationSupport.swift`와 별개로 `FakeCdjClient.swift`에 둔다.
 
 ## 의존 범위의 제한
 

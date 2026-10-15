@@ -24,7 +24,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 4. 기존 시험 회귀까지 확인한 뒤 시험용 네트워크에서 실기 확인한다. 해당 Mac의 rekordbox·rekordboxAgent는 꺼져 있어야 하고 광고 번호는 7 이상이다.
 5. 커밋·푸시는 사용자가 요청했을 때만 한다.
 
-원본 통합 시험은 실제 소켓 대신 같은 TCP/UDP 바이트를 연결하는 가짜 전송을 주입한다. 단 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)는 `DJLINK_LOOPBACK_TESTS=1`일 때만 127.0.0.1의 실제 소켓으로 돈다. `LiveExportSocketFactory`는 시험 프로세스에서 이 환경 변수가 없으면 실제 소켓 생성을 금지하고, 있어도 127.0.0.1·::1 밖 주소에는 묶지 않는다(#28). 시험은 어느 경우에도 LAN에 아무것도 보내지 않는다. 시간은 주입한 시계를 사용하며 Rust `Instant`에 대응하는 기본 시계는 단조 시계다.
+원본 통합 시험은 실제 소켓 대신 같은 TCP/UDP 바이트를 연결하는 가짜 전송을 주입한다. 단 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)는 `DJLINK_LOOPBACK_TESTS=1`일 때만 127.0.0.1의 실제 소켓으로 돈다. `LiveExportSocketFactory`는 시험 프로세스에서 이 환경 변수가 없으면 실제 소켓 생성을 금지하고, 있어도 TCP는 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며 UDP는 127.0.0.1·::1로만 보낸다(#28). 시험은 어느 경우에도 LAN에 아무것도 보내지 않는다. 시간은 주입한 시계를 사용하며 Rust `Instant`에 대응하는 기본 시계는 단조 시계다.
 
 ## 픽스처
 

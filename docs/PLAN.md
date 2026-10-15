@@ -337,7 +337,7 @@ let package = Package(
 
 - 정렬 키(#24): 파일명·이름·앨범 메뉴의 정렬 비교자가 비교할 때마다 문자열을 접고 복원했다. 원본의 `sort_by_cached_key`처럼 행마다 키를 한 번만 만든다. 순서는 같다(UTF-8 바이트 순서, 동률은 행·밀집 id 순서). 자체 회귀 3개.
 - 스마트 목록 날짜(#25): `SmartDate.today`가 `Calendar.current`를 써서 일본력·불교력 등을 쓰는 Mac에서 연도가 달라졌다. 원본 chrono `Local`처럼 현지 시간대의 그레고리력 연월일을 쓴다. 자체 회귀 1개.
-- 실제 소켓 가드(#28): Export의 가드가 `DJLINK_LOOPBACK_TESTS`와 관계없이 시험 프로세스에서 늘 소켓을 막아 루프백 시험을 돌릴 수 없었다. DJLinkKit처럼 `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 127.0.0.1·::1 밖 주소에는 묶지 못하게 한다. 자체 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개를 더했다.
+- 실제 소켓 가드(#28): Export의 가드가 `DJLINK_LOOPBACK_TESTS`와 관계없이 시험 프로세스에서 늘 소켓을 막아 루프백 시험을 돌릴 수 없었다. DJLinkKit처럼 `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다). 자체 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개를 더했다.
 
 ## 10. 라이선스·출처
 
@@ -377,7 +377,7 @@ let package = Package(
 
 - 시험은 기본적으로 실제 소켓을 열지 않는다(원본 시험도 0개다). 예외는 아래 루프백 시험뿐이다.
 - 실제 소켓을 만드는 쪽(`SocketFactory.live`)은 시험 프로세스에서 부르면 바로 실패하게 한다. DJCrate의 `TestProcess`처럼 시험 프로세스를 알아본다.
-- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다(DJLinkKit 6개, Link Export 8개). Link Export의 실제 소켓 가드(`LiveExportSocketFactory`)도 같은 조건에서만 열고, 그때도 127.0.0.1·::1 밖 주소에는 묶지 못하게 한다(#28). 시험은 LAN에 아무것도 보내지 않는다.
+- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다(DJLinkKit 6개, Link Export 8개). Link Export의 실제 소켓 가드(`LiveExportSocketFactory`)도 같은 조건에서만 열고, 그때도 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다)(#28). 시험은 LAN에 아무것도 보내지 않는다.
 
 **실기와 CLI**
 

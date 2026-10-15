@@ -68,7 +68,7 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
 - TCP: `TCPConnection` 프로토콜(`Socket/TCPConnection.swift`).
 - 소켓을 만드는 형은 `SocketFactory`를 주입받는다(`LiveSocketFactory.shared`가 기본). 시험은 `FakeSocketFactory`·`FakeUDPSocket`.
 - 실제 소켓은 시험 프로세스에서 만들 수 없다(`TestProcess`). 시험은 LAN에 아무것도 보내지 않는다.
-  예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험(DJLinkKit 6개, `DJLinkExport` 8개)이다. 이 시험은 127.0.0.1에만 묶는다. Export는 소켓 가드가 시험 프로세스에서 127.0.0.1·::1 밖 주소를 막는다.
+  예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험(DJLinkKit 6개, `DJLinkExport` 8개)이다. 이 시험은 127.0.0.1에만 묶는다. Export는 소켓 가드가 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다).
 
 ## 6. 시험
 

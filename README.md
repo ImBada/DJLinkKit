@@ -52,15 +52,15 @@ swift test
 ```
 
 - 시험은 LAN에 아무것도 보내지 않는다. 시험 프로세스에서 실제 소켓을 만들면 바로 실패한다. DJLinkKit과 Link Export(`DJLinkExport`) 모두 같다.
-- 실제 소켓 구현만 따로 검사하는 루프백 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다. DJLinkKit의 6개(`LiveTCPConnectionLoopbackTests`)와 Link Export의 8개(`rbl-fakecdj/tests/loopback.rs` 대응)는 모두 127.0.0.1에만 묶는다. Link Export 소켓 가드는 루프백 시험이 아니면 소켓 생성을 막고, 시험 프로세스에서는 127.0.0.1·::1 밖 주소에 묶는 것도 막는다. 켜도 LAN에는 아무것도 나가지 않는다.
+- 실제 소켓 구현만 따로 검사하는 루프백 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다. DJLinkKit의 6개(`LiveTCPConnectionLoopbackTests`)와 Link Export의 8개(`rbl-fakecdj/tests/loopback.rs` 대응)는 모두 127.0.0.1에만 묶는다. Link Export 소켓 가드는 루프백 시험이 아니면 소켓 생성을 막고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다). 켜도 LAN에는 아무것도 나가지 않는다.
 
   ```bash
   DJLINK_LOOPBACK_TESTS=1 swift test
   ```
 
-- 조건이 맞을 때만 도는 시험은 선언 기준 27개다.
+- 조건이 맞을 때만 도는 시험은 선언 기준 28개다.
   - 루프백 켰을 때만 15개: DJLinkKit 6, Link Export 루프백 8, Link Export 소켓 가드 1.
-  - 루프백 껐을 때만 1개: Link Export 소켓 가드(실제 소켓을 거부하는지 확인). 가드 시험 2개는 서로 반대 조건이라 어느 쪽으로 돌려도 하나는 건너뛴다.
+  - 루프백 껐을 때만 2개: Link Export 소켓 가드와 DJLinkKit의 `live sockets are refused inside the test process`(실제 소켓을 거부하는지 확인). 반대 조건의 시험이 짝으로 있어 어느 쪽으로 돌려도 일부는 건너뛴다.
   - 실제 음원 파일이 있을 때만 5개: 앨범아트 통합.
   - 시험이 띄운 자식 프로세스 안에서만 2개: SQLCipher 동시 열기 도우미.
   - `.disabled` 4개: Link Export Beacon 2개(원본 `#[ignore]`, 실제 시간 창에 의존)와 서버 범위 밖 2개(디스크 캐시, 폴더 브라우저).

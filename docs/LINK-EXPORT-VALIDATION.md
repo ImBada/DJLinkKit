@@ -22,7 +22,7 @@
 
 - 원본 대응 1,124개는 TypeScript 계열 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)와 rbxport 502개(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)다. 루프백을 뺀 rbxport는 494개다.
 - 자체 시험 411개 중 Link Export 자체 회귀는 16개다(`export-test-map.json`의 `regressions`). 소켓 가드 2, WAV 곡 정보 2, 레거시 큐 8, 정렬 키 3, 날짜 1이다. 나머지 395개는 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 같은 DJLinkKit 계열 시험이다.
-- 조건부는 27개다. `DJLINK_LOOPBACK_TESTS=1`에서만 15개(DJLinkKit 6, Export 루프백 8, 소켓 가드 1), 꺼졌을 때만 1개(소켓 가드), 실제 음원이 있을 때만 5개(앨범아트), 자식 프로세스 안에서만 2개(SQLCipher 도우미), `.disabled` 4개(Beacon 2개는 원본 `#[ignore]`, 나머지 2개는 서버 범위 밖)다.
+- 조건부는 28개다. `DJLINK_LOOPBACK_TESTS=1`에서만 15개(DJLinkKit 6, Export 루프백 8, 소켓 가드 1), 꺼졌을 때만 2개(Export 소켓 가드, DJLinkKit 실제 소켓 거부), 실제 음원이 있을 때만 5개(앨범아트), 자식 프로세스 안에서만 2개(SQLCipher 도우미), `.disabled` 4개(Beacon 2개는 원본 `#[ignore]`, 나머지 2개는 서버 범위 밖)다.
 
 ## 결과 (2026-10-15 초기 검증)
 
@@ -90,5 +90,5 @@ git diff --check
 - #27: `rbl-index/tests/file_created.rs` 원본 시험 7개를 `FileCreatedTests.swift`로 옮겼다(1개 `.disabled`). 모델 대응이 86개에서 93개가 되어 원본 대응은 494개다.
 - #24: 파일명·이름·앨범 정렬 키를 행마다 한 번만 만든다. 순서는 같다. 자체 회귀 3개를 더했다.
 - #25: `SmartDate.today`가 현지 시간대의 그레고리력으로 계산한다(원본 chrono Local과 같다). 자체 회귀 1개를 더했다.
-- #28: Link Export 실제 소켓 가드가 `DJLINK_LOOPBACK_TESTS=1`일 때만 소켓을 허용하고, 시험 프로세스에서는 127.0.0.1·::1 밖 주소에 묶지 못하게 한다. 가드 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)를 더했다. 원본 대응은 502개가 된다.
+- #28: Link Export 실제 소켓 가드가 `DJLINK_LOOPBACK_TESTS=1`일 때만 소켓을 허용하고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다). 가드 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)를 더했다. 원본 대응은 502개가 된다.
 - `DJLinkExport*` 선언 수는 레거시 큐 회귀 시점의 479개에서 모델 시험 보강(+18, 497개), #27(+7), #24·#25 회귀(+4), #28 가드·루프백(+10)을 거쳐 518개가 되었다. `python3 scripts/export-port-status.py --strict`가 보는 대응(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)과 자체 회귀 16개의 이름·순서는 정적으로 일치한다.
