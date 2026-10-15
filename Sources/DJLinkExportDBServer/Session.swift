@@ -219,6 +219,16 @@ private enum Menu {
         return catalog.edit(op != 0 ? .saveCue(track: track, cue: cue) : .deleteCue(track: track, cue: cue))
             ? extended_cue_list(m, track) : refuse()
     }
+    // PLAN §9/#20: 조회는 기존 큐 목록 인코더만 사용하며 편집 콜백을 호출하지 않는다.
+    private func cue_list(_ m: Message) -> [Message] {
+        guard m.arguments.count >= 2, case .number = m.arguments[0],
+            case let .number(track) = m.arguments[1]
+        else { return Self.hot_cue_bank_unavailable(m) }
+        // 실기(CDJ-2000nexus, 2026-10-15): 시간순으로 섞어 보내면 앞의 memory 개수만큼을 메모리 큐로 읽어
+        // Hot Cue A가 메모리 목록에 들어가고 A 버튼이 꺼졌다. 메모리 큐를 먼저, 핫큐를 뒤에 보낸다.
+        let cues = catalog.usb_cues(track)
+        return Self.usb_cue_reply(m, cues.filter { $0.slot == 0 } + cues.filter { $0.slot != 0 })
+    }
     private func save_cue(_ m: Message) -> [Message] {
         guard m.arguments.count >= 5, case .number = m.arguments[0], case let .number(track) = m.arguments[1],
             case let .number(op) = m.arguments[2], case let .number(length) = m.arguments[3],
@@ -519,6 +529,7 @@ private enum Menu {
                 m, track, .beatGrid, kind.BEAT_GRID_REPLY, UInt32(UInt16(bitPattern: catalog.grid_offset(track))))
         case kind.VBR: return analysis(m, track, .vbr, kind.VBR_REPLY, nil)
         case kind.WAVEFORM_DETAIL: return analysis(m, track, .waveformDetail, kind.WAVEFORM_DETAIL_REPLY, nil)
+        case kind.CUES: return cue_list(m)
         case kind.EXTENDED_CUES: return extended_cue_list(m, track)
         case kind.ANLZ_TAG, kind.ANLZ_TAG_2EX:
             return analysis(
@@ -632,7 +643,7 @@ private enum Menu {
             }
             return header(position.flatMap { UInt32(exactly: $0) } ?? .max)
         case kind.ARTWORK, kind.CONTENT_ARTWORK, kind.WAVEFORM_PREVIEW, kind.BEAT_GRID, kind.VBR, kind.WAVEFORM_DETAIL,
-            kind.EXTENDED_CUES, kind.ANLZ_TAG, kind.ANLZ_TAG_2EX, kind.USER_INFO:
+            kind.CUES, kind.EXTENDED_CUES, kind.ANLZ_TAG, kind.ANLZ_TAG_2EX, kind.USER_INFO:
             return handle_blob(m)
         default: return handle_menu(m)
         }

@@ -79,3 +79,5 @@ Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공
 ## 원본 기준선 후 실기 회귀
 
 `port/rbxport-one-to-one` (`03d3371`)이 원본과 동일한 기준선이다. 현재 브랜치는 PLAN §9의 WAV 디코더 선택 id 수정과 `TrackInfoCompatibilityTests.swift` 2개를 더한다. 이 시험은 `export-test-map.json`의 `regressions`에 따로 기록하고 원본 대응 469개에 합치지 않는다. 수정 뒤 전체 CI는 등록 1,479개에서 실패 0이다. [실기 기록](LINK-EXPORT-HARDWARE.md).
+
+#20 레거시 큐 조회는 별도 자체 회귀 `LegacyCueReadTests.swift` 6개와 `LegacyCueClientTests.swift` 2개를 추가 작성했다. 원본 대응 469개는 그대로이며 자체 회귀는 총 10개다. 실기에서 찾은 큐 순서 문제(메모리 큐 먼저)를 고쳐 CDJ에서 확인했다. [#20 기록](LINK-EXPORT-LEGACY-CUES.md).

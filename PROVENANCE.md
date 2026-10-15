@@ -116,3 +116,7 @@ Deep Symmetry 문서·`.ksy` 원문은 복사하지 않는다. 원본 캡처는 
 ### Link Export 실기 추가 관측 (2026-10-15)
 
 CDJ-2000nexus와 합성 신호 WAV의 애플리케이션 TCP/UDP 송수신을 비교했다. `0x2102`/`0x3000` 곡 정보 첫 항목의 `arguments[1]`만 1에서 11로 바꾸자 E-8305가 사라지고 RIFF/PCM 읽기·재생·시작 위치 CUE 복귀가 됐다. 이 값을 `TrackDetails.file_type`에서 전달하는 수정과 별도 회귀 2개를 추가했다. `0x2f` 항목의 비교는 실패했으므로 그 항목의 의미는 새로 단정하지 않는다. 시스템 pcap·펌웨어·rekordbox 실행 파일 분석은 하지 않았다. 원본과 같은 기준선 `03d3371`은 별도 브랜치에 남긴다. 상세 증거·범위·한계는 [실기 기록](docs/LINK-EXPORT-HARDWARE.md)에 있다.
+
+### 레거시 큐 읽기 계약 연결 (#20, 실기 확인)
+
+기존 MIT alphatheta-connect 고정 커밋 `7496991060a38951c2119db13c26b3da7c075bfa`의 `src/remotedb/message/types.ts`·`queries.ts`와 이식된 클라이언트 응답 파서가 정의한 `0x2104`/`0x4702` 읽기 계약을 사용한다. GPL rbxport의 기존 `usb_cue_reply` 레코드·sidecar 생성기를 재사용해 빠진 조회 dispatch를 더했다. 이전 실기의 요청 문맥은 합성 데이터 회귀의 입력으로 썼다. 추가 회귀 7개와 전체 CI는 통과했고 CDJ의 실제 요청·응답까지 확인했다. 화면·버튼 확인 결과는 [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 구분한다. 펌웨어·rekordbox 실행 파일 분석은 하지 않았다.

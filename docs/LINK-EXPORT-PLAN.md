@@ -41,3 +41,7 @@ rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 �
 공유 파일 변경: `Package.swift`의 별도 제품·타깃, 기존 `UDPSocket`/`BSDUDPSocket`의 서버용 send/receive 버퍼 옵션, `scripts/ci.sh`의 Export 정적 대응 검사를 추가했다. 기존 CLI가 서버를 실행하지는 않는다.
 
 실기에서는 LINK 목록·두 CDJ의 NFS 마운트·2번 CDJ의 MP3 로드/재생/CUE를 확인했다. WAV E-8305는 곡 정보의 디코더 선택 id가 1로 고정된 원본 동작 때문이었다. id=11의 단일 필드 비교로 WAV 로드/재생/CUE를 확인하고 실제 서버를 수정했다. 원본 1:1 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남기고 실기 회귀는 원본 대응 개수와 분리한다. [상세 실기 기록](LINK-EXPORT-HARDWARE.md). 레거시 큐 읽기는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 남겼다.
+
+## #20 레거시 큐 조회 추가 구현
+
+`0x2104` 읽기 dispatch와 별도 자체 회귀 8개를 작성했다. 실기에서 시간순으로 섞은 큐 목록이 핫큐 A 버튼을 끄고 CALL ▶ 오류(E-8302)를 낸 것을 찾아 메모리 큐 먼저·핫큐 뒤로 순서를 고쳤고, 메모리 큐·루프·A/B/C 호출을 실제 CDJ에서 확인했다. [#20 구현·검증 기록](LINK-EXPORT-LEGACY-CUES.md).

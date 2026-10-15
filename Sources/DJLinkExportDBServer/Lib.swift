@@ -68,6 +68,8 @@ public enum kind {
     public static let CONTENT_ARTWORK: UInt16 = 0x2103
     public static let WAVEFORM_PREVIEW: UInt16 = 0x2004
     public static let SAVE_WAVEFORM: UInt16 = 0x2005
+    // PLAN §9/#20: 공개 alphatheta-connect 클라이언트와 CDJ-2000nexus가 쓰는 레거시 큐 읽기.
+    public static let CUES: UInt16 = 0x2104
     public static let TRACK_INFO: UInt16 = 0x2102
     public static let BEAT_GRID: UInt16 = 0x2204
     public static let SAVE_GRID_OFFSET: UInt16 = 0x2605
@@ -116,6 +118,7 @@ public enum kind {
     public static let VBR_REPLY: UInt16 = 0x4502
     public static let BEAT_GRID_REPLY: UInt16 = 0x4602
     public static let HOT_CUE_BANK_REPLY: UInt16 = 0x4702
+    public static let CUES_REPLY: UInt16 = HOT_CUE_BANK_REPLY
     public static let REKORDBOX_MOBILE_REPLY: UInt16 = 0x4b02
     public static let WAVEFORM_DETAIL_REPLY: UInt16 = 0x4a02
     public static let USER_INFO_REPLY: UInt16 = 0x4d02
@@ -191,6 +194,7 @@ public enum kind {
         case GRID_OFFSET: return "grid offset"
         case VBR: return "VBR"
         case WAVEFORM_DETAIL: return "waveform detail"
+        case CUES: return "cues"
         case EXTENDED_CUES: return "extended cues"
         case ANLZ_TAG: return "anlz tag (EXT)"
         case ANLZ_TAG_2EX: return "anlz tag (2EX)"
