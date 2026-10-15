@@ -61,15 +61,17 @@
     `withRetry(sleep:)`의 기본 nil은 원본 시계 sleep이며 CLI RPC에서만 취소 가능한 대기를 주입한다.
     원본 `udpRead`는 바꾸지 않는다.
 
-- CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 `NWPathMonitor.availableInterfaces`에서 이름을 찾고 `NWParameters.requiredInterface`를 설정한다.
-    찾지 못하면 TCP 연결을 시작하지 않는다.
+- CLI 안전을 위한 추가(기본값은 원본 동작): `TCPConnection.setRequiredInterface(name:)`를 호출하면 `LiveTCPConnection`이 그 인터페이스의 IPv4 주소를 `NWParameters.requiredLocalEndpoint`로 지정해 연결한다.
+    주소는 연결할 곳과 같은 서브넷에 있는 것을 먼저 고르고, 없으면 첫 IPv4 주소를 쓴다.
+    인터페이스가 없거나 IPv4 주소가 없으면 TCP 연결을 시작하지 않는다.
+    연결된 뒤 `currentPath.availableInterfaces`에 그 이름이 없으면 끊고 `connect`를 실패시킨다(실패하면 막는 쪽).
+    그래서 Mac 자신의 인터페이스 주소로 연결하면 경로가 `lo0`이라 거부된다. 인터페이스를 지정한 IPv6 목적지도 IPv4 로컬 주소와 맞지 않아 연결되지 않는다(CDJ는 IPv4만 쓴다).
+    #40: 예전에는 `NWPathMonitor.availableInterfaces`에서 이름을 찾아 `requiredInterface`로 묶었다. 그런데 macOS는 기본 경로만 보여 주므로, 라우터 없는 링크 로컬망(169.254/16)의 인터페이스를 찾지 못해 remotedb 연결이 늘 실패했다(2026-10-16 실기).
     `djlink` 소켓 공장은 포트 조회와 DB 연결 모두에 적용한다.
     미호출 시 원본처럼 라우팅한다.
-    `setConnectGuard`는 인터페이스 해석을 기다린 뒤 실제 `NWConnection` 생성 직전에도 CLI 중단 플래그를 검사한다.
+    `setConnectGuard`는 인터페이스 주소를 찾은 뒤 실제 `NWConnection` 생성 직전에 CLI 중단 플래그를 검사한다.
     기본 미설정은 검사하지 않는다.
-    `destroy`는 인터페이스 해석 대기(`NWPathMonitor`)도 바로 풀고 감시·타이머를 거둔다(3초 타이머를 기다리지 않는다).
-    해석 중에는 `destroy` 오류(없으면 "Socket closed")로 `connect`가 실패한다.
-    `startsPathMonitor`는 시험이 소켓·감시 없이 대기 상태만 만들려고 끄는 이음매이며 기본은 켜짐이다.
+    `interfaceProvider`는 시험이 인터페이스 목록을 바꿔 끼우는 이음매이며 기본은 `getifaddrs`다.
 
 - NFS 경로 시험 입력의 `Users/chris/...`를 `Users/example/...`로 바꿨다(개인 이름 정리, 경로 해석 결과의 모양은 같다).
 

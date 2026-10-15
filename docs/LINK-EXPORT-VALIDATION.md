@@ -4,11 +4,11 @@
 
 ## 현재 선언 수 (정적)
 
-아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-16 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,510개가 모두 통과했다. `scripts/ci.sh --loopback`은 기본 시험 뒤에 루프백 시험 16개(DJLinkKit 6, Link Export 루프백 8과 가드 2)만 따로 돌리며 모두 통과한다. `DJLINK_LOOPBACK_TESTS=1 swift test`로 한 번에 다 돌리면 같은 프로세스의 SQLCipher DB 열기가 `DJLinkActor`를 몇 초씩 막아 TCP 루프백 시험이 시간 초과로 실패할 수 있다([#33](https://github.com/ImBada/DJLinkKit/issues/33)).
+아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-16 기본 실행(`scripts/ci.sh`)에서는 28개를 건너뛰고 1,511개가 모두 통과했다. `scripts/ci.sh --loopback`은 기본 시험 뒤에 루프백 시험 18개(DJLinkKit 8, Link Export 루프백 8과 가드 2)만 따로 돌리며 모두 통과한다. `DJLINK_LOOPBACK_TESTS=1 swift test`로 한 번에 다 돌리면 같은 프로세스의 SQLCipher DB 열기가 `DJLinkActor`를 몇 초씩 막아 TCP 루프백 시험이 시간 초과로 실패할 수 있다([#33](https://github.com/ImBada/DJLinkKit/issues/33)).
 
 | 시험 대상 | 선언 | 원본 대응 | 자체 시험 |
 |---|---:|---:|---:|
-| DJLinkKitTests | 760 | 580 | 180 |
+| DJLinkKitTests | 763 | 580 | 183 |
 | DJLinkControlTests | 18 | 11 | 7 |
 | DJLinkPassiveTests | 59 | 31 | 28 |
 | djlinkTests (CLI) | 180 | 0 | 180 |
@@ -18,11 +18,11 @@
 | DJLinkExportModelTests | 97 | 95 (모델 93, XML 2) | 2 |
 | DJLinkExportANLZTests | 78 | 78 | 0 |
 | DJLinkExportTests | 119 | 113 (rbl-link 105, 루프백 8) | 6 |
-| **합계** | **1,536** | **1,124** | **412** |
+| **합계** | **1,539** | **1,124** | **415** |
 
 - 원본 대응 1,124개는 TypeScript 계열 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)와 rbxport 502개(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)다. 루프백을 뺀 rbxport는 494개다.
-- 자체 시험 412개 중 Link Export 자체 회귀는 17개다(`export-test-map.json`의 `regressions`). 소켓 가드 2, WAV 곡 정보 2, 레거시 큐 9, 정렬 키 3, 날짜 1이다. 나머지 395개는 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 같은 DJLinkKit 계열 시험이다.
-- 조건부는 28개다. `DJLINK_LOOPBACK_TESTS=1`에서만 15개(DJLinkKit 6, Export 루프백 8, 소켓 가드 1), 꺼졌을 때만 2개(Export 소켓 가드, DJLinkKit 실제 소켓 거부), 실제 음원이 있을 때만 5개(앨범아트), 자식 프로세스 안에서만 2개(SQLCipher 도우미), `.disabled` 4개(Beacon 2개는 원본 `#[ignore]`, 나머지 2개는 서버 범위 밖)다.
+- 자체 시험 415개 중 Link Export 자체 회귀는 17개다(`export-test-map.json`의 `regressions`). 소켓 가드 2, WAV 곡 정보 2, 레거시 큐 9, 정렬 키 3, 날짜 1이다. 나머지 398개는 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 같은 DJLinkKit 계열 시험이다.
+- 조건부는 30개다. `DJLINK_LOOPBACK_TESTS=1`에서만 17개(DJLinkKit 8, Export 루프백 8, 소켓 가드 1), 꺼졌을 때만 2개(Export 소켓 가드, DJLinkKit 실제 소켓 거부), 실제 음원이 있을 때만 5개(앨범아트), 자식 프로세스 안에서만 2개(SQLCipher 도우미), `.disabled` 4개(Beacon 2개는 원본 `#[ignore]`, 나머지 2개는 서버 범위 밖)다.
 
 ## 결과 (2026-10-15 초기 검증)
 
