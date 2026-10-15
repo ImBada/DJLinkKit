@@ -314,6 +314,11 @@ let package = Package(
 - 원본이 읽을 수 있는 mixer discovery subtype `0x03`도 다시 인코딩할 때는 `0x02`가 된다. 원본의 재인코딩 결과를 유지한다.
 - 스마트 목록의 `dateCreated` 조건은 원본처럼 `date_added` 컬럼을 읽고, 루트 마지막 XML 닫기 이름은 검사하지 않는다. 1:1 기준선 작성 중에는 의미를 바꾸지 않는다.
 
+**고친 것**(2026-10-15, Link Export 실기)
+
+- rbxport `rbl-dbserver/src/session.rs::track_info_rows`가 첫 항목 id를 1로 고정했다. CDJ-2000nexus가 WAV에도 MP3 디코더를 선택해 E-8305가 났다. 동일한 합성 WAV와 송수신 비교에서 이 id만 11로 바꾸자 정상 로드·재생·CUE 복귀를 확인했다. 이제 `TrackDetails.file_type`을 보내고, 0인 기존 Source는 기본값 1을 유지한다. 원본 대응 시험의 입력·기대값은 바꾸지 않고 실기 회귀 2개를 더했다. 원본 그대로인 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. [실기 기록](LINK-EXPORT-HARDWARE.md).
+- 남은 레거시 큐 목록 읽기 `0x2104`는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 기록했다. 원본에도 핸들러가 없으며, 기본 MP3/WAV 재생 성공을 큐 목록 복원 검증으로 간주하지 않는다.
+
 ## 10. 라이선스·출처
 
 **LICENSE**

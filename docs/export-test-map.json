@@ -186,5 +186,14 @@
       "source": "rbl-core/src/xml.rs",
       "swift": "DJLinkExportModelTests/XmlTests.swift"
     }
+  ],
+  "regressions": [
+    {
+      "swift": "DJLinkExportDBServerTests/TrackInfoCompatibilityTests.swift",
+      "names": [
+        "WAV 곡 정보가 실기에서 확인한 형식 ID를 보낸다",
+        "MP3 곡 정보와 형식 미지정 입력의 기존 값이 유지된다"
+      ]
+    }
   ]
 }

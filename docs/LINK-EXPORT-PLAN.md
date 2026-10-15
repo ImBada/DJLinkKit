@@ -16,7 +16,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 
 ## 진행과 검증 관문
 
-현재 **빌드·대응 시험·전체 회귀 검증 완료, 실기 미확인**이다. 전체 1,477개 등록 시험에서 실패가 없고 15개는 조건에 따라 건너뛰었다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다. 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
+현재 **빌드·대응 시험·전체 회귀 검증 및 CDJ-2000nexus 기본 MP3/WAV 실기 확인 완료**이다. 실기 회귀 2개를 추가한 전체 1,479개 등록 시험에서 실패가 없고 15개는 조건에 따라 건너뛰었다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다. 파일별 상태는 [export-port-map.md](export-port-map.md)에 기록한다.
 
 1. 원본 시험 파일 하나를 Swift 파일 하나로 대응하고 입력·기대값을 유지한다. Rust 시험 함수 이름을 `@Test("함수 이름")`으로 유지한다.
 2. 코드를 옮긴다. 원본 버그는 그대로 두고 개선 제안은 PLAN §9에 기록한다.
@@ -39,3 +39,5 @@ rbxport 코드는 GPL-2.0-or-later이며 새 Export 타깃과 시험에 해당 �
 2026-10-15: 서버 코드·원본 대응 시험 469개(core 321, ANLZ 78, 모델 68, XML 2)를 작성했다. 파일별 이름·순서의 strict 정적 대조와 Swift 소스 서식 정리를 수행했다. 사용자의 이번 단계 “구현 완료” 신호 뒤 빌드·대응 시험·전체 로컬 CI를 실행해 통과했다. Export 등록 시험 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 실제 소켓·장비 조작·커밋·푸시는 실행하지 않았다. 상세 결과는 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다.
 
 공유 파일 변경: `Package.swift`의 별도 제품·타깃, 기존 `UDPSocket`/`BSDUDPSocket`의 서버용 send/receive 버퍼 옵션, `scripts/ci.sh`의 Export 정적 대응 검사를 추가했다. 기존 CLI가 서버를 실행하지는 않는다.
+
+실기에서는 LINK 목록·두 CDJ의 NFS 마운트·2번 CDJ의 MP3 로드/재생/CUE를 확인했다. WAV E-8305는 곡 정보의 디코더 선택 id가 1로 고정된 원본 동작 때문이었다. id=11의 단일 필드 비교로 WAV 로드/재생/CUE를 확인하고 실제 서버를 수정했다. 원본 1:1 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남기고 실기 회귀는 원본 대응 개수와 분리한다. [상세 실기 기록](LINK-EXPORT-HARDWARE.md). 레거시 큐 읽기는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 남겼다.

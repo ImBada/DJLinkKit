@@ -1,6 +1,6 @@
 # Link Export 파일·시험 대응
 
-고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 상태는 **빌드·대응 시험·전체 로컬 CI 통과, 실기 미확인**이다. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 실행한다. 코드나 시험 본문을 실행하지 않는 검사다.
+고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 상태는 **빌드·대응 시험·전체 로컬 CI 통과, CDJ-2000nexus 기본 MP3/WAV 실기 확인**이다. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 실행한다. 코드나 시험 본문을 실행하지 않는 검사다.
 
 ## 서버 소스
 
@@ -75,3 +75,7 @@
 Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공유 셀·잠금, 주입 소켓/시계로 옮긴다. `Instant`의 경과 시간은 단조 시계로 유지한다. OS UDP 옵션·TCP keepalive·즉시 재바인딩을 위한 해제 대기는 실제 전송 경계에서 처리한다. 시험은 실제 TCP/UDP listen/connect를 하지 않는다.
 
 원본의 병렬 색인/파일 메타데이터 구축은 Swift에서 같은 행 순서와 결과로 직렬 수행한다. 실제 처리량·지연은 실기 확인 전이다. 기존 MIT 클라이언트의 수신 상태 파서와 Rust 파서의 다른 길이·반올림 경계는 Export 어댑터에서 처리한다.
+
+## 원본 기준선 후 실기 회귀
+
+`port/rbxport-one-to-one` (`03d3371`)이 원본과 동일한 기준선이다. 현재 브랜치는 PLAN §9의 WAV 디코더 선택 id 수정과 `TrackInfoCompatibilityTests.swift` 2개를 더한다. 이 시험은 `export-test-map.json`의 `regressions`에 따로 기록하고 원본 대응 469개에 합치지 않는다. 수정 뒤 전체 CI는 등록 1,479개에서 실패 0이다. [실기 기록](LINK-EXPORT-HARDWARE.md).

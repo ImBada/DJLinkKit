@@ -37,10 +37,23 @@ for item in manifest['tests']:
     counts[item['group']] = counts.get(item['group'], 0) + len(original)
     seen.add(target.resolve())
     print(f'{"일치" if original == translated else "불일치"}: {item["source"]}: {len(original)} → {len(translated)}')
+regression_count = 0
+for item in manifest.get('regressions', []):
+    target = project / 'Tests' / item['swift']
+    try:
+        names = re.findall(r'@Test\s*\(\s*"([^"\n]+)"', target.read_text())
+    except OSError as error:
+        errors.append(str(error))
+        continue
+    if names != item['names']:
+        errors.append(f'자체 회귀 시험 목록 불일치: {item["swift"]}')
+    regression_count += len(names)
+    seen.add(target.resolve())
 for target in (project / 'Tests').glob('DJLinkExport*Tests/*.swift'):
     if re.search(r'@Test\(', target.read_text()) and target.resolve() not in seen:
         errors.append(f'대응표에 없는 시험 파일: {target.relative_to(project)}')
 print('정적 시험 대응 합계:', ', '.join(f'{group}={count}' for group, count in counts.items()))
+print('별도 실기 회귀:', regression_count)
 for error in errors:
     print('오류:', error, file=sys.stderr)
 if errors and args.strict:

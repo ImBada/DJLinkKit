@@ -112,3 +112,7 @@ PLAN에 적힌 줄 번호는 실제와 조금 달랐다. 아래는 고정 커밋
 | `alphatheta-connect-rs/src/status/utils.rs` @ `b54d9e9c53059f11e04f4de9898f4abae3b46480` | MIT 공개 클라이언트 상태 파서의 패킷 길이 및 반올림 규칙 | `DJLinkExport/Beacon`의 기존 Swift 클라이언트 파서 어댑터 |
 
 Deep Symmetry 문서·`.ksy` 원문은 복사하지 않는다. 원본 캡처는 외부 고정 체크아웃에서 읽어 시험하고 공개 저장소에 복사하지 않는다. 이번 서버 실기 결과는 아직 없다.
+
+### Link Export 실기 추가 관측 (2026-10-15)
+
+CDJ-2000nexus와 합성 신호 WAV의 애플리케이션 TCP/UDP 송수신을 비교했다. `0x2102`/`0x3000` 곡 정보 첫 항목의 `arguments[1]`만 1에서 11로 바꾸자 E-8305가 사라지고 RIFF/PCM 읽기·재생·시작 위치 CUE 복귀가 됐다. 이 값을 `TrackDetails.file_type`에서 전달하는 수정과 별도 회귀 2개를 추가했다. `0x2f` 항목의 비교는 실패했으므로 그 항목의 의미는 새로 단정하지 않는다. 시스템 pcap·펌웨어·rekordbox 실행 파일 분석은 하지 않았다. 원본과 같은 기준선 `03d3371`은 별도 브랜치에 남긴다. 상세 증거·범위·한계는 [실기 기록](docs/LINK-EXPORT-HARDWARE.md)에 있다.

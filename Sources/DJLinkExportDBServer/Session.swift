@@ -778,9 +778,12 @@ func delivery_rows(_ t: TrackDetails) -> [Item] {
     ]
 }
 func track_info_rows(_ t: TrackDetails) -> [Item] {
+    // PLAN §9: 첫 항목의 id는 디코더 선택 값이다. 실기에서 1은 MP3, 11은 WAV로 확인했다.
+    // 형식이 없는 기존 Source/원본 시험 입력은 기존 기본값 1을 유지한다.
     [
         Item(
-            a: 1, id: 1, item_type: item_type.TRACK, e: 0x100, key: t.row.key, art: t.row.key_id, text3: t.row.key_name,
+            a: 1, id: t.file_type == 0 ? 1 : t.file_type, item_type: item_type.TRACK, e: 0x100, key: t.row.key,
+            art: t.row.key_id, text3: t.row.key_name,
             f: t.row.bpm_x100), .line(0, t.duration_s, "", item_type.DURATION),
         .line(0, t.row.bpm_x100, "", item_type.TEMPO), .line(0, t.row.id, t.comment, item_type.COMMENT),
         .line(t.file_size, t.row.id, t.path, item_type.PATH), .line(0, 1, "", item_type.INFO_UNKNOWN),

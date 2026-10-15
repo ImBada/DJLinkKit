@@ -22,7 +22,7 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 | `DJLinkControl` | 제어 명령(곡 올리기, 재생 상태, Stagehand 설정). 공연 중인 장비를 움직인다 |
 | `DJLinkPassive` | libpcap으로 듣기만 하는 패시브 모드(BPF 권한 필요) |
 | `djlink` | 실기 확인용 CLI(아래 "CLI") |
-| `DJLinkExport` | rbxport 기반 Link Export 서버. **빌드·시험 통과, 실기 미확인**, GPL-2.0-or-later 별도 제품([범위·계획](docs/LINK-EXPORT-PLAN.md)) |
+| `DJLinkExport` | rbxport 기반 Link Export 서버. **빌드·시험 통과, CDJ-2000nexus 기본 실기 확인**, GPL-2.0-or-later 별도 제품([범위·계획](docs/LINK-EXPORT-PLAN.md)) |
 
 ## 상표 고지
 
@@ -164,4 +164,6 @@ TCP 포트 조회 연결은 응답 직후 닫고, 닫힌 TCP는 장부에서 제
 
 ## Link Export
 
-Mac 라이브러리의 곡·메타데이터·분석을 CDJ에 내주는 `DJLinkExport`를 별도 제품으로 작성했다. 원본 rbxport 1.8.0 고정 커밋과 시험을 따른다. 빌드와 원본 대응 시험 469개 검증이 끝났고(원본 ignore 2개 유지), 전체 회귀 1,477개에서 실패가 없다. 실제 CDJ 확인은 아직이며 기존 CLI에서는 서버를 실행하지 않는다. [검증 기록](docs/LINK-EXPORT-VALIDATION.md)에 범위와 건너뛴 시험을 적었다. 서버 코드의 GPL-2.0-or-later 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), 세부 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md)과 [대응표](docs/export-port-map.md)에 있다.
+Mac 라이브러리의 곡·메타데이터·분석을 CDJ에 내주는 `DJLinkExport`를 별도 제품으로 작성했다. 원본 rbxport 1.8.0 고정 커밋과 시험을 따른다. 빌드와 원본 대응 시험 469개 검증이 끝났고(원본 ignore 2개 유지), 실기 회귀 2개를 더한 전체 1,479개에서 실패가 없다. CDJ-2000nexus에서 목록·마운트·Mac 음원의 MP3/WAV 로드·재생·CUE 복귀를 확인했다. 현재 CLI에서는 서버를 실행하지 않으며 별도 임시 실행 도구로 실기 확인했다. [검증 기록](docs/LINK-EXPORT-VALIDATION.md)에 범위와 건너뛴 시험을 적었다. 서버 코드의 GPL-2.0-or-later 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), 세부 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md)과 [대응표](docs/export-port-map.md)에 있다.
+
+원본과 동일한 Link Export 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. 실기에서 찾은 WAV 형식 선택 오류는 PLAN §9에 따라 수정했다. [실기 기록](docs/LINK-EXPORT-HARDWARE.md)과 [남은 레거시 큐 조회 #20](https://github.com/ImBada/DJLinkKit/issues/20)에 확인 범위와 한계를 적었다.
