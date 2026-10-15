@@ -175,47 +175,72 @@ extension Library {
     }
     func column_rank(_ column: SortColumn) -> [UInt32] {
         var order = (0..<count).compactMap(Row.init(exactly:))
-        order.sort { a, b in
-            let ordering = column_compare(a, b, column)
-            return ordering == .equal ? a < b : ordering == .less
+        if let text_key = column_text_key(column) {
+            // 원본의 sort_by_cached_key처럼 정렬 키를 행마다 한 번만 만든다. 동률은 행 순서다.
+            var keys = [[UInt8]](repeating: [], count: count)
+            for row in order { keys[Int(row)] = Array(text_key(row).utf8) }
+            order.sort { a, b in
+                let x = keys[Int(a)]
+                let y = keys[Int(b)]
+                return x == y ? a < b : x.lexicographicallyPrecedes(y)
+            }
+        } else {
+            let compare = column_comparator(column)
+            order.sort { a, b in
+                let ordering = compare(a, b)
+                return ordering == .equal ? a < b : ordering == .less
+            }
         }
         var rank = [UInt32](repeating: 0, count: count)
         for (position, row) in order.enumerated() { rank[Int(row)] = UInt32(exactly: position) ?? .max }
         return rank
     }
-    func column_compare(_ a: Row, _ b: Row, _ column: SortColumn) -> Ordering {
-        func text(_ x: String, _ y: String) -> Ordering {
-            x.utf8.elementsEqual(y.utf8) ? .equal : utf8_less(x, y) ? .less : .greater
-        }
+    /// 문자열 열의 정렬 키. 문자열이 아닌 열은 nil이다.
+    func column_text_key(_ column: SortColumn) -> ((Row) -> String)? {
         switch column {
-        case .trackNo: return .equal
-        case .title: return text(title_folded.get(Int(a)), title_folded.get(Int(b)))
-        case .artist:
-            return text(artists.folded(artist.at(Int(a)) ?? NO_ID), artists.folded(artist.at(Int(b)) ?? NO_ID))
-        case .album: return text(albums.folded(album.at(Int(a)) ?? NO_ID), albums.folded(album.at(Int(b)) ?? NO_ID))
-        case .genre: return text(genres.folded(genre.at(Int(a)) ?? NO_ID), genres.folded(genre.at(Int(b)) ?? NO_ID))
-        case .label: return text(labels.folded(label.at(Int(a)) ?? NO_ID), labels.folded(label.at(Int(b)) ?? NO_ID))
-        case .key: return cmp_names(key_name(a), key_name(b))
-        case .keyCamelot:
-            let x = camelot_rank(key_name(a))
-            let y = camelot_rank(key_name(b))
-            return x == y ? cmp_names(key_name(a), key_name(b)) : x < y ? .less : .greater
+        case .title: return { self.title_folded.get(Int($0)) }
+        case .artist: return { self.artists.folded(self.artist.at(Int($0)) ?? NO_ID) }
+        case .album: return { self.albums.folded(self.album.at(Int($0)) ?? NO_ID) }
+        case .genre: return { self.genres.folded(self.genre.at(Int($0)) ?? NO_ID) }
+        case .label: return { self.labels.folded(self.label.at(Int($0)) ?? NO_ID) }
         case .comment, .composer, .albumArtist, .remixer, .originalArtist, .mixName, .lyricist, .message:
-            return text(fold(sort_text(a, column)), fold(sort_text(b, column)))
-        case .fileName, .location: return text(fold_smart(sort_text(a, column)), fold_smart(sort_text(b, column)))
-        case .dateAdded, .releaseDate, .dateCreated: return text(sort_text(a, column), sort_text(b, column))
+            return { fold(self.sort_text($0, column)) }
+        case .fileName, .location: return { fold_smart(self.sort_text($0, column)) }
+        case .dateAdded, .releaseDate, .dateCreated: return { self.sort_text($0, column) }
+        default: return nil
+        }
+    }
+    /// 문자열이 아닌 열의 비교자. 행마다 드는 값은 비교자를 만들 때 한 번만 읽는다.
+    func column_comparator(_ column: SortColumn) -> (Row, Row) -> Ordering {
+        switch column {
+        case .trackNo: return { _, _ in .equal }
+        case .key:
+            let names = (0..<count).map { key_name(Row(truncatingIfNeeded: $0)) }
+            return { a, b in cmp_names(names[Int(a)], names[Int(b)]) }
+        case .keyCamelot:
+            let names = (0..<count).map { key_name(Row(truncatingIfNeeded: $0)) }
+            let ranks = names.map(camelot_rank)
+            return { a, b in
+                let x = ranks[Int(a)]
+                let y = ranks[Int(b)]
+                return x == y ? cmp_names(names[Int(a)], names[Int(b)]) : x < y ? .less : .greater
+            }
         case .fileCreated:
             let created = file_created_all()
-            let x = created.at(Int(a)) ?? nil
-            let y = created.at(Int(b)) ?? nil
-            if x == y { return .equal }
-            if x == nil { return .less }
-            if y == nil { return .greater }
-            return x! < y! ? .less : .greater
+            return { a, b in
+                let x = created.at(Int(a)) ?? nil
+                let y = created.at(Int(b)) ?? nil
+                if x == y { return .equal }
+                if x == nil { return .less }
+                if y == nil { return .greater }
+                return x! < y! ? .less : .greater
+            }
         default:
-            let x = sort_number(a, column)
-            let y = sort_number(b, column)
-            return x == y ? .equal : x < y ? .less : .greater
+            return { a, b in
+                let x = self.sort_number(a, column)
+                let y = self.sort_number(b, column)
+                return x == y ? .equal : x < y ? .less : .greater
+            }
         }
     }
     func sort_text(_ row: Row, _ column: SortColumn) -> String {

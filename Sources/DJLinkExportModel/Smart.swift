@@ -178,22 +178,33 @@ private func smart_attribute(_ attributes: [(String, String)], _ name: String) -
     attributes.first { $0.0.utf8.elementsEqual(name.utf8) }?.1 ?? ""
 }
 private func smart_document(_ xml: String) -> String? {
-    var rest = xml[...]
+    // Rust str처럼 유니코드 스칼라 단위로 건너뛴다. 결합 문자가 붙어도 `<`를 한 글자로 묶지 않는다.
+    var rest = Array(xml.unicodeScalars)[...]
+    func after(_ marker: String, in slice: ArraySlice<Unicode.Scalar>) -> ArraySlice<Unicode.Scalar>? {
+        let pattern = Array(marker.unicodeScalars)
+        guard pattern.count <= slice.count else { return nil }
+        for start in slice.startIndex...(slice.endIndex - pattern.count)
+        where slice[start..<start + pattern.count].elementsEqual(pattern) {
+            return slice[(start + pattern.count)...]
+        }
+        return nil
+    }
     while true {
-        rest = modelTrim(String(rest), end: false)[...]
-        if rest.hasPrefix("<!--") {
-            let after = rest.dropFirst(4)
-            guard let end = after.range(of: "-->") else { return nil }
-            rest = after[end.upperBound...]
+        rest = rest.drop(while: { $0.properties.isWhitespace })
+        if rest.starts(with: "<!--".unicodeScalars) {
+            guard let next = after("-->", in: rest.dropFirst(4)) else { return nil }
+            rest = next
             continue
         }
-        if rest.hasPrefix("<?") {
-            let after = rest.dropFirst(2)
-            guard let end = after.range(of: "?>") else { return nil }
-            rest = after[end.upperBound...]
+        if rest.starts(with: "<?".unicodeScalars) {
+            guard let next = after("?>", in: rest.dropFirst(2)) else { return nil }
+            rest = next
             continue
         }
-        return rest.hasPrefix("<") ? String(rest) : nil
+        guard rest.first == "<" else { return nil }
+        var text = String.UnicodeScalarView()
+        text.append(contentsOf: rest)
+        return String(text)
     }
 }
 public func escape_attribute(_ text: String) -> String {
@@ -398,7 +409,10 @@ struct CompiledCondition {
     }
 }
 func whole(_ text: String) -> Int64 {
-    let value = Double(modelTrim(text)) ?? 0
+    let trimmed = modelTrim(text)
+    // Rust의 f64 파서는 16진 실수와 nan(페이로드) 꼴을 받지 않는다. Swift는 받으므로 먼저 거른다.
+    let rejected = trimmed.contains { "xX()".contains($0) }
+    let value = rejected ? 0 : Double(trimmed) ?? 0
     if value.isNaN { return 0 }
     return Int64(min(max(value.rounded(.towardZero), Double(Int32.min)), Double(Int32.max)))
 }

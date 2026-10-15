@@ -60,13 +60,16 @@
 | model | `rbl-index/src/smart.rs` | `DJLinkExportModelTests/SmartTests.swift` | 19 |
 | model | `rbl-index/tests/views.rs` | `DJLinkExportModelTests/ViewsTests.swift` | 31 |
 | model | `rbl-index/tests/categories.rs` | `DJLinkExportModelTests/CategoriesTests.swift` | 2 |
+| model | `rbl-index/tests/smartlists.rs` | `DJLinkExportModelTests/SmartlistsTests.swift` | 5 |
+| model | `rbl-index/tests/unanalysed.rs` | `DJLinkExportModelTests/UnanalysedTests.swift` | 1 |
+| model | `rbl-index/tests/filter.rs` | `DJLinkExportModelTests/FilterTests.swift` | 12 (1개 `.disabled`) |
 | xml | `rbl-core/src/xml.rs` | `DJLinkExportModelTests/XmlTests.swift` | 2 |
 
-총 469개: 서버 core 321, ANLZ 78, 서버 메모리 모델 68, XML 스캐너 2. 등록 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. [검증 기록](LINK-EXPORT-VALIDATION.md).
+총 487개: 서버 core 321, ANLZ 78, 서버 메모리 모델 86, XML 스캐너 2. 모델 시험 파일 3개(18개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 새 3개 파일의 `.disabled` 1개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`)는 서버 범위 밖이라 이름만 유지했다. [검증 기록](LINK-EXPORT-VALIDATION.md).
 
 ## 의존 범위의 제한
 
-`rbl-index` 전체 149개 시험을 옮겼다고 주장하지 않는다. 이번 서버가 사용하는 메모리 알고리즘의 원본 시험 68개와 `rbl-core` XML 2개를 별도로 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 이번 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
+`rbl-index` 전체 149개 시험을 옮겼다고 주장하지 않는다. 이번 서버가 사용하는 메모리 알고리즘의 원본 시험 86개와 `rbl-core` XML 2개를 별도로 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 이번 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
 
 픽스처 파일이나 실곡 문자열이 필요한 경우 원본 값을 외부 고정 체크아웃에서 그대로 읽는다. 바꾼 값·sanitized capture를 대신 넣지 않는다.
 

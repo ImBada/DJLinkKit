@@ -130,7 +130,9 @@ public func unescape(_ text: String) -> String {
             let units = Array(entity.unicodeScalars)
             if units.first == "#" {
                 let number = String(String.UnicodeScalarView(units.dropFirst()))
-                let value = number.hasPrefix("x") ? UInt32(String(number.dropFirst()), radix: 16) : UInt32(number)
+                let digits = number.hasPrefix("x") ? String(number.dropFirst()) : number
+                // Rust의 부호 없는 정수 파서는 '-'를 받지 않는다(Swift는 "-0"을 0으로 읽는다).
+                let value = digits.hasPrefix("-") ? nil : UInt32(digits, radix: number.hasPrefix("x") ? 16 : 10)
                 replacement = value.flatMap(UnicodeScalar.init)
             }
         }

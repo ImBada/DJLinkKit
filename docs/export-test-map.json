@@ -182,6 +182,21 @@
       "swift": "DJLinkExportModelTests/CategoriesTests.swift"
     },
     {
+      "group": "model",
+      "source": "rbl-index/tests/smartlists.rs",
+      "swift": "DJLinkExportModelTests/SmartlistsTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/unanalysed.rs",
+      "swift": "DJLinkExportModelTests/UnanalysedTests.swift"
+    },
+    {
+      "group": "model",
+      "source": "rbl-index/tests/filter.rs",
+      "swift": "DJLinkExportModelTests/FilterTests.swift"
+    },
+    {
       "group": "xml",
       "source": "rbl-core/src/xml.rs",
       "swift": "DJLinkExportModelTests/XmlTests.swift"

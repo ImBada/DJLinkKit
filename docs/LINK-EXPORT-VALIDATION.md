@@ -52,3 +52,11 @@ git diff --check
 ## 레거시 큐 읽기 회귀 (2026-10-15, #20)
 
 사용자의 구현 완료·검증 진행 신호 뒤 `swift test --filter 'LegacyCue(Read|Client)Tests'`로 추가 회귀 7개를 실행해 모두 통과했다. 실기에서 찾은 큐 순서 문제를 고치며 회귀 1개를 더해 8개가 되었고, 이 시험은 수정 전 코드에서 실패하고 수정 후 통과한다. 이어 `bash scripts/ci.sh`가 종료 코드 0으로 통과했다. 등록 시험은 1,486개(기존 1,008 + 원본 대응 469 + WAV 회귀 2 + 레거시 큐 회귀 7), 조건부 건너뜀 15개, 실패 0이다. TypeScript 원본 622개·44개 파일과 Rust 원본 469개의 정적 대응도 유지했다. 실제 소켓 없이 자동 시험을 마친 뒤 별도 도구로 실기를 진행했다. [#20 기록](LINK-EXPORT-LEGACY-CUES.md).
+
+## 모델 시험 보강과 Catalog 대조 (2026-10-15)
+
+병렬 작업자 둘이 컴파일 없이 정적으로 한 대조를 이후 `bash scripts/ci.sh`로 검증했다. 종료 코드 0, 실패 0이다.
+
+- `Catalog.swift`·`CatalogTests.swift`: `catalog.rs` 전체와 원본 시험 25개를 대조했고 동작 차이는 없었다. 머리말 순서와 상수 정리만 있다.
+- Model 모듈: 정렬 키를 행마다 한 번만 계산하게 했고, Rust가 거부하는 입력 세 곳(16진 실수·`nan(…)`, 결합 문자, `&#-0;`)과 `file_name`의 `.` 처리를 원본에 맞췄다.
+- 원본 시험 파일 3개를 더했다: `smartlists.rs` 5, `unanalysed.rs` 1, `filter.rs` 12(디스크 캐시를 거치는 1개는 `.disabled`). 모델 대응이 68개에서 86개가 되었다. `export-port-status.py --strict`가 통과한다.

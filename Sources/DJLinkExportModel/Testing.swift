@@ -94,8 +94,9 @@ public func library_from(_ tracks: [TestTrack]) -> Library {
             lib.search_extra[column].push(value)
         }
         lib.folder_path.push(t.path)
-        let path = t.path.split(separator: "/", omittingEmptySubsequences: true)
-        lib.file_name.push(path.last.map(String.init) ?? "")
+        // Path::file_name처럼 "."은 건너뛰고, 마지막이 ".."이면 이름이 없다.
+        let path = t.path.split(separator: "/", omittingEmptySubsequences: true).filter { $0 != "." }
+        lib.file_name.push(path.last.map { $0 == ".." ? "" : String($0) } ?? "")
         lib.analysis_path.push("")
         lib.date_added.push(t.date_added)
         lib.release_date.push("")
