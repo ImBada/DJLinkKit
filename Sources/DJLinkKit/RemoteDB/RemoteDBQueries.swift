@@ -94,6 +94,11 @@ public enum RemoteDBQueryResult: Equatable, Sendable {
     case let .cueAndLoops(data): return .cueAndLoops(data)
     case let .advancedCueAndLoops(data): return .advancedCueAndLoops(data)
     case let .success(success):
+        // PLAN §9(#48): 원본은 분석하지 않은 곡이 항목 0개면 필수 항목을 찾다 `Cannot read properties of undefined`로 실패했다.
+        // 까닭을 알 수 있는 오류로 바꾼다. rekordbox 곡(0x2002)의 항목 0개는 원본처럼 빈 곡과 경고로 둔다(원본 시험이 있다).
+        if success.itemsAvailable == 0, query == .getGenericMetadata {
+            throw RemoteDBNoMetadataItemsError(deviceId: conn.device.id, trackId: args.trackId ?? 0)
+        }
         var received: [Items] = []
         for try await item in renderItems(conn, lookupDescriptor, success.itemsAvailable, span) {
             received.append(item)
@@ -122,6 +127,19 @@ public enum RemoteDBQueryResult: Equatable, Sendable {
         default: throw DJLinkError("Unexpected setup success")
         }
     default: throw DJLinkError("Unexpected query response")
+    }
+}
+/// 플레이어가 분석하지 않은 곡의 메타데이터 질의(0x2202)에 항목 0개로 답했다(PLAN §9, #48).
+/// CDJ-2000nexus는 질의가 빌린 번호의 플레이어가 망에 없을 때 이렇게 답한다(2026-10-16 실기).
+public struct RemoteDBNoMetadataItemsError: Error, Equatable, Sendable, CustomStringConvertible {
+    public var deviceId: DeviceID
+    public var trackId: Int
+    public init(deviceId: DeviceID, trackId: Int) {
+        self.deviceId = deviceId
+        self.trackId = trackId
+    }
+    public var description: String {
+        "Device \(deviceId) answered the metadata query for track \(trackId) with no items (CDJ-2000nexus does this when the player whose number the query borrows is not on the network)"
     }
 }
 private func makeRemoteDBTrack(_ received: [Items], generic: Bool) throws -> RemoteDBQueryResult {

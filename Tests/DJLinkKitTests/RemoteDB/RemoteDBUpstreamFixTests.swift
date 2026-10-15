@@ -343,3 +343,52 @@ struct RemoteDBQueryTimeoutTests {
         #expect(player.clock.pendingTimerCount == 0)
     }
 }
+
+/// 2026-10-16 실기(CDJ-2000nexus)에서 받은 `0x2202` 응답(성공, 요청 종류 0x2202, 항목 0개) 42바이트. 트랜잭션 번호만 바꿔 쓴다.
+@DJLinkActor private func emptyGenericMetadataReply(_ transactionId: Int) -> [UInt8] {
+    var bytes = hexBytes(
+        """
+        11 87 23 49 ae 11 00 00 00 01 10 40 00 0f 02 14 00 00 00 0c 06 06 00 00 00 00 00 00 00 00 00 00
+        11 00 00 22 02 11 00 00 00 00
+        """)
+    bytes.replaceSubrange(6..<10, with: RemoteDBUInt32(transactionId).data)
+    return bytes
+}
+
+// PLAN §9(#48): CDJ-2000nexus는 빌린 질의 번호의 플레이어가 망에 없으면 분석하지 않은 곡의 메타데이터 질의에 항목 0개로 답한다.
+// 원본은 필수 항목을 찾다 `Cannot read properties of undefined`로 실패했다.
+@Suite("remotedb 분석하지 않은 곡의 메타데이터 항목 0개(#48)") @DJLinkActor
+struct RemoteDBEmptyMetadataTests {
+    private func player() -> ScriptedPlayer {
+        let player = ScriptedPlayer()
+        player.respond = { _, _, data in emptyGenericMetadataReply(transactionId(ofRequest: data)) }
+        return player
+    }
+
+    @Test("항목 0개 응답은 렌더 요청 없이 까닭을 적은 오류로 끝나고 연결은 그대로다")
+    func emptyMenuThrowsNoItems() async throws {
+        let player = player()
+        let conn = try #require(try await player.database().get(1))
+        await #expect(throws: RemoteDBNoMetadataItemsError(deviceId: 1, trackId: 132)) {
+            try await conn.query(
+                queryDescriptor: QueryDescriptor(menuTarget: .main, trackSlot: .usb, trackType: .unanalyzed),
+                query: .getGenericMetadata, args: RemoteDBQueryArgs(trackId: 132))
+        }
+        // 렌더 요청(0x3000)을 보내지 않는다.
+        #expect(player.requests[0].count == 1)
+        #expect(player.connections[0].isOpen)
+    }
+
+    @Test("원격 메타데이터 조회도 같은 오류를 내고, 그 설명에 CDJ-2000nexus의 까닭을 적는다")
+    func viaRemoteReportsReason() async throws {
+        let player = player()
+        await #expect(throws: RemoteDBNoMetadataItemsError(deviceId: 1, trackId: 132)) {
+            try await GetMetadata.viaRemote(
+                player.database(), .init(deviceId: 1, trackSlot: .usb, trackType: .unanalyzed, trackId: 132))
+        }
+        #expect(
+            String(describing: RemoteDBNoMetadataItemsError(deviceId: 1, trackId: 132))
+                == "Device 1 answered the metadata query for track 132 with no items (CDJ-2000nexus does this when the player whose number the query borrows is not on the network)"
+        )
+    }
+}
