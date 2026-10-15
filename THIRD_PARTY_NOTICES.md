@@ -1298,6 +1298,7 @@ IN THE SOFTWARE.
 - 저작권: Copyright (c) 2026 Chris Le.
 - 라이선스: GNU General Public License, version 2 or (at your option) any later version, **GPL-2.0-or-later**. [전문](LICENSES/GPL-2.0-or-later.txt)은 원본 `crates/rbl-deck/vendor/rubberband/COPYING`에서 옮겼다.
 - 적용 범위: `Sources/DJLinkExport*`, `Tests/DJLinkExport*`의 rbxport 이식 코드, 별도 Export 전송·시험 지원 코드. `rbl-prolink`, `rbl-nfs`, `rbl-dbserver`, `rbl-link`, `rbl-anlz`, 서버에 필요한 `rbl-index` 모델과 `rbl-db` details/export-info, `rbl-core/src/xml.rs`, 통합 시험의 `rbl-fakecdj` 요청 절차를 옮긴다.
+- 추가 이식 시험: `crates/rbl-index/tests/file_created.rs` → `Tests/DJLinkExportModelTests/FileCreatedTests.swift`(7개, 폴더 브라우저 시험 1개는 이름을 유지하고 비활성화).
 - 2026-10-15부터 저장소 전체가 GPL-2.0-or-later이다. 기존 MIT 코드는 위 MIT 고지를 유지한 채 GPL 결과물에 합쳐 배포한다. Export 코드를 MIT로 낸 적은 없다.
 - 공개 원본의 패킷 캡처·프로토콜 및 분석 알고리즘을 사용한다. 외부 `.ksy`·Deep Symmetry 문서 원문은 옮기지 않았다. 외부 캡처 픽스처는 고정 원본에서 읽으며 이 저장소에 복사하지 않았다.
 

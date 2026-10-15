@@ -459,7 +459,13 @@ public struct SmartDate: Equatable, Sendable {
         self.day = day
     }
     public static func today() -> Self {
-        let values = Calendar.current.dateComponents([.year, .month, .day], from: Foundation.Date())
+        today(date: Foundation.Date(), calendar: .current)
+    }
+    static func today(date: Foundation.Date, calendar: Calendar) -> Self {
+        // chrono Local처럼 사용자 달력의 식별자와 관계없이 현지 시각을 그레고리력으로 읽는다.
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let values = gregorian.dateComponents([.year, .month, .day], from: date)
         return Self(year: Int64(values.year ?? 1970), month: Int64(values.month ?? 1), day: Int64(values.day ?? 1))
     }
     public static func parse(_ text: String) -> Self? {

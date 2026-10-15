@@ -1,6 +1,6 @@
-import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
+import DJLinkKit
 // rbxport 서버 전송 경계: IPv4/IPv6 BSD UDP와 직렬 이벤트 전달.
 import Darwin
 @preconcurrency import Dispatch
@@ -28,9 +28,7 @@ final class DualStackUDPSocket: ServerUDPSocket {
     private var interface: String?
 
     init(reuseAddr: Bool) throws {
-        guard !TestProcess.isRunning else {
-            throw DJLinkError("Live Link Export sockets are disabled in test processes")
-        }
+        try ExportLiveSocketGuard.requireLiveOrLoopbackProcess()
         self.reuseAddr = reuseAddr
     }
     deinit { source?.cancel() }
@@ -199,6 +197,7 @@ final class DualStackUDPSocket: ServerUDPSocket {
         var sent = 0
         do {
             guard !closed, fd >= 0 else { throw SocketNotRunningError() }
+            try ExportLiveSocketGuard.requireLoopbackDestinationInTests(address)
             sent = try withAddress(address, port) { pointer, length in
                 let count = msg.withUnsafeBytes { sendto(fd, $0.baseAddress, $0.count, 0, pointer, length) }
                 guard count >= 0 else { throw failure("sendto") }

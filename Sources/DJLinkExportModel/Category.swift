@@ -42,10 +42,15 @@ extension Library {
         year != 0 && year <= 2999 && self.year.at(Int(row)).map(UInt32.init) == year
     }
     public func filename_rows() -> [Row] {
-        (0..<count).compactMap(Row.init(exactly:)).sorted { a, b in
-            let x = fold(file_name.get(Int(a)))
-            let y = fold(file_name.get(Int(b)))
-            return x == y ? a < b : utf8_less(x, y)
+        var rows = (0..<count).compactMap(Row.init(exactly:))
+        // View의 문자열 열처럼 UTF-8 키를 행마다 한 번만 만들고 동률은 행 순서로 정한다.
+        var keys = [[UInt8]](repeating: [], count: count)
+        for row in rows { keys[Int(row)] = Array(fold(file_name.get(Int(row))).utf8) }
+        rows.sort { a, b in
+            let x = keys[Int(a)]
+            let y = keys[Int(b)]
+            return x == y ? a < b : x.lexicographicallyPrecedes(y)
         }
+        return rows
     }
 }

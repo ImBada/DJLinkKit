@@ -1,6 +1,6 @@
-import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
+import DJLinkKit
 // rbxport의 TCP listen/accept 전송을 위한 macOS 경계. 패킷·세션 코덱과 분리한다.
 import Darwin
 @preconcurrency import Dispatch
@@ -42,13 +42,14 @@ final class BSDTCPListener: TCPListener {
     private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
 
     init() throws {
-        if TestProcess.isRunning { throw DJLinkError("Live Link Export sockets are disabled in test processes") }
+        try ExportLiveSocketGuard.requireLiveOrLoopbackProcess()
     }
 
     func bind(port: Int, address: String) async throws -> AddressInfo {
         guard fd < 0, bound == nil, !releasing, let portValue = UInt16(exactly: port) else {
             throw tcpError("bind", EINVAL)
         }
+        try ExportLiveSocketGuard.requireLoopbackBindInTests(address)
         let family = address.contains(":") ? AF_INET6 : AF_INET
         let socket = Darwin.socket(family, SOCK_STREAM, IPPROTO_TCP)
         guard socket >= 0 else { throw tcpError("socket") }

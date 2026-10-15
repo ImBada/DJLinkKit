@@ -113,6 +113,7 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
     }
     public func disconnectForDevice(_ device: Device) { handleDeviceRemoved(device) }
     private func handleDeviceRemoved(_ device: Device) {
+        // PLAN §9: 원본은 find로 첫 DB만 닫고 filter로 해당 장치의 모든 DB를 뺐다. 빠지는 DB를 모두 닫는다.
         for db in dbs where db.media.deviceId == device.id {
             closeLoaded(db.loaded)
             if let alternate = db.alternate { closeLoaded(alternate) }
@@ -154,7 +155,8 @@ extension EventName where Owner == LocalDatabase, Payload == LocalDBCommonProgre
             let adapter = try dependencies.makeOneLibraryAdapter(path)
             return .init(adapter: adapter, tempFile: path)
         } catch {
-            // 쓰기 도중 남은 파일도 정리한다. 기존 닫기 경로처럼 삭제 오류는 무시한다.
+            // PLAN §9: 원본은 쓰기·열기에 실패해도 임시 파일을 남겼다. 쓰다 만 파일도 지운다.
+            // 기존 닫기 경로처럼 삭제 오류는 무시한다.
             if let tempFile { try? dependencies.fileSystem.unlinkSync(tempFile) }
             return nil
         }

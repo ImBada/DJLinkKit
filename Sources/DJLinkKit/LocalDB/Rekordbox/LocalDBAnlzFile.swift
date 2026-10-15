@@ -157,16 +157,23 @@ public func readLocalDBAnlz(_ bytes: [UInt8]) throws -> [LocalDBAnlzSection] {
             section.mood = try u16(18)
             section.endBeat = try u16(26)
             let size = try u32(12)
-            guard count == 0 || (size >= 9 && (1...3).contains(section.mood)) else {
-                throw DJLinkError("Invalid ANLZ phrase length or mood")
-            }
-            _ = try entryBytes(start: 32, count: count, size: size)
+            // 원본 Kaitai는 항목마다 len_entry_bytes - 9바이트를 건너뛰므로 9보다 작으면 항목 읽기에 실패한다.
+            guard count == 0 || size >= 9 else { throw DJLinkError("Invalid ANLZ phrase length") }
+            // PLAN §9(#26): 1:1 기준선은 mood가 1~3 밖이면 EXT 전체를 실패시켰다.
+            // 원본 Kaitai song_structure_entry: phrase_number u2, beat_number u2, kind,
+            // (len_entry_bytes - 9)바이트 건너뜀, fill_in u1, fill_in_beat_number u2.
+            // kind는 mood가 high·mid·low(1~3)일 때만 u2이고 그 밖에는 0바이트 unknown_tag다.
+            // 그래서 알 수 없는 mood에서도 실패하지 않고, 항목이 2바이트씩 짧아 뒤 항목이 어긋난다.
+            let kindLength = (1...3).contains(section.mood) ? 2 : 0
+            let entryLength = count == 0 ? 0 : 4 + kindLength + (size - 9) + 3
+            _ = try entryBytes(start: 32, count: count, size: entryLength)
             section.bank = Int(b[30])
             section.phrases = try (0..<count).map { i in
-                let p = 32 + size * i
+                let p = 32 + entryLength * i
+                let kind: LocalDBAnlzPhraseKind = try kindLength == 0 ? .unknownTag : .init(id: u16(p + 4))
                 return .init(
-                    phraseNumber: try u16(p), beatNumber: try u16(p + 2), kind: .init(id: try u16(p + 4)),
-                    fillIn: Int(b[p + size - 3]), fillInBeatNumber: try u16(p + size - 2))
+                    phraseNumber: try u16(p), beatNumber: try u16(p + 2), kind: kind,
+                    fillIn: Int(b[p + entryLength - 3]), fillInBeatNumber: try u16(p + entryLength - 2))
             }
         default: break
         }

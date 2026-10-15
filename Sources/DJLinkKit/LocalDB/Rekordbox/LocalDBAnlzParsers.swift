@@ -39,14 +39,18 @@ public struct LocalDBAnlzCue: Equatable, Sendable {
 public enum LocalDBAnlzPhraseKind: Equatable, Sendable {
     case number(Int)
     case object(id: Int)
+    // 원본 Kaitai unknown_tag: mood가 high·mid·low 밖이면 kind는 id가 없는 빈 객체다.
+    case unknownTag
 
     public init(id: Int) {
         self = .object(id: id)
     }
 
-    public var id: Int {
+    // unknownTag는 원본 `entry.kind.id`처럼 undefined(nil)다.
+    public var id: Int? {
         switch self {
         case .number(let id), .object(let id): id
+        case .unknownTag: nil
         }
     }
 }
@@ -185,7 +189,8 @@ public func makeSongStructure(_ data: LocalDBAnlzSection) -> SongStructure {
         phrases: data.phrases.map { entry in
             .init(
                 index: entry.phraseNumber, beat: entry.beatNumber, kind: entry.kind.id,
-                phraseType: maps[mood]?[entry.kind.id] ?? "Unknown",
+                // 원본 phraseTypeMap[mood][undefined]도 없는 키라 'Unknown'이다.
+                phraseType: entry.kind.id.flatMap { maps[mood]?[$0] } ?? "Unknown",
                 fill: entry.fillIn > 0 ? entry.fillIn : nil,
                 fillBeat: entry.fillIn > 0 ? entry.fillInBeatNumber : nil)
         })

@@ -11,8 +11,8 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
    - 입력과 기대값을 바꾸지 않는다. 원본 버그도 그대로 둔다(PLAN §9).
    - JS에만 있는 검사(`typeof`, `instanceof Buffer` 등)는 가장 가까운 Swift 검사로 옮기고 `// 원본과 다름: 이유` 주석을 단다.
 2. 원본 코드를 옮긴다.
-3. `swift build`와 `swift test --filter <Suite 형 이름>`로 통과시킨다.
-4. `scripts/port-status.sh --stage N`에서 원본 `it(` 수와 `@Test` 수가 같은지 본다.
+3. 사용자가 "구현 완료"라고 하면 `swift build`와 `swift test --filter <Suite 형 이름>`로 통과시킨다. 구현하는 동안에는 빌드·시험을 돌리지 않는다(AGENTS.md).
+4. `scripts/port-status.sh --stage N`에서 원본 `it(` 수와 `@Test` 수가 같은지 본다. 이 스크립트는 읽기만 하므로 구현 중에도 쓸 수 있다.
 
 ## 2. 이름과 파일
 
@@ -68,6 +68,7 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
 - TCP: `TCPConnection` 프로토콜(`Socket/TCPConnection.swift`).
 - 소켓을 만드는 형은 `SocketFactory`를 주입받는다(`LiveSocketFactory.shared`가 기본). 시험은 `FakeSocketFactory`·`FakeUDPSocket`.
 - 실제 소켓은 시험 프로세스에서 만들 수 없다(`TestProcess`). 시험은 LAN에 아무것도 보내지 않는다.
+  예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험(DJLinkKit 6개, `DJLinkExport` 8개)이다. 이 시험은 127.0.0.1에만 묶는다. Export는 소켓 가드가 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다).
 
 ## 6. 시험
 

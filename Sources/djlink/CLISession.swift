@@ -442,8 +442,9 @@ struct CLIGuardedArtworkSource: ArtworkNFSFileSource {
 }
 
 /// OneLibrary를 임시 파일로 풀 때 중단된 뒤에는 쓰지 않고, 쓴 파일을 기억해 끝날 때 남은 것을 지운다.
-/// 임시 DB(`prolink-onelibrary-*.db`)에는 장치 USB의 곡 정보가 들어 있다. 라이브러리는 정상 종료·장치 제거 때만 지우고
-/// 열기에 실패하면 원본처럼 그대로 둔다(docs/port-notes.md). 강제 종료(두 번째 신호·SIGKILL 등)로는 남을 수 있다.
+/// 임시 DB(`prolink-onelibrary-*.db`)에는 장치 USB의 곡 정보가 들어 있다. 라이브러리는 정상 종료·장치 제거 때 지우고
+/// 열기에 실패해도 쓰다 만 파일까지 지운다(PLAN §9. 1:1 기준선은 실패하면 그대로 뒀다).
+/// 강제 종료(두 번째 신호·SIGKILL 등)로는 남을 수 있다.
 @DJLinkActor
 final class CLIGuardedLocalFileSystem: LocalDBFileSystem {
     let abort: CLIAbort

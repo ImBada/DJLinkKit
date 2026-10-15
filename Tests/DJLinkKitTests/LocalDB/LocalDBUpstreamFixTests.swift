@@ -293,6 +293,196 @@ struct LocalDBUpstreamFixTests {
         #expect(fs.unlinks == fs.writes)
         #expect(oneLibrary.closeCalls == (scenario == "success" ? 1 : 0))
     }
+
+    // 이슈 #22
+    @Test("같은 종류의 PCOB·PCO2 태그를 덮어쓰지 않고 파일 순서대로 잇는다")
+    @DJLinkActor func anlzCueListsConcatenate() async throws {
+        let track = LocalDBAnlzTrackReference(analyzePath: "/ANLZ0000")
+        // DAT: 핫 큐 목록(1) 뒤에 메모리 목록(0)이 온다.
+        let dat = createAnlzFile([
+            anlzCueList(
+                type: 1,
+                [
+                    anlzCue(hotCue: 1, type: 1, time: 1000, loopTime: 0xffff_ffff),
+                    anlzCue(hotCue: 2, type: 2, time: 2000, loopTime: 3000),
+                ]),
+            anlzCueList(
+                type: 0,
+                [
+                    anlzCue(hotCue: 0, type: 1, time: 4000, loopTime: 0xffff_ffff),
+                    anlzCue(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+                ]),
+        ])
+        let datResult = try await loadAnlz(track, type: "DAT", anlzResolver: { _ in dat })
+        #expect(
+            datResult.cueAndLoops == [
+                .hotCue(.init(offset: 1000, button: .A)),
+                .hotLoop(.init(offset: 2000, button: .B, length: 1000)),
+                .cuePoint(.init(offset: 4000)),
+                .loop(.init(offset: 5000, length: 1000)),
+            ])
+        // EXT: 핫 큐 D 목록 뒤의 빈 메모리 PCOB가 앞 목록을 지우지 않고, PCO2 두 목록도 잇는다.
+        let ext = createAnlzFile([
+            anlzCueList(type: 1, [anlzCue(hotCue: 4, type: 1, time: 7000, loopTime: 0xffff_ffff)]),
+            anlzCueList(type: 0, []),
+            anlzExtendedCueList(type: 1, [anlzExtendedCue(hotCue: 1, type: 1, time: 1000, loopTime: 0)]),
+            anlzExtendedCueList(
+                type: 0,
+                [
+                    anlzExtendedCue(hotCue: 0, type: 1, time: 4000, loopTime: 0),
+                    anlzExtendedCue(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+                ]),
+        ])
+        let extResult = try await loadAnlz(track, type: "EXT", anlzResolver: { _ in ext })
+        #expect(extResult.cueAndLoops == [.hotCue(.init(offset: 7000, button: .D))])
+        #expect(
+            extResult.extendedCues == [
+                .init(hotCue: 1, type: 1, time: 1000),
+                .init(hotCue: 0, type: 1, time: 4000),
+                .init(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+            ])
+    }
+
+    // 이슈 #26. 고친 원본 버그가 아니라 원본 Kaitai 동작으로 되돌린 것이다.
+    @Test("알 수 없는 mood의 PSSI도 EXT 전체를 실패시키지 않고 원본 Kaitai 배치대로 읽는다")
+    @DJLinkActor func unknownMoodSongStructure() async throws {
+        // rekordbox처럼 kind u2가 있는 24바이트 항목 두 개를 평문으로 쓰고 mood만 4로 둔다.
+        var plain = [UInt8](repeating: 0, count: 32 + 24 * 2)
+        plain.replaceSubrange(0..<4, with: "PSSI".utf8)
+        plain.replaceSubrange(4..<8, with: anlzBE32(32))
+        plain.replaceSubrange(8..<12, with: anlzBE32(plain.count))
+        plain.replaceSubrange(12..<16, with: anlzBE32(24))
+        plain.replaceSubrange(16..<18, with: anlzBE16(2))
+        plain.replaceSubrange(18..<20, with: anlzBE16(4))
+        plain.replaceSubrange(26..<28, with: anlzBE16(128))
+        plain[30] = 3
+        // 항목 0(32..<56): 번호 1, 박자 1, kind 1, +19 = 5, fill_in 1, fill 박자 60.
+        plain.replaceSubrange(32..<34, with: anlzBE16(1))
+        plain.replaceSubrange(34..<36, with: anlzBE16(1))
+        plain.replaceSubrange(36..<38, with: anlzBE16(1))
+        plain[51] = 5
+        plain[53] = 1
+        plain.replaceSubrange(54..<56, with: anlzBE16(60))
+        // 항목 1(56..<80): 번호 2, 박자 33, kind 2, fill_in 1, fill 박자 64.
+        plain.replaceSubrange(56..<58, with: anlzBE16(2))
+        plain.replaceSubrange(58..<60, with: anlzBE16(33))
+        plain.replaceSubrange(60..<62, with: anlzBE16(2))
+        plain[77] = 1
+        plain.replaceSubrange(78..<80, with: anlzBE16(64))
+        let hd = createWaveSection("PWV5", numEntries: 1, entryBytes: 2, unknown: true, data: [0xff, 0xfc])
+        let color = createWaveSection(
+            "PWV4", numEntries: 1, entryBytes: 6, unknown: true, data: [10, 20, 30, 40, 50, 60])
+        let detail = createWaveSection("PWV3", numEntries: 2, entryBytes: 1, unknown: true, data: [0x00, 0xff])
+        let bytes = createAnlzFile([hd, maskPSSI(plain), color, detail])
+        let section = try #require(try readLocalDBAnlz(bytes).first { $0.fourcc == "PSSI" })
+        #expect(section.mood == 4)
+        #expect(section.phrases.map(\.kind) == [.unknownTag, .unknownTag])
+        let result = try await loadAnlz(
+            LocalDBAnlzTrackReference(analyzePath: "/ANLZ0000"), type: .ext, anlzResolver: { _ in bytes })
+        // PSSI 앞뒤의 파형 태그도 그대로 남는다.
+        #expect(result.waveformHd == [.init(height: 31, color: [1, 1, 1])])
+        #expect(result.waveformColorPreview == [10, 20, 30, 40, 50, 60])
+        #expect(result.waveformDetail == [0, 255])
+        // 기대값은 원본 rekordbox_anlz.ksy의 song_structure_entry 배치로 손으로 셌다.
+        // mood 4는 kind가 0바이트 unknown_tag라 항목이 22바이트다(2 + 2 + 0 + (24 - 9) + 1 + 2).
+        // 항목 0(32~): 번호 1, 박자 1, fill_in은 +19 바이트(5), fill 박자는 +20~21(0x0001, 원래 fill_in 1).
+        // 항목 1(54~): 번호는 원래 항목 0의 fill 박자(60), 박자는 원래 항목 1의 번호(2), fill_in은 0.
+        // makeSongStructure는 mood를 'high'로, kind를 undefined로, phraseType을 'Unknown'으로 둔다.
+        #expect(
+            result.songStructure
+                == .init(
+                    mood: .high, bank: .hot, endBeat: 128,
+                    phrases: [
+                        .init(index: 1, beat: 1, kind: nil, phraseType: "Unknown", fill: 5, fillBeat: 1),
+                        .init(index: 60, beat: 2, kind: nil, phraseType: "Unknown"),
+                    ]))
+    }
+
+    // 이슈 #26
+    @Test("알 수 없는 mood의 PSSI 항목은 len_entry_bytes보다 2바이트 짧게 읽고 그만큼만 요구한다")
+    func unknownMoodPhraseLength() throws {
+        func file(length: Int, lenEntryBytes: Int) -> [UInt8] {
+            // mood 0에서 원본이 읽는 22바이트 배치로 항목 두 개를 쓴다.
+            var plain = [UInt8](repeating: 0, count: 32 + 22 * 2)
+            plain.replaceSubrange(0..<4, with: "PSSI".utf8)
+            plain.replaceSubrange(4..<8, with: anlzBE32(32))
+            plain.replaceSubrange(12..<16, with: anlzBE32(lenEntryBytes))
+            plain.replaceSubrange(16..<18, with: anlzBE16(2))
+            for i in 0..<2 {
+                let p = 32 + 22 * i
+                plain.replaceSubrange(p..<p + 2, with: anlzBE16(i + 1))
+                plain.replaceSubrange(p + 2..<p + 4, with: anlzBE16(1 + 32 * i))
+                plain[p + 19] = 1
+                plain.replaceSubrange(p + 20..<p + 22, with: anlzBE16(60 + i))
+            }
+            plain = Array(plain.prefix(length))
+            plain.replaceSubrange(8..<12, with: anlzBE32(length))
+            return createAnlzFile([maskPSSI(plain)])
+        }
+        let parsed = try #require(try readLocalDBAnlz(file(length: 32 + 22 * 2, lenEntryBytes: 24)).first)
+        #expect(parsed.mood == 0)
+        #expect(parsed.phrases.map(\.phraseNumber) == [1, 2])
+        #expect(parsed.phrases.map(\.beatNumber) == [1, 33])
+        #expect(parsed.phrases.map(\.kind) == [.unknownTag, .unknownTag])
+        #expect(parsed.phrases.map(\.fillIn) == [1, 1])
+        #expect(parsed.phrases.map(\.fillInBeatNumber) == [60, 61])
+        // 한 바이트 모자라면 원본 Kaitai도 마지막 fill 박자를 읽다 EOF로 실패한다.
+        #expect(throws: (any Error).self) {
+            try readLocalDBAnlz(file(length: 32 + 22 * 2 - 1, lenEntryBytes: 24))
+        }
+        // len_entry_bytes가 9보다 작으면 원본은 음수 길이를 건너뛰려다 실패한다.
+        #expect(throws: (any Error).self) {
+            try readLocalDBAnlz(file(length: 32 + 22 * 2, lenEntryBytes: 8))
+        }
+    }
+}
+
+/// 원본 cue_entry 배치의 56바이트 PCPT 항목.
+private func anlzCue(hotCue: Int, type: UInt8, time: Int, loopTime: Int) -> [UInt8] {
+    let body: [UInt8] =
+        anlzBE32(hotCue) + anlzBE32(1) + anlzBE32(0x10000) + anlzBE16(0xffff) + anlzBE16(0xffff) + [type, 0]
+        + anlzBE16(1000) + anlzBE32(time) + anlzBE32(loopTime) + [UInt8](repeating: 0, count: 16)
+    return anlzSection("PCPT", body, headerLength: 28)
+}
+
+/// 원본 cue_tag: 목록 형(1 핫 큐, 0 메모리)과 항목 수를 머리에 둔 PCOB 태그.
+private func anlzCueList(type: Int, _ cues: [[UInt8]]) -> [UInt8] {
+    anlzSection(
+        "PCOB", anlzBE32(type) + anlzBE16(0) + anlzBE16(cues.count) + anlzBE32(0) + cues.flatMap { $0 },
+        headerLength: 24)
+}
+
+/// 원본 cue_extended_entry의 가장 짧은 40바이트 PCP2 항목(주석·색 없음).
+private func anlzExtendedCue(hotCue: Int, type: UInt8, time: Int, loopTime: Int) -> [UInt8] {
+    var entry = [UInt8](repeating: 0, count: 40)
+    entry.replaceSubrange(0..<4, with: "PCP2".utf8)
+    entry.replaceSubrange(4..<8, with: anlzBE32(16))
+    entry.replaceSubrange(8..<12, with: anlzBE32(40))
+    entry.replaceSubrange(12..<16, with: anlzBE32(hotCue))
+    entry[16] = type
+    entry.replaceSubrange(20..<24, with: anlzBE32(time))
+    entry.replaceSubrange(24..<28, with: anlzBE32(loopTime))
+    return entry
+}
+
+/// 원본 cue_extended_tag: 목록 형(1 핫 큐, 0 메모리)과 항목 수를 머리에 둔 PCO2 태그.
+private func anlzExtendedCueList(type: Int, _ cues: [[UInt8]]) -> [UInt8] {
+    anlzSection(
+        "PCO2", anlzBE32(type) + anlzBE16(cues.count) + anlzBE16(0) + cues.flatMap { $0 }, headerLength: 20)
+}
+
+/// 평문 PSSI 태그(머리 포함)의 18바이트 뒤에 원본과 같은 마스크(열쇠 + len_entries)를 씌운다.
+private func maskPSSI(_ plain: [UInt8]) -> [UInt8] {
+    var section = plain
+    let count = (Int(section[16]) << 8) | Int(section[17])
+    let mask: [UInt8] = [
+        0xCB, 0xE1, 0xEE, 0xFA, 0xE5, 0xEE, 0xAD, 0xEE, 0xE9, 0xD2, 0xE9, 0xEB, 0xE1, 0xE9, 0xF3, 0xE8, 0xE9,
+        0xF4, 0xE1,
+    ]
+    for i in 18..<section.count {
+        section[i] ^= mask[(i - 18) % mask.count] &+ UInt8(truncatingIfNeeded: count)
+    }
+    return section
 }
 
 @DJLinkActor private final class LocalDBFailingFileSystem: LocalDBFileSystem {

@@ -8,8 +8,8 @@ PRO DJ LINK 네트워크를 Swift에서 쓰는 패키지다. TypeScript 라이�
 
 - 1:1 포트의 0~9단계 코드를 모두 옮겼다.
 - 원본 시험 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)를 모두 옮겼고, 모두 통과한다. 원본 `it` 수와 옮긴 `@Test` 수가 파일마다 같다(`scripts/port-status.sh`).
-- main은 1:1 기준선에, 옮기면서 찾은 원본 버그 22건을 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
-- 전체 시험 1,008개(DJLinkKit 757, DJLinkPassive 53, DJLinkControl 18, djlink CLI 180)가 실패 없이 돈다. 이 중 13개는 조건이 맞을 때만 돈다(루프백 6개는 `DJLINK_LOOPBACK_TESTS=1`, 앨범아트 통합 5개는 실제 음원이 있을 때, SQLCipher 동시 열기 도우미 2개는 시험이 띄운 자식 프로세스 안에서만). 원본에 없는 우리 시험(기반 코드, 소켓 전송, 바이트 리더, CLI 등)이 포함되어 있다.
+- main은 1:1 기준선에, 옮기면서 찾은 원본 버그를 고친 것을 더한 쪽이다(목록은 [docs/PLAN.md](docs/PLAN.md) §9). 원본 버그까지 그대로 둔 1:1 기준선은 `port/one-to-one` 브랜치에 남긴다. 고친 동작에 맞춰 원본 시험의 기대값을 바꾼 곳은 그 시험 위에 `// PLAN §9:` 주석이 있다.
+- 시험은 `@Test` 선언 기준(`grep -rE '^\s*@Test' Tests`로 센 정적 수) 전체 1,535개다. DJLinkKit 760, DJLinkControl 18, DJLinkPassive 59, djlink CLI 180, DJLinkExport 계열 518이다. 원본 대응이 1,124개(alphatheta-connect 계열 622, rbxport 502), 우리 시험이 411개다. 우리 시험은 DJLinkKit·Control·Passive·CLI의 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 395개와 Link Export 자체 회귀 16개다. 이 중 28개는 조건이 맞을 때만 돈다(아래 "시험"). 2026-10-15 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,509개가 모두 통과했다. `--loopback`에서는 Link Export 루프백 8개와 가드 시험이 통과하지만, DJLinkKit TCP 루프백 5개가 전체 실행에서만 시간 초과로 실패한다(따로 돌리면 통과, [#33](https://github.com/ImBada/DJLinkKit/issues/33)).
 - **실기 확인은 일부만 했다.** CDJ-2000nexus 2대와 DJM-900NXS2로 장치 목록, 참여, 상태, 비트, on-air, 메타데이터, NFS, 곡 올리기, play·pause, mixstatus를 확인했다(2026-10-14, 기록은 [docs/PLAN.md](docs/PLAN.md) §8). CDJ-3000, 6채널 믹서, remotedb 질의, 번호 겹침, pcap 캡처는 아직이다. 시험은 가짜 소켓과 합성 데이터로 돈다. 공연 장비에 쓰기 전에 시험용 네트워크에서 먼저 확인한다(아래 "안전 안내").
 - 현재 장비에서 CDJ LAN·Mac LAN 재연결, USB 재삽입, 덱 전원 재시작도 확인했다(2026-10-14~15). 장치·상태·메타데이터 복귀는 확인했으나, 이때 발견한 임시 DB 부속 파일 잔존([#16](https://github.com/ImBada/DJLinkKit/issues/16))과 watch의 같은 곡 ID 재조회 누락([#17](https://github.com/ImBada/DJLinkKit/issues/17))도 고쳤고 회귀 시험과 로컬 CI가 통과했다. 수정된 같은 watch에서 전원 재시작 후 같은 곡 재조회와 정상 종료 후 부속 파일 잔존 수 0을 확인했다. 상세 결과는 PLAN §8에 있다.
 - 원본과 다르게 옮긴 곳, 1:1 기준선에 일부러 그대로 옮긴 원본 버그는 [docs/port-notes.md](docs/port-notes.md)에 있다.
@@ -42,6 +42,7 @@ Linux는 지원하지 않는다.
 - **가상 CDJ 번호는 7 이상만 쓴다.** 1~6은 실제 플레이어가 쓰는 번호다. 겹치면 공연 중인 플레이어가 영향을 받을 수 있다.
 - 공연이나 리허설 중인 네트워크에서 돌리지 않는다. 시험용 스위치에 장비 한두 대만 묶어서 쓴다.
 - 같은 Mac에서 rekordbox나 rekordboxAgent가 켜져 있으면 쓰지 않는다. UDP 50000~50002를 잡으면 rekordbox LINK가 망가질 수 있다.
+- **Link Export(`DJLinkExport`)는 이 검사를 스스로 하지 않는다.** CLI(`djlink`)와 달리 서버를 띄우는 호스트 앱이 규칙을 지켜야 한다. 서버는 rekordbox처럼 17·18번(무선 41번)으로 참여하고, UDP 50000~50002, TCP 12523, portmap 50111, NFS 2049를 연다. 같은 Mac의 rekordbox·rekordboxAgent와 NFS 서버(`nfsd`)를 끄고, 시험용 네트워크에서 인터페이스를 지정해 띄운다. 자세한 규칙은 [docs/LINK-EXPORT-PLAN.md](docs/LINK-EXPORT-PLAN.md) "호스트 안전 규칙".
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 `DJLinkControl`에 따로 들어 있고, 공연 중인 장비를 움직인다. 필요한 곳에만 넣는다.
 
 ## 시험
@@ -50,19 +51,25 @@ Linux는 지원하지 않는다.
 swift test
 ```
 
-- 시험은 실제 소켓을 열지 않고 LAN에 아무것도 보내지 않는다. 시험 프로세스에서 실제 소켓을 만들면 바로 실패한다.
-- 실제 TCP 구현만 따로 검사하는 루프백(127.0.0.1) 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다. 켜도 LAN에는 아무것도 나가지 않는다.
+- 시험은 LAN에 아무것도 보내지 않는다. 시험 프로세스에서 실제 소켓을 만들면 바로 실패한다. DJLinkKit과 Link Export(`DJLinkExport`) 모두 같다.
+- 실제 소켓 구현만 따로 검사하는 루프백 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 돈다. DJLinkKit의 6개(`LiveTCPConnectionLoopbackTests`)와 Link Export의 8개(`rbl-fakecdj/tests/loopback.rs` 대응)는 모두 127.0.0.1에만 묶는다. Link Export 소켓 가드는 루프백 시험이 아니면 소켓 생성을 막고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다). 켜도 LAN에는 아무것도 나가지 않는다.
 
   ```bash
   DJLINK_LOOPBACK_TESTS=1 swift test
   ```
 
-- 실제 음원 파일이나 암호화 픽스처가 있어야 도는 시험은 조건이 맞지 않으면 건너뛴다(원본도 같은 조건에서 본문을 건너뛴다).
-- GitHub Actions는 쓰지 않는다. 합치기 전에 로컬에서 `scripts/ci.sh`를 돌린다. `swift test`와 아래 원본 대조(`port-status.sh --strict`)를 차례로 돌리고, 하나라도 실패하면 종료 코드 1로 끝난다.
+- 조건이 맞을 때만 도는 시험은 선언 기준 28개다.
+  - 루프백 켰을 때만 15개: DJLinkKit 6, Link Export 루프백 8, Link Export 소켓 가드 1.
+  - 루프백 껐을 때만 2개: Link Export 소켓 가드와 DJLinkKit의 `live sockets are refused inside the test process`(실제 소켓을 거부하는지 확인). 반대 조건의 시험이 짝으로 있어 어느 쪽으로 돌려도 일부는 건너뛴다.
+  - 실제 음원 파일이 있을 때만 5개: 앨범아트 통합.
+  - 시험이 띄운 자식 프로세스 안에서만 2개: SQLCipher 동시 열기 도우미.
+  - `.disabled` 4개: Link Export Beacon 2개(원본 `#[ignore]`, 실제 시간 창에 의존)와 서버 범위 밖 2개(디스크 캐시, 폴더 브라우저).
+- 암호화 픽스처(OneLibrary)는 저장소에 들어 있어 기본 실행에 포함된다. 실제 음원 파일이 있어야 도는 시험은 조건이 맞지 않으면 건너뛴다(원본도 같은 조건에서 본문을 건너뛴다).
+- GitHub Actions는 쓰지 않는다. 합치기 전에 로컬에서 `scripts/ci.sh`를 돌린다. `swift test`, 아래 원본 대조(`port-status.sh --strict`), Link Export 원본 대조(`export-port-status.py --strict`)를 차례로 돌리고, 하나라도 실패하면 종료 코드 1로 끝난다.
 
   ```bash
   UPSTREAM_DIR=~/src/upstream bash scripts/ci.sh             # 루프백 시험은 끈다
-  UPSTREAM_DIR=~/src/upstream bash scripts/ci.sh --loopback  # 루프백 시험까지
+  UPSTREAM_DIR=~/src/upstream bash scripts/ci.sh --loopback  # 루프백 시험까지(DJLinkKit 6개와 Link Export 8개 포함)
   ```
 
 ## 원본 대조
@@ -76,11 +83,17 @@ UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh --stage 4  # 단계 하�
 
 하나라도 다르면 종료 코드 1로 끝난다. 원본이 고정 커밋과 다르면 경고만 낸다.
 
+Link Export는 rbxport 체크아웃(`$UPSTREAM_DIR/rbxport`, 별도 위치는 `DJLINK_EXPORT_UPSTREAM_DIR`)과 같은 방식으로 대조한다. 이 스크립트도 읽기만 한다. 원본이 고정 커밋과 다르거나 이름·순서가 다르면 오류를 내고, `--strict`를 주면 종료 코드 1로 끝난다.
+
+```bash
+UPSTREAM_DIR=~/src/upstream python3 scripts/export-port-status.py --strict
+```
+
 ## CLI
 
 실기 확인용 `djlink` 실행 파일이 있다.
 실기 확인은 공연 중이 아닌 시험용 네트워크에서만 한다.
-사용법은 `swift run djlink --help`(하위 명령별로 `--help`)에 있다.
+사용법은 `swift run djlink --help`(하위 명령별로 `--help`)에 있다. 아래 표는 주요 옵션만 적었으니, 전체 옵션은 `--help`를 본다.
 
 | 명령 | 하는 일 |
 |---|---|
@@ -95,7 +108,7 @@ UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh --stage 4  # 단계 하�
 
 비트 수신은 CDJ-2000nexus에서 확인한 96바이트 0x28 형식을 지원한다. `network.beatEmitter`와 패시브 네트워크의 `beatEmitter`에서 `.beat`를 구독하면 장치 번호·마디 안 비트·곡 BPM·피치를 받는다. `effectiveBPM`은 곡 BPM에 피치 비율을 적용한 계산값이다. CLI `status`와 `passive`는 비트마다 `beat device=… beat=… bpm=… pitch=… effective-bpm=…`를 출력한다. 정밀 위치와 비트 예측 시간은 별개다. 능동 수신은 두 CDJ에서 CLI 실기로 확인했고, 패시브 수신 경로는 가짜 pcap 백엔드로 시험했다. 실제 pcap 확인은 [#6](https://github.com/ImBada/DJLinkKit/issues/6)에 남긴다. 앞부분 시간 필드와 다른 기종은 해석·검증 범위에 포함하지 않는다([#7](https://github.com/ImBada/DJLinkKit/issues/7)).
 
-watch는 곡 ID뿐 아니라 원본 장치·슬롯·곡 종류의 변경과 장치 재접속을 구분해 제목을 다시 조회한다. 메타데이터 조회 실패는 다음 상태 패킷에서 1초 이상 간격으로 최대 두 번 재시도한다. 최초 포함 3회가 모두 실패하면 새 곡이나 새 연결이 될 때까지 멈춘다. 성공한 조회와 진행 중인 조회는 반복 상태 패킷 때문에 중복 실행하지 않는다.
+watch는 곡 ID뿐 아니라 원본 장치·슬롯·곡 종류의 변경과 장치 재접속을 구분해 제목을 다시 조회한다. 메타데이터 조회 실패는 다음 상태 패킷에서 1초 이상 간격으로 최대 두 번 재시도한다. 최초 포함 3회가 모두 실패하면 새 곡이나 새 연결이 될 때까지 멈춘다. 성공한 조회와 진행 중인 조회는 반복 상태 패킷 때문에 중복 실행하지 않는다. 곡 번호가 0(곡 없음)이면 조회하지 않고 `no track`도 내지 않는다(원본 cli는 곡 번호 0도 조회하고 결과가 없으면 `no track`을 낸다).
 
 CLI가 지키는 안전 규칙(docs/PLAN.md §11):
 
@@ -149,8 +162,8 @@ TCP 포트 조회 연결은 응답 직후 닫고, 닫힌 TCP는 장부에서 제
 안전 정책이 있는 Stagehand 연결은 송신 전에 거부한다.
 번호 거부 뒤 startupReady 대기도 끝나며 `startupRejectedDeviceId`·`waitUntilReady()`로 거부 상태를 확인할 수 있다.
 
-종료 코드는 0 정상, 1 실행 실패(제한 시간 초과·번호 거부·캡처 오류 포함), 2 사용법·안전 규칙 거부, 130 중단(Ctrl-C)이다.
-`watch`·`status`·`mixstatus`·`passive`는 Ctrl-C로만 끝나므로 늘 130이다.
+종료 코드는 0 정상, 1 실행 실패(제한 시간 초과·번호 거부·장치 미발견·캡처 오류 포함), 2 사용법·안전 규칙 거부, 130 중단(Ctrl-C)이다.
+`watch`·`status`·`mixstatus`·`passive`는 스스로 끝나지 않으므로 Ctrl-C로 끝나면 130이다. 번호 거부, 장치를 찾지 못한 제한 시간 초과(`watch`·`status`·`mixstatus`), 캡처 오류(`passive`)로 먼저 끝나면 1이다.
 
 ## 원본과 라이선스
 
@@ -164,8 +177,8 @@ TCP 포트 조회 연결은 응답 직후 닫고, 닫힌 TCP는 장부에서 제
 
 ## Link Export
 
-Mac 라이브러리의 곡·메타데이터·분석을 CDJ에 내주는 `DJLinkExport`를 별도 제품으로 작성했다. 원본 rbxport 1.8.0 고정 커밋과 시험을 따른다. 빌드와 원본 대응 시험 469개 검증이 끝났고(원본 ignore 2개 유지), 실기 회귀 2개를 더한 전체 1,479개에서 실패가 없다. CDJ-2000nexus에서 목록·마운트·Mac 음원의 MP3/WAV 로드·재생·CUE 복귀를 확인했다. 현재 CLI에서는 서버를 실행하지 않으며 별도 임시 실행 도구로 실기 확인했다. [검증 기록](docs/LINK-EXPORT-VALIDATION.md)에 범위와 건너뛴 시험을 적었다. 서버 코드의 GPL-2.0-or-later 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), 세부 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md)과 [대응표](docs/export-port-map.md)에 있다.
+Mac 라이브러리의 곡·메타데이터·분석을 CDJ에 내주는 `DJLinkExport`를 별도 제품으로 작성했다. 원본 rbxport 1.8.0 고정 커밋과 시험을 따른다. 원본 시험 502개(core 321, ANLZ 78, 서버 메모리 모델 93, XML 2, 루프백 8)를 모두 옮겼다. 이 중 4개는 `.disabled`다(원본 `#[ignore]` 2개, 서버 범위 밖 2개). 원본에 없는 자체 회귀 16개(실기 회귀 2, 레거시 큐 8, 정렬 키 3, 날짜 1, 소켓 가드 2)가 따로 있다. `DJLinkExport*` 시험은 선언 기준 518개다. 날짜별 실행 기록과 범위, 건너뛴 시험은 [검증 기록](docs/LINK-EXPORT-VALIDATION.md)에 있고, 2026-10-15 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,509개가 모두 통과했다. `--loopback`에서는 Link Export 루프백 8개와 가드 시험이 통과하지만, DJLinkKit TCP 루프백 5개가 전체 실행에서만 시간 초과로 실패한다(따로 돌리면 통과, [#33](https://github.com/ImBada/DJLinkKit/issues/33)). CDJ-2000nexus에서 목록·마운트·Mac 음원의 MP3/WAV 로드·재생·CUE 복귀를 확인했다. 현재 CLI에서는 서버를 실행하지 않으며 별도 임시 실행 도구로 실기 확인했다. 서버 코드의 GPL-2.0-or-later 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), 세부 상태는 [서버 계획](docs/LINK-EXPORT-PLAN.md)과 [대응표](docs/export-port-map.md)에 있다.
 
-원본과 동일한 Link Export 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. 실기에서 찾은 WAV 형식 선택 오류는 PLAN §9에 따라 수정했다. [실기 기록](docs/LINK-EXPORT-HARDWARE.md)과 [남은 레거시 큐 조회 #20](https://github.com/ImBada/DJLinkKit/issues/20)에 확인 범위와 한계를 적었다.
+원본과 동일한 Link Export 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. 실기에서 찾은 WAV 형식 선택 오류는 PLAN §9에 따라 수정했다. [실기 기록](docs/LINK-EXPORT-HARDWARE.md)에 확인 범위와 한계를, [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 레거시 큐 조회의 확인 결과를 적었다.
 
-레거시 큐 조회 [#20](https://github.com/ImBada/DJLinkKit/issues/20)는 추가 회귀 8개를 통과했다. 실기(CDJ-2000nexus)에서 찾은 큐 순서 문제를 고쳐 메모리 큐·루프·Hot Cue A/B/C 호출을 확인했다. 현재 상태는 [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 있다.
+레거시 큐 조회 [#20](https://github.com/ImBada/DJLinkKit/issues/20)는 추가 회귀 8개(`LegacyCueReadTests` 6, `LegacyCueClientTests` 2)로 시험하고, 2026-10-15 검증에서 통과했다. 실기(CDJ-2000nexus)에서 찾은 큐 순서 문제를 고쳐 메모리 큐·루프·Hot Cue A/B/C 호출을 확인했다. 확인한 것과 못 한 것은 [#20 기록](docs/LINK-EXPORT-LEGACY-CUES.md)에 있다.

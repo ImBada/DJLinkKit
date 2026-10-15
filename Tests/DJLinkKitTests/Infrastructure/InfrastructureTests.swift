@@ -133,7 +133,8 @@ struct InfrastructureTests {
         #expect(throws: AddressError.self) { try Address4("not-an-ip") }
     }
 
-    @Test("live sockets are refused inside the test process")
+    // 루프백 시험(DJLINK_LOOPBACK_TESTS=1)에서는 실제 소켓을 허용하므로 그때는 돌리지 않는다.
+    @Test("live sockets are refused inside the test process", .enabled(if: !TestProcess.loopbackTestsEnabled))
     func liveSocketGuard() {
         #expect(TestProcess.isRunning)
         #expect(throws: DJLinkError.self) { try LiveSocketFactory.shared.createUDPSocket(reuseAddr: true) }

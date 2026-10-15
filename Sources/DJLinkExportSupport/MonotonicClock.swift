@@ -1,6 +1,6 @@
-import DJLinkKit
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
+import DJLinkKit
 // Rust Instant에 대응한다. 벽시계 조정은 참여·만료 시간에 영향을 주지 않는다.
 import Dispatch
 import Foundation

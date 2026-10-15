@@ -85,7 +85,6 @@ private struct LinkHistory {
     }
 }
 private func catalogAt<T>(_ values: [T], _ at: Int) -> T? { values.indices.contains(at) ? values[at] : nil }
-private func catalogLess(_ a: String, _ b: String) -> Bool { a.utf8.lexicographicallyPrecedes(b.utf8) }
 private let MAX_ARTWORK: UInt64 = 4 * 1024 * 1024
 private let MEDIUM_ARTWORK_SUFFIX = "_m"
 private let ANALYSIS_CACHE = 32
@@ -380,10 +379,13 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
         var ids = (0..<interner.len()).compactMap(UInt32.init(exactly:)).filter {
             used.contains($0) && !interner.name($0).isEmpty
         }
+        // View의 문자열 열처럼 사용 중인 id마다 UTF-8 키를 한 번만 만든다.
+        var keys = [[UInt8]](repeating: [], count: interner.len())
+        for id in ids { keys[Int(id)] = Array(interner.folded(id).utf8) }
         ids.sort { a, b in
-            let left = interner.folded(a)
-            let right = interner.folded(b)
-            return left.utf8.elementsEqual(right.utf8) ? a < b : catalogLess(left, right)
+            let left = keys[Int(a)]
+            let right = keys[Int(b)]
+            return left == right ? a < b : left.lexicographicallyPrecedes(right)
         }
         return ids.map { .named(id: wire_id(wire_ids, $0), name: interner.name($0)) }
     }
@@ -394,11 +396,10 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
     }
     private static func album_rows(_ library: Library, _ albums: [UInt32]) -> [DJLinkExportDBServer.Row] {
         func name(_ id: UInt32) -> String { id == NO_ID ? "unknown" : library.albums.folded(id) }
-        let sorted = Set(albums).sorted { a, b in
-            let l = name(a)
-            let r = name(b)
-            return l.utf8.elementsEqual(r.utf8) ? a < b : catalogLess(l, r)
-        }
+        // NO_ID도 정렬하므로 키를 id와 함께 보관한다. 동률은 기존처럼 밀집 id 순서다.
+        let sorted = Set(albums).map { (id: $0, key: Array(name($0).utf8)) }.sorted { a, b in
+            a.key == b.key ? a.id < b.id : a.key.lexicographicallyPrecedes(b.key)
+        }.map(\.id)
         return sorted.filter { $0 == NO_ID || !library.albums.name($0).isEmpty }.map {
             .named(id: wire_id(library.album_ids, $0), name: $0 == NO_ID ? "Unknown" : library.albums.name($0))
         }

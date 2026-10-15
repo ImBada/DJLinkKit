@@ -1,6 +1,6 @@
-import DJLinkExportProtocol
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2026 Chris Le (원본 rbxport). Swift 이식: Copyright (c) 2026 Bada
+import DJLinkExportProtocol
 // 원본: rbl-link/src/interface_mode.rs의 inline 시험.
 import Testing
 

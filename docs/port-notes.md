@@ -1,16 +1,16 @@
 # 원본과 다르게 옮긴 곳·옮긴 원본 버그
 
 1:1을 지키지 못했거나 일부러 다르게 둔 곳과, 그대로 옮긴 원본 버그(PLAN §9 후보)를 단계별로 적는다.
-"원본 버그 그대로"는 1:1 기준선(`port/one-to-one`)의 동작이다. 그중 고친 것은 main에 있고(PR #2) 목록은 [PLAN.md](PLAN.md) §9에 있다.
+"원본 버그 그대로"는 1:1 기준선(`port/one-to-one`)의 동작이다. 그중 main이 고친 것에는 "main에서 고침(PLAN §9)"을 붙였다. 고친 목록은 [PLAN.md](PLAN.md) §9에 있다.
 각 항목의 자세한 이유는 해당 Swift 파일 주석(`// 원본과 다름`)에 있다.
 
 ## 공통
 
 - CLI 안전을 위한 추가(기본값은 원본 동작): `djlink`의 중단 상태는 액터 밖의 잠금으로 보호하며 신호 큐와 독립 제한 시간 감시가 즉시 세운다.
     두 번째 신호는 `_exit(130)`, 중단 후 3초 동안 정리가 끝나지 않으면 해당 실패 코드로 강제 종료한다.
-    PDB 순환 쪽 사슬 등 라이브러리의 원본 동기 무한 루프는 그대로 유지한다.
+    PDB 순환 쪽 사슬의 원본 동기 무한 루프는 1:1 기준선에서는 그대로다. main에서 고침(PLAN §9).
     CLI 파일 쓰기·fsync·게시를 별도 큐에서 수행하고 쓰기 도중과 게시 직전에 중단을 검사한다.
-    OneLibrary 임시 DB는 CLI가 주입하는 `LocalDBFileSystem` 래퍼가 쓴 파일을 추적해 종료 정리 때 지운다(라이브러리 변경 없음).
+    OneLibrary 임시 DB는 CLI가 주입하는 `LocalDBFileSystem` 래퍼가 쓴 파일을 추적해 종료 정리 때 지운다. 열기에 실패한 임시 파일은 main의 라이브러리도 지운다(PLAN §9, 아래 4단계).
 
 - 시간 지연은 Node 규칙대로 1ms 미만·2^31-1ms 초과면 1ms로 본다(`Duration.nodeTimerDelay`).
 - 원본 이벤트 처리기·타이머 콜백 안에서 잡지 않은 예외는 Node 프로세스를 죽인다. Swift에서는 그 자리에서 잡고 넘어간다(가이드 §4).
@@ -23,7 +23,7 @@
 - `buildName`: 이름이 20바이트를 넘으면 원본처럼 `RangeError`("offset is out of bounds")에 해당하는 `BufferRangeError`를 던진다. 그래서 패킷을 만드는 함수(`makeAnnouncePacket`, `makeMediaSlotRequest`, 제어 패킷 등)가 `throws`다.
 - 짧은 announce 패킷(0x30–0x34바이트)의 `type`: 원본은 `undefined`, Swift는 `DeviceType(rawValue: 0)`.
 - 미디어 슬롯 생성일: 원본 `new Date(str)` 중 ECMAScript 형식(`YYYY-MM-DD` 등)만 옮겼다. CDJ가 보내는 값(픽스처)은 이 형식이다. V8의 옛 형식(`2020/10/10`)은 NaN 시각이 된다.
-- 원본 버그 그대로: `ready`를 다시 부르면 앞에서 기다리던 쪽이 풀리지 않는다 / `getDeviceEnsured`가 장치가 먼저 와도 타이머를 지우지 않는다 / `makeStatusPacket`이 머리말을 0x0b에 쓴다 / stage 0x06 패킷이 55바이트다.
+- 원본 버그 그대로: `ready`를 다시 부르면 앞에서 기다리던 쪽이 풀리지 않는다 / `getDeviceEnsured`가 장치가 먼저 와도 타이머를 지우지 않는다 / `makeStatusPacket`이 머리말을 0x0b에 쓴다 / stage 0x06 패킷이 55바이트다. 모두 main에서 고침(PLAN §9). `getDeviceEnsured`는 패시브도 고쳤다(#23).
 
 ## 2단계 network
 
@@ -41,7 +41,7 @@
 - `ConnectedProlinkNetwork`는 별칭이다(TS 형 좁히기는 없다).
 - `disconnect()`가 돌려주는 닫기 함수: 원본은 `return this.close`로 바인딩되지 않은 함수라 부르면 TypeError가 난다. Swift 클로저는 인스턴스에 묶여 있어 부르면 정상으로 닫힌다(바인딩 안 된 메서드 참조를 표현할 수 없다).
 - `disconnect()`의 remotedb 종료(`disconnectFromDevice`)는 Task로 돌아, 원본처럼 장치마다 remotedb→localdb가 번갈아 시작하지 않고 localdb를 모두 닫은 뒤 시작한다. 결과 상태는 같다.
-- 원본 버그 그대로: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다(fd가 남는다).
+- 원본 버그 그대로: `bringOnline`에서 bind가 실패하면 앞서 만든 소켓을 닫지 않는다(fd가 남는다). main에서 고침(PLAN §9).
 - CLI 안전을 위한 추가(기본값은 원본 동작): 아래 인자를 주지 않으면 동작이 원본과 같다.
     `djlink`만 쓴다.
   - `UDPSocket.setBoundInterface(name:)`: 소켓을 인터페이스 하나에 묶는다(macOS `IP_BOUND_IF`). 부르지 않으면 묶지 않는다. 기본 구현은 던진다(지원하지 않는 소켓이 조용히 넘어가지 않게). `BSDUDPSocket`은 `if_nametoindex`와 `setsockopt`로 구현했고, 두 호출은 `bindSocketToInterface(fd:name:nameToIndex:setsockopt:)`로 바꿔 넣어 시험한다. `FakeUDPSocket`은 호출을 기록한다.
@@ -91,8 +91,10 @@
 - `LocalDBRow.int`: Int로 표현할 수 없는 NaN·무한대·범위 밖 실수는 nil(원본 JS number는 오류 없음).
 - OneLibrary `dateAdded`를 읽지 못하면 원본은 Invalid Date, Swift는 nil.
 - 원본 버그 후보: 긴 ASCII 문자열(0x40)을 +3부터 u16 length만큼 읽는다(DJCrate는 +4부터 length-4). 실제 형식은 실기로 확인해야 한다.
-- 원본 버그 그대로: PDB 쪽 사슬이 자기 자신이나 지난 쪽을 가리키면 무한 루프에 빠진다(신뢰할 수 없는 입력에서 멈춤).
-- 원본 버그 그대로: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다 / 장치 제거 때 첫 DB 항목만 닫고 같은 장치 항목을 모두 지운다 / OneLibrary 열기에 실패하면 임시 파일을 지우지 않는다.
+- 원본 버그 그대로: PDB 쪽 사슬이 자기 자신이나 지난 쪽을 가리키면 무한 루프에 빠진다(신뢰할 수 없는 입력에서 멈춤). main에서 고침(PLAN §9): 이제 오류를 낸다.
+- 원본 버그 그대로: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다(main도 그대로, PLAN §9 검토 필요) / 장치 제거 때 첫 DB 항목만 닫고 같은 장치 항목을 모두 지운다 / OneLibrary 열기에 실패하면 임시 파일을 지우지 않는다. 뒤의 둘은 main에서 고침(PLAN §9). 패시브도 같다(#23).
+- 원본 버그 그대로: `loadAnlz`가 PCOB·PCO2 태그마다 결과를 덮어써(`src/localdb/rekordbox/index.ts:76-83`) 핫 큐(1)·메모리(0) 목록 중 마지막 태그만 남는다. main에서 고침(PLAN §9). #22: 같은 종류 태그를 파일 순서대로 잇는다. 패시브도 같은 `loadAnlz`를 쓴다.
+- PSSI: 원본 Kaitai song_structure_entry처럼 mood가 1~3 밖이면 kind를 0바이트 unknown_tag로 읽는다. 항목이 len_entry_bytes보다 2바이트 짧아 뒤 항목이 어긋나지만 실패하지 않는다. 결과는 원본처럼 mood high, kind nil(undefined), phraseType Unknown이고, 이 때문에 Phrase.kind는 Int?다. 1:1 기준선(port/one-to-one)은 이 경우 EXT 전체를 실패시킨다(#26).
 
 ## 5단계 (metadata-connect·artwork)
 
@@ -100,8 +102,8 @@
 - 통합 시험은 원본처럼 실제 음원이 있을 때만 돈다(`.enabled(if:)`, 원본은 본문에서 return). 원본 시험 입력에 있던 원작자의 개인 음악 폴더 경로·곡 이름은 공개 저장소라 견본 경로로 바꿨다(2026-10-10 사용자 결정). 파일이 없으면 건너뛰는 시험이라 동작은 같다.
 - 원본 `PARSER_MAP`은 보통 객체라 `isExtensionSupported('constructor')`·`('__proto__')`가 true이고 이상한 값을 돌려준다. Swift는 이 prototype 조회를 옮기지 않았다(false).
 - UTF-16 문자열의 짝 없는 서로게이트: Node는 그대로 두고 Swift `String`은 U+FFFD로 바꾼다(깨진 ID3 텍스트 프레임에서만 다르다).
-- 원본 버그 그대로: APIC의 BOM 검사가 MIME 바이트를 읽는다 / v2.3 확장 헤더 크기에 크기 칸 4바이트가 빠져 태그 시작이 4바이트 어긋난다.
-- 원본 버그 그대로: mp4 문자열 atom(`©nam` 등)이 `toString('ascii')` 때문에 맞지 않는다 / `Object.keys(...).length === 0` 검사 때문에 빈 값만 있어도 null이 아니다 / ID3 프레임 ID를 앞부분만 비교해 `TCOM`·`TCOP`이 장르로 읽힌다.
+- 원본 버그 그대로: APIC의 BOM 검사가 MIME 바이트를 읽는다 / v2.3 확장 헤더 크기에 크기 칸 4바이트가 빠져 태그 시작이 4바이트 어긋난다. 모두 main에서 고침(PLAN §9).
+- 원본 버그 그대로: mp4 문자열 atom(`©nam` 등)이 `toString('ascii')` 때문에 맞지 않는다 / `Object.keys(...).length === 0` 검사 때문에 빈 값만 있어도 null이 아니다 / ID3 프레임 ID를 앞부분만 비교해 `TCOM`·`TCOP`이 장르로 읽힌다. 모두 main에서 고침(PLAN §9).
 
 ## 5단계 (db)
 
@@ -113,12 +115,12 @@
 ## 6단계 (mixstatus)
 
 - `setMayStop`의 `await` 뒤 부분(JS 마이크로태스크)은 프로세서 안의 마이크로태스크 목록에 넣고, 가장 바깥 진입점(`handleState`, `triggerNextTrack`, 타이머 콜백)이 끝날 때 돌린다. 원본에서는 사용자가 한 처리 단위 안에서 `handleState`를 여러 번 부르면 그 뒤에 한꺼번에 돌지만, Swift는 각 호출 끝에 돈다(실제로는 패킷마다 따로 부르므로 같다).
-- 원본 버그 그대로: 같은 trackId 중복을 막는 `return`이 `cancelSetEnding` 호출보다 앞에 있어, 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 난다 / `isSetActive`가 false로 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않는다 / `setMayStop`이 두 번 불리면 앞 취소 함수가 덮여 앞 타이머를 지울 수 없다.
+- 원본 버그 그대로: 같은 trackId 중복을 막는 `return`이 `cancelSetEnding` 호출보다 앞에 있어, 같은 곡을 다시 틀면 30초 뒤 재생 중에 `setEnded`가 난다 / `isSetActive`가 false로 돌아가지 않아 두 번째 세트에서 `setStarted`가 나지 않는다 / `setMayStop`이 두 번 불리면 앞 취소 함수가 덮여 앞 타이머를 지울 수 없다. 모두 main에서 고침(PLAN §9).
 
 ## 7단계 (제어)
 
 - `Control`에 시험용 `correlationByte` 인자를 더했다(기본값은 원본처럼 무작위).
-- 원본 버그 그대로: 재생 상태 패킷이 칸 번호(0–3)를 `device.id`와 견줘 id 4 이상이면 비트가 서지 않는다.
+- 원본 버그 그대로: 재생 상태 패킷이 칸 번호(0–3)를 `device.id`와 견줘 칸이 한 칸 어긋난다(칸 i는 플레이어 i+1의 것이다). 명령은 플레이어 id+1의 칸에 실리고 나머지 칸은 0(시작)으로 채워진다. 그래서 `pause`는 대상을 멈추지 못하고 대상 칸에는 시작이 간다. id가 4 이상이면 맞는 칸이 없어 모든 칸이 시작이다. main에서 고침(PLAN §9): 칸 `device.id - 1`에 명령을 싣고 나머지는 2(그대로)로 채우며, 1~4 밖 번호와 재생·cue 밖의 상태는 보내지 않고 오류를 낸다.
 
 
 ## 8단계 (패시브)
@@ -138,9 +140,9 @@
 
 그대로 옮긴 원본 버그와 동작:
 
-- UDP 길이 이중 차감: cap 0.2.1 `lib/Decoders.js`의 UDP는 wire 길이에서 헤더 8바이트를 뺀 값을 반환하고, 원본 `src/passive/pcap-adapter.ts:213`이 다시 8을 뺀다.
-- 따라서 payload의 끝 8바이트가 잘리고, payload가 8바이트 이하면 방출되지 않으며, 표준 54바이트 announce는 46바이트로 잘려 source IP와 장치 번호 휴리스틱을 쓰는 short format 경로로 읽힌다.
-- `PassiveFlowTests.udpDoubleSubtraction`은 정상 wire 길이로 이 버그를 고정하며, 나중에 버그를 고칠 때 기대값을 바꿔야 한다.
+- UDP 길이 이중 차감(1:1 기준선): cap 0.2.1 `lib/Decoders.js`의 UDP는 wire 길이에서 헤더 8바이트를 뺀 값을 반환하고, 원본 `src/passive/pcap-adapter.ts:213`이 다시 8을 뺀다. main에서 고침(PLAN §9).
+- 따라서 기준선에서는 payload의 끝 8바이트가 잘리고, payload가 8바이트 이하면 방출되지 않으며, 표준 54바이트 announce는 46바이트로 잘려 source IP와 장치 번호 휴리스틱을 쓰는 short format 경로로 읽힌다.
+- 기준선의 `PassiveFlowTests.udpDoubleSubtraction`이 정상 wire 길이로 이 버그를 고정했다. main에는 이 시험이 없고, 같은 파일의 `udpPayloadLength`(`UDP payload keeps every byte and a standard announce uses the full format`)가 고친 동작(payload 전체, 표준 announce의 표준 경로)을 확인한다.
 - libpcap 필터의 netmask: cap 0.2.1 `src/binding.cc:308–355`는 `pcap_lookupnet`의 mask 대신 net을 `pcap_compile`의 마지막 인자로 넘긴다.
 - lookupnet 실패 시 net·mask를 0으로 두고 원본과 같은 경고를 출력한다.
 - 캡처 읽기 오류: 원본은 `pcap_next_ex`를 쓰지 않고 `pcap_dispatch(..., 1, ...)`를 반복한다(`src/binding.cc:159–212`).
@@ -158,4 +160,4 @@ cap 0.2.1의 동작은 npm tarball의 `lib/Decoders.js`·`src/binding.cc`를 읽
 ## CLI 연결 복구 고치기(1:1 완료 뒤)
 
 - 임시 DB([#16](https://github.com/ImBada/DJLinkKit/issues/16)): 우리 CLI의 소유 경로 목록을 본체의 존재 여부와 분리해, 본체가 먼저 삭제돼도 부속 파일을 종료 때 정리한다. 라이브러리 API와 1:1 기준선은 바꾸지 않는다.
-- watch([#17](https://github.com/ImBada/DJLinkKit/issues/17)): 원본 cli의 곡 ID만 비교하는 중복 억제를 원본 장치·슬롯·종류·곡 ID와 연결 수명으로 구분한다. 실패는 제한된 간격·횟수로 다시 조회하고, 이전 상태의 늦은 응답과 파일 게시 안내는 버린다. 원본 대응 시험은 유지하고 우리 CLI 회귀 시험으로 확인한다.
+- watch([#17](https://github.com/ImBada/DJLinkKit/issues/17)): 원본 cli의 곡 ID만 비교하는 중복 억제를 원본 장치·슬롯·종류·곡 ID와 연결 수명으로 구분한다. 실패는 제한된 간격·횟수로 다시 조회하고, 이전 상태의 늦은 응답과 파일 게시 안내는 버린다. 곡 번호가 0(곡 없음)이면 조회하지 않고 `no track`도 내지 않는다(원본 cli는 0도 그대로 조회한다). 원본 대응 시험은 유지하고 우리 CLI 회귀 시험으로 확인한다.
