@@ -271,6 +271,13 @@ let package = Package(
   - 재시작 전후 DB 본체·WAL·SHM 경로를 확인하고 Ctrl-C로 watch를 종료했다. 정상 종료 코드 130 뒤 확인한 경로 6개 중 남은 파일은 0개였다. 이전과 달리 수동 삭제 없이 정리됐다(#16).
   - 개인 곡 제목·경로·DB 내용은 공개 기록에 넣지 않고 원시 로그는 저장소 밖에 둔다. 실제 소켓을 열지 않는 회귀 시험 15개와 전체 로컬 CI도 통과했다.
 
+- 2026-10-16(pcap·패시브, [#6](https://github.com/ImBada/DJLinkKit/issues/6)), CDJ-2000nexus 2대(1·2번)와 DJM-900NXS2(33번), macOS 27, Mac `en8`. BPF 읽기 권한을 준 일반 사용자로 `tcpdump`와 `djlink passive --iface en8`을 함께 돌렸다. 2번 덱에는 Link Export(17번)의 시험용 합성 곡을 올리고 `djlink control`로 재생·정지했다.
+  - pcap(50000~50002, 1,098개)과 `passive` 출력이 맞았다. 장치 5개(CDJ 2대, DJM, Link Export 17번, 가상 CDJ 7번), 1번 빈 덱과 2번 덱의 곡·재생 상태·on-air·master, 2번 덱의 비트가 같았다.
+  - pcap에서도 on-air는 종류 0x03·45바이트·`0x20` = 0x02로 비트 포트(50001)에, keep-alive(0x06)는 54바이트, 비트(0x28)는 96바이트였다(2026-10-14 UDP 수신 결과와 같다).
+  - Ctrl-C로 `passive`가 종료 코드 130으로 끝났고 남은 캡처 프로세스는 없었다.
+  - MAC이 가려져 실리는 것을 이 캡처에서 찾았다(#41, §11).
+  - 캡처에서 CDJ·DJM이 보낸 프레임 7개를 MAC만 가려(제조사 앞자리는 남김) `PassiveCaptureTests`의 입력으로 쓴다. 곡 정보는 합성 곡 번호뿐이다. 원시 pcap과 로그는 저장소 밖에 둔다.
+
 - 2026-10-16(링크 로컬 remotedb TCP, [#40](https://github.com/ImBada/DJLinkKit/issues/40)), CDJ-2000nexus 2대(1·2번)와 DJM-900NXS2(33번), macOS 27, Mac `en8`(169.254/16, 라우터 없음), 가상 CDJ 7번.
   - `djlink metadata --iface en8`이 localdb를 찾지 못해 remotedb로 넘어가자 `Network interface not found: en8`로 TCP 연결을 시작하지도 못했다. `NWPathMonitor`가 기본 경로(`en0`)만 보여 주고 링크 로컬 주소만 있는 `en8`은 넣지 않기 때문이다. 이전 실기는 메타데이터를 NFS(UDP)로만 읽어 드러나지 않았다.
   - 고친 뒤(인터페이스의 IPv4 주소를 로컬 주소로 지정하고, 연결 뒤 경로가 `en8`인지 검사) 같은 명령이 1번 CDJ의 질의 포트(12523)와 remotedb 포트에 `en8`로 연결해 응답을 받았다. USB가 없는 슬롯이라 응답은 0x4003(거절)이었고, 연결 자체를 확인하는 데 그쳤다. 실제 곡의 remotedb 조회는 #9에 남는다.
@@ -320,7 +327,7 @@ let package = Package(
 
 **기능 추가·검토 필요**
 
-- 비트 패킷(0x28): CDJ-2000nexus의 96바이트 형식과 장치 번호·마디 안 비트·곡 BPM·피치를 캡처로 확인했다. 능동·패시브 비트 이벤트와 CLI 출력을 추가했고 회귀 시험과 능동 CLI 실기를 확인했다. 실제 패시브 캡처는 #6에서 확인한다([#7](https://github.com/ImBada/DJLinkKit/issues/7)). 정밀 위치나 실제 다음 비트까지의 시간은 제공하지 않는다.
+- 비트 패킷(0x28): CDJ-2000nexus의 96바이트 형식과 장치 번호·마디 안 비트·곡 BPM·피치를 캡처로 확인했다. 능동·패시브 비트 이벤트와 CLI 출력을 추가했고 회귀 시험과 능동 CLI 실기를 확인했다. 실제 패시브 캡처도 2026-10-16에 확인했다(#6, §8)([#7](https://github.com/ImBada/DJLinkKit/issues/7)). 정밀 위치나 실제 다음 비트까지의 시간은 제공하지 않는다.
 - localdb: 버튼이 있으면 알 수 없는 cue type도 hot_cue로 돌려준다. 원본 시험 주석은 cue도 loop도 아닌 항목을 뺀다고 하므로 검증 누락으로 보이지만 의도를 확정할 시험이 없다.
 - Stagehand 제어(0x07)는 CDJ가 무시한다고 원본 문서(`docs/STAGEHAND.md` §6.1)에 적혀 있다.
 - README는 가상 CDJ 번호로 5를 권하지만 기본값은 7이다(`src/constants.ts:9`). 우리 문서에는 7 이상만 적는다.
