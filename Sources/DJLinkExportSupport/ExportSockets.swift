@@ -47,14 +47,34 @@ extension ServerUDPSocket {
     }
 }
 
-/// Link Export의 실제 전송. 기존 루프백 시험 옵션과 관계없이 시험 프로세스에서는 금지한다.
+/// 시험 프로세스에서 Link Export 실제 소켓을 쓸 수 있는지 정한다.
+/// 기본은 금지다. `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 루프백 주소에만 묶는다(LAN에 보내지 않는다).
+public enum ExportLiveSocketGuard {
+    static let loopbackHosts: Set<String> = ["127.0.0.1", "::1"]
+
+    public static func requireLiveOrLoopbackProcess() throws {
+        if TestProcess.isRunning, !TestProcess.loopbackTestsEnabled {
+            throw DJLinkError(
+                "Live Link Export sockets are disabled in test processes (set DJLINK_LOOPBACK_TESTS=1 for loopback tests)"
+            )
+        }
+    }
+
+    public static func requireLoopbackBindInTests(_ host: String) throws {
+        if TestProcess.isRunning, !loopbackHosts.contains(host) {
+            throw DJLinkError("Link Export loopback tests may bind only 127.0.0.1 or ::1 (got \(host))")
+        }
+    }
+}
+
+/// Link Export의 실제 전송. 시험 프로세스에서는 루프백 시험(`DJLINK_LOOPBACK_TESTS=1`)일 때만 쓸 수 있다.
 @DJLinkActor
 public final class LiveExportSocketFactory: ExportSocketFactory {
     public static let shared = LiveExportSocketFactory()
     public nonisolated init() {}
 
     private func requireLiveProcess() throws {
-        if TestProcess.isRunning { throw DJLinkError("Live Link Export sockets are disabled in test processes") }
+        try ExportLiveSocketGuard.requireLiveOrLoopbackProcess()
     }
 
     public func createUDPSocket(reuseAddr: Bool) throws -> any UDPSocket {

@@ -28,9 +28,7 @@ final class DualStackUDPSocket: ServerUDPSocket {
     private var interface: String?
 
     init(reuseAddr: Bool) throws {
-        guard !TestProcess.isRunning else {
-            throw DJLinkError("Live Link Export sockets are disabled in test processes")
-        }
+        try ExportLiveSocketGuard.requireLiveOrLoopbackProcess()
         self.reuseAddr = reuseAddr
     }
     deinit { source?.cancel() }
@@ -133,6 +131,7 @@ final class DualStackUDPSocket: ServerUDPSocket {
     func bind(port: Int?, address: String?) async throws -> AddressInfo {
         guard !closed, fd < 0 else { throw failure("bind", EINVAL) }
         let host = address ?? "0.0.0.0"
+        try ExportLiveSocketGuard.requireLoopbackBindInTests(host)
         family = host.contains(":") ? AF_INET6 : AF_INET
         let descriptor = socket(family, SOCK_DGRAM, IPPROTO_UDP)
         guard descriptor >= 0 else { throw failure("socket") }

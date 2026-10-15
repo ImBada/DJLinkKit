@@ -42,13 +42,14 @@ final class BSDTCPListener: TCPListener {
     private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
 
     init() throws {
-        if TestProcess.isRunning { throw DJLinkError("Live Link Export sockets are disabled in test processes") }
+        try ExportLiveSocketGuard.requireLiveOrLoopbackProcess()
     }
 
     func bind(port: Int, address: String) async throws -> AddressInfo {
         guard fd < 0, bound == nil, !releasing, let portValue = UInt16(exactly: port) else {
             throw tcpError("bind", EINVAL)
         }
+        try ExportLiveSocketGuard.requireLoopbackBindInTests(address)
         let family = address.contains(":") ? AF_INET6 : AF_INET
         let socket = Darwin.socket(family, SOCK_STREAM, IPPROTO_TCP)
         guard socket >= 0 else { throw tcpError("socket") }
