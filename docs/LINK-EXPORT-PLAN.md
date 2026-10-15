@@ -28,7 +28,7 @@ rbxport 앱 전체, 암호화 rekordbox DB 열기·쓰기, 디스크 인덱스 �
 
 ## 픽스처
 
-실곡 정보·개인 경로가 들어 있는 원본 캡처와 시험 상수는 공개 저장소에 복사하지 않는다. `UpstreamFixtures`가 고정 원본 체크아웃에서 그대로 읽는다. 값 대체·기대값 변경·픽스처 부재 시 성공 처리나 건너뛰기를 하지 않는다. 기본 경로는 `~/src/upstream/rbxport`, 별도 위치는 `DJLINK_EXPORT_UPSTREAM_DIR` 또는 `UPSTREAM_DIR/rbxport`다.
+원본 캡처 파일(바이너리 픽스처)과 개인 라이브러리 정보(곡·경로·토큰)는 공개 저장소에 복사하지 않는다. 캡처 파일은 `UpstreamFixtures`가 고정 원본 체크아웃에서 그대로 읽는다. 원본 시험 코드에 적힌 짧은 문자열 상수(곡 이름·경로 예시 등)는 개인 정보가 아니므로 1:1로 그대로 옮긴다. 값 대체·기대값 변경·픽스처 부재 시 성공 처리나 건너뛰기를 하지 않는다. 기본 경로는 `~/src/upstream/rbxport`, 별도 위치는 `DJLINK_EXPORT_UPSTREAM_DIR` 또는 `UPSTREAM_DIR/rbxport`다.
 
 ## 라이선스·출처
 
