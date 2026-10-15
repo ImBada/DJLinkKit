@@ -26,10 +26,48 @@ public final class Message: Sendable {
         return fields.flatMap(\.buffer)
     }
     public var data: RemoteDBResponseData { get throws { try responseTransform(type, args) } }
+    /// 응답 하나를 기다리며 건너뛸 수 있는 다른 번호의 메시지 수. 넘으면 오류로 끝낸다.
+    /// 끼어드는 메시지가 끝없이 오면 소켓의 유휴 제한(#47)이 늘어나기만 해서 질의가 끝나지 않기 때문이다.
+    public static let maxSkippedMessages = 16
+    /// - Parameter expectedTransactionId: 원본은 응답을 순서대로 읽고 트랜잭션 번호를 보지 않는다(기본값 nil, 원본 동작).
+    ///   값을 주면 그 번호가 아닌 메시지(CDJ가 요청하지 않고 먼저 보낸 것, 이전 질의에서 남은 것)는 끝까지 읽어 버리고
+    ///   디버그 로그만 남긴 채 다음 메시지를 읽는다. 종류 검사는 번호가 맞는 메시지에만 한다(PLAN §9, #46).
     @DJLinkActor public static func fromStream(
-        _ stream: any TCPConnection, _ expect: Response, _ span: TelemetrySpan = TelemetrySpan()
+        _ stream: any TCPConnection, _ expect: Response, _ span: TelemetrySpan = TelemetrySpan(),
+        expectedTransactionId: Int? = nil, logger: any Logger = noopLogger
     ) async throws -> Message {
         let tx = span.startChild(SpanContext(op: "readFromStream", description: getMessageName(expect)))
+        var skipped = 0
+        while true {
+            let (txId, actual, args) = try await readFrame(stream)
+            if let expectedTransactionId, txId != expectedTransactionId {
+                skipped += 1
+                guard skipped <= maxSkippedMessages else {
+                    tx.setStatus(.failedPrecondition)
+                    tx.finish()
+                    throw DJLinkError(
+                        "Skipped more than \(maxSkippedMessages) messages while waiting for transaction 0x\(String(expectedTransactionId, radix: 16))"
+                    )
+                }
+                logger.debug(
+                    "[remotedb] Skipped message type 0x\(String(actual, radix: 16)) with transaction 0x\(String(txId, radix: 16)) while waiting for transaction 0x\(String(expectedTransactionId, radix: 16))"
+                )
+                continue
+            }
+            guard actual == expect.rawValue else {
+                tx.setStatus(.failedPrecondition)
+                tx.finish()
+                throw DJLinkError(
+                    "Expected message type 0x\(String(expect.rawValue, radix: 16)), got 0x\(String(actual, radix: 16))")
+            }
+            tx.finish()
+            return Message(transactionId: txId, type: MessageType(rawValue: actual), args: args)
+        }
+    }
+    /// 메시지 하나를 끝까지 읽는다(매직, 트랜잭션, 종류, 인자 수, 인자 형 목록, 인자). 종류는 검사하지 않는다.
+    @DJLinkActor private static func readFrame(_ stream: any TCPConnection) async throws -> (
+        transactionId: Int, type: Int, args: [Field]
+    ) {
         let magic = try await readField(stream, .uint32)
         guard (magic as? any NumberField)?.value == REMOTEDB_MAGIC else {
             throw DJLinkError("Did not receive expected magic value. Corrupt message")
@@ -58,15 +96,7 @@ public final class Message: Sendable {
             }
             args.append(try await readField(stream, type))
         }
-        let actual = (messageType as! RemoteDBUInt16).value
-        guard actual == expect.rawValue else {
-            tx.setStatus(.failedPrecondition)
-            tx.finish()
-            throw DJLinkError(
-                "Expected message type 0x\(String(expect.rawValue, radix: 16)), got 0x\(String(actual, radix: 16))")
-        }
-        tx.finish()
-        return Message(transactionId: (txId as! RemoteDBUInt32).value, type: MessageType(rawValue: actual), args: args)
+        return ((txId as! RemoteDBUInt32).value, (messageType as! RemoteDBUInt16).value, args)
     }
     private static func argumentType(_ type: FieldType) -> UInt8 {
         switch type {

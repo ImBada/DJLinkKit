@@ -302,6 +302,10 @@ let package = Package(
   - 첫 곡을 읽은 지 약 1.7초 뒤 CDJ가 요청하지 않은 메시지(트랜잭션 0x03800122, 종류 0x4b02)를 보냈다. 원본 읽기는 트랜잭션 번호를 보지 않아 이후 응답이 한 칸씩 밀렸고, 같은 연결의 조회가 모두 실패했다([#46](https://github.com/ImBada/DJLinkKit/issues/46)).
   - 원시 pcap과 `export.pdb`는 저장소 밖에 둔다. 공개 시험에는 합성 곡의 제목·파일 이름 바이트만 쓴다.
 
+- 2026-10-16(#46·#47 수정 뒤 실기 재확인), 같은 장비와 USB, 가상 CDJ 7번, 수정판 `djlink watch --verbose`와 TCP pcap.
+  - 1번 덱에 올라가 있던 분석하지 않은 곡(207)에 이어 132, 207을 차례로 올렸고, 같은 연결에서 세 곡 모두 제목을 읽었다. 이번에는 CDJ가 끼어드는 메시지(0x4b02)를 보내지 않아, 건너뛰는 경로는 실기에서 지나가지 않았다(이슈의 54바이트로 시험한다). 캡처에서 0x4000과 메뉴 머리·항목·꼬리가 모두 요청의 트랜잭션 번호를 되돌려 보냈다.
+  - 2번 CDJ의 LAN을 뽑았다가 다시 꽂은 뒤, 1번 CDJ가 질의 번호 2의 `0x2202`에 답하지 않았다(소개는 성공). 수정판은 10초마다 `RemoteDB query to … timed out`으로 연결을 닫고 다시 연결했고, 3회 뒤 포기했다. 다른 곡을 올려도 같았다. 고치기 전이라면 멈춰 있었을 상황이다(#47). 무응답의 원인은 #48에 적었다.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
@@ -369,6 +373,11 @@ let package = Package(
 **고친 것**(2026-10-16, 패시브 실기)
 
 - passive(#8): 캡처 중 인터페이스가 사라지면 오류 없이 영영 캡처 중으로 남았다(실기 `en8` USB 어댑터 제거, §8). 원본 cap의 반복은 `pcap_dispatch` 오류를 무시해 조용하다. 이제 `PcapAdapter`가 시작 뒤 1초마다 인터페이스 이름의 번호(`if_nametoindex`)를 시작 때의 번호와 견주어, 0이 되거나 바뀌면 `.error`(인터페이스 이름과 번호를 적은 `DJLinkError`)를 한 번 내고 캡처를 멈춰 백엔드를 닫는다. CLI는 이 오류를 "패킷 캡처 오류"로 보고 종료 코드 1로 끝낸다. 주소가 아니라 번호로 보는 것은 케이블만 뽑아도 169.254 주소가 사라지기 때문이다. 케이블만 뽑은 경우는 번호가 그대로여서 오류가 아니며 재연결 뒤 캡처가 이어진다. win32(장치 이름이 다름)와 시작 때 번호를 찾지 못한 이름(`any` 등)은 감시하지 않는다. 시계와 번호 조회는 `PcapAdapter.init`으로 주입하고, `PassiveProlinkNetwork`는 자기 시계를 어댑터에 넘긴다. `stop` 없이 어댑터가 해제되면 감시 타이머도 거둔다. 회귀 시험 8개를 `PassivePcapUpstreamFixTests`에 더했다.
+
+**고친 것**(2026-10-16, remotedb 실기)
+
+- remotedb(#46): `Message.fromStream`이 응답을 순서대로 읽고 트랜잭션 번호를 보지 않았다(`src/remotedb/message/index.ts`). CDJ-2000nexus 실기(분석하지 않은 곡)에서 첫 곡 조회가 성공한 약 1.7초 뒤 CDJ가 요청하지 않은 메시지(트랜잭션 0x03800122, 종류 0x4b02, 54바이트)를 보냈고, 다음 질의가 이것을 자기 응답으로 읽어(`Expected message type 0x4000, got 0x4b02`) 그 연결의 응답이 한 칸씩 밀렸다(`got 0x4001`, `got 0x4101`). 이제 `fromStream`에 `expectedTransactionId`를 더했다(기본값 nil은 원본 동작). 번호를 주면 그 번호가 아닌 메시지(CDJ가 먼저 보낸 것, 앞선 질의에서 남은 것)를 끝까지 읽어 버리고 debug 로그 한 줄만 남긴 채 다음 메시지를 읽으며, 종류 검사는 번호가 맞는 메시지에만 한다. `RemoteDatabase`·`PassiveRemoteDatabase`가 만드는 `Connection`은 켜 두어(`matchesTransactionIds`) `readMessage`가 마지막으로 쓴 요청의 번호로 읽는다. 메뉴 질의의 머리(0x4001)·항목(0x4101)·꼬리(0x4201)는 렌더 요청(0x3000)을 쓴 번호를 따른다. 소개 응답은 소개 요청과 같은 0xfffffffe로 맞춘다. `Connection`을 직접 만들면 기본값은 원본처럼 번호를 보지 않는다(원본 대응 시험이 번호 없는 응답을 쓴다). CDJ-2000nexus는 요청의 번호를 되돌려 보낸다. 같은 날 #9 캡처에서 소개 응답(0xfffffffe), 0x4000, 메뉴 머리(0x4001)·항목(0x4101)·꼬리(0x4201)가 모두 요청의 번호였고, 끼어든 메시지만 0x03800122였다. CLI는 `--verbose`일 때 건너뛴 메시지를 debug 로그로 보인다. 다른 번호의 메시지는 응답 하나당 16개(`Message.maxSkippedMessages`)까지만 건너뛰고 더 오면 오류로 끝낸다(끼어드는 메시지가 끝없이 오면 #47의 유휴 제한이 늘어나기만 하므로). 비교는 번호가 u32로 쓰이는 것에 맞춰 하위 32비트로 한다. 회귀 시험은 `RemoteDBUpstreamFixTests`에 11개(이슈의 54바이트를 입력으로 쓴다)와 `PassiveRemoteDBUpstreamFixTests`에 1개.
+- remotedb(#47): `connectToDevice`가 연결을 마치면 `setTimeout(0)`으로 시간 제한을 꺼서(`src/remotedb/index.ts`) 응답이 없는 질의가 영영 기다리고 그 장치의 잠금을 쥔 채 이후 조회도 막았다(CDJ-2000nexus 실기, 40초 넘게 무응답). 이제 `QueryInterface.query`가 응답을 기다리는 동안 소켓 제한을 10초(연결할 때와 같은 값, `Connection.queryTimeoutMilliseconds`)로 걸고, 질의가 성공하든 실패하든 끝나면 푼다. 소켓의 유휴 제한이라 응답이 오는 동안에는 늘어나고 10초 동안 바이트가 없을 때만 넘는다. 넘으면 연결을 닫고(`destroy`) 질의를 `DJLinkError("RemoteDB query to <ip> timed out")`로 끝낸다. 장치 잠금이 풀리고, 닫힌 연결은 다음 `RemoteDatabase.get`이 버리고 새로 연결한다. 놀고 있는 연결은 원본처럼 제한 없이 열려 있다. 패시브도 같은 `QueryInterface`를 쓰므로 같이 적용된다. 원본 패시브 `get`은 닫힌 연결을 그대로 돌려주어 시간 제한 뒤에도 같은 연결로 계속 실패하므로, 능동처럼 닫힌 연결은 버리고 새로 연결한다. 회귀 시험 4개를 `RemoteDBUpstreamFixTests`에 더했다(무응답 뒤 재연결, 응답이 오는 동안 늘어나는 제한, 질의가 성공·실패로 끝난 뒤 제한을 푸는 것). 패시브 재연결 시험 1개는 `PassiveRemoteDBUpstreamFixTests`에 있다. 같은 날 실기에서 무응답 조건을 다시 만나 10초마다 끊고 다시 연결하는 것을 확인했다(§8).
 
 **고친 것**(2026-10-15, Link Export Swift 쪽)
 
