@@ -435,6 +435,29 @@ struct LocalDBUpstreamFixTests {
             try readLocalDBAnlz(file(length: 32 + 22 * 2, lenEntryBytes: 8))
         }
     }
+
+    // PLAN §9(#13): rekordbox가 실제로 쓴 export.pdb에서 잘라 낸 바이트다(2026-10-16, 합성 시험 곡의 제목과 파일 이름뿐).
+    // 0x40 뒤 u16은 머리 4바이트를 포함한 길이이고, 0 한 바이트 뒤 +4부터 본문이다(UTF-16 0x90과 같은 배치).
+    // 원본 Kaitai 정의는 +3부터 그 길이만큼 읽어, 앞에 NUL이 붙고 다음 문자열의 3바이트를 먹었다.
+    @Test("긴 ASCII(0x40)는 실제 export처럼 머리 4바이트 뒤부터 길이-4바이트를 읽는다")
+    func longASCIIFromRealExport() throws {
+        let title = "DLK-T127-" + String(String(repeating: "0123456789", count: 12).prefix(114)) + "-END"
+        #expect(title.utf8.count == 127)
+        let row: [UInt8] = [0x40, 0x83, 0x00, 0x00] + Array(title.utf8) + [0x03, 0x1F] + Array("dlk-pdb-02.mp3".utf8)
+        let decoded = try PdbStringDecoder.decode(row, at: 0)
+        #expect(decoded.value == title)
+        #expect(decoded.kind == .longASCII)
+        #expect(decoded.byteLength == 131)
+        // 바로 뒤의 빈 짧은 문자열과 파일 이름이 그대로 남는다.
+        #expect(try PdbStringDecoder.decode(row, at: 131).value == "")
+        #expect(try PdbStringDecoder.decode(row, at: 132).value == "dlk-pdb-02.mp3")
+    }
+
+    @Test("긴 ASCII(0x40)의 길이가 머리 4바이트보다 짧거나 행을 넘으면 거부한다")
+    func longASCIIBounds() {
+        #expect(throws: LocalDBPdbError.self) { try PdbStringDecoder.decode([0x40, 3, 0, 0], at: 0) }
+        #expect(throws: LocalDBPdbError.self) { try PdbStringDecoder.decode([0x40, 8, 0, 0, 65], at: 0) }
+    }
 }
 
 /// 원본 cue_entry 배치의 56바이트 PCPT 항목.

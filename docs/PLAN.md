@@ -294,6 +294,14 @@ let package = Package(
   - 같은 시간에 `passive`로 두 덱의 상태를 기록했다. 질의 동안 1·2번 덱의 상태 줄(핵심 값이 바뀔 때만 낸다)이 새로 나오지 않았다.
   - 빈 슬롯의 응답은 시간 초과가 아니라 0x4003 오류로 구분된다. 실제 곡의 remotedb 조회(분석하지 않은 곡처럼 remote로 가는 경우)는 시험용 USB가 있어야 해서 남겼다. 원시 pcap은 저장소 밖에 둔다.
 
+- 2026-10-16(시험용 USB, [#13](https://github.com/ImBada/DJLinkKit/issues/13)·[#9](https://github.com/ImBada/DJLinkKit/issues/9)), CDJ-2000nexus 2대(1·2번)와 DJM-900NXS2, Mac `en8`, 가상 CDJ 7번. 합성 시험 곡 6개(30초, 120 BPM 킥과 사인파)를 만들었다. 4곡은 사용자의 rekordbox로 USB에 내보냈다(Device Library). 제목은 짧은 영문, 127자 영문, 200자 영문(아티스트 150자·앨범 180자), 80자 한글이다. 나머지 2곡은 rekordbox를 거치지 않고 USB 폴더에만 넣었다. USB는 1번 CDJ에 꽂았고 시험 중 rekordbox·rekordboxAgent는 꺼져 있었다.
+  - #13: NFS로 받은 `export.pdb`에서 rekordbox는 127자 이상 영문을 0x40으로 썼다. 머리는 `40 83 00 00`(127자), `40 cc 00 00`(200자), `40 9a 00 00`(150자), `40 b8 00 00`(180자)였다. u16은 본문 길이 + 4이고, 다음 바이트는 0, 본문은 +4부터다. 한글 80자는 `90 a4 00 00`(UTF-16, 160 + 4)였다. 우리 리더(원본 Kaitai와 같음)는 NUL + 본문 + 다음 문자열 3바이트로 읽었다. 고친 내용은 §9다. CLI `metadata`는 기본으로 OneLibrary(`exportLibrary.db`)를 먼저 읽어 바른 제목을 냈다. 코멘트(250자)는 `export.pdb`에서 찾지 못했다.
+  - #9: 폴더에서 올린 곡을 CDJ가 `Unanalyzed`로 보고했고, `djlink watch`가 remotedb로 넘어갔다. 2번 CDJ가 망에 있고 곡이 이미 올라간 상태에서는 질의 번호 2로 보낸 `0x2202`에 0x4000(항목 10개)이 왔다. 이어진 렌더로 제목 `DLK Remote 01`을 읽었다.
+  - 2번 CDJ의 LAN을 빼자 같은 질의 번호 2(이제 비어 있는 번호)에 항목 0개로 답했다. 원본 렌더 경로는 `Cannot read properties of undefined`로 실패했다([#48](https://github.com/ImBada/DJLinkKit/issues/48)).
+  - 곡을 올리는 순간 처음 보낸 질의에는 40초가 넘도록 답이 없었다. 원본은 연결 뒤 시간 제한이 없어 watch가 멈췄다([#47](https://github.com/ImBada/DJLinkKit/issues/47)).
+  - 첫 곡을 읽은 지 약 1.7초 뒤 CDJ가 요청하지 않은 메시지(트랜잭션 0x03800122, 종류 0x4b02)를 보냈다. 원본 읽기는 트랜잭션 번호를 보지 않아 이후 응답이 한 칸씩 밀렸고, 같은 연결의 조회가 모두 실패했다([#46](https://github.com/ImBada/DJLinkKit/issues/46)).
+  - 원시 pcap과 `export.pdb`는 저장소 밖에 둔다. 공개 시험에는 합성 곡의 제목·파일 이름 바이트만 쓴다.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
@@ -327,10 +335,6 @@ let package = Package(
 - localdb(#22): `loadAnlz`가 PCOB·PCO2 태그마다 결과를 덮어써(`src/localdb/rekordbox/index.ts:76-83`) 핫 큐(목록 형 1)·메모리(0) 목록 중 마지막 태그만 남았다. 같은 종류 태그를 파일 순서대로 잇는다. 태그가 하나면 결과가 같고 없으면 nil이다. 패시브도 같은 `loadAnlz`를 쓴다. 회귀 시험 1개를 `LocalDBUpstreamFixTests`에 더했다.
 - localdb(#26): PSSI의 mood가 1~3 밖이면 1:1 기준선은 EXT 전체를 실패시켰다. 원본 Kaitai는 kind를 0바이트 `unknown_tag`로 읽어 항목이 2바이트 짧게 끝까지 읽는다. 원본처럼 읽고 `kind`는 nil(undefined), `phraseType`은 `Unknown`이다. 그래서 공개 형 `Phrase.kind`가 `Int?`가 되었다. 회귀 시험 2개를 더했다.
 
-**실기 확인 뒤 정할 것**
-
-- localdb: 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4).
-
 **기능 추가·검토 필요**
 
 - 비트 패킷(0x28): CDJ-2000nexus의 96바이트 형식과 장치 번호·마디 안 비트·곡 BPM·피치를 캡처로 확인했다. 능동·패시브 비트 이벤트와 CLI 출력을 추가했고 회귀 시험과 능동 CLI 실기를 확인했다. 실제 패시브 캡처도 2026-10-16에 확인했다(#6, §8)([#7](https://github.com/ImBada/DJLinkKit/issues/7)). 정밀 위치나 실제 다음 비트까지의 시간은 제공하지 않는다.
@@ -357,6 +361,10 @@ let package = Package(
 **고친 것**(2026-10-16, Link Export 원본 동작)
 
 - 큐 편집 응답(#32): rbxport의 `0x2105` 저장·삭제 응답은 편집 뒤 큐 목록을 시간순 그대로 보냈다. CDJ-2000nexus는 `0x4702`의 앞쪽 memory 개수만큼을 메모리 큐로 읽어(#20과 같은 원인) 편집 뒤 Hot Cue A 버튼이 꺼졌다. 읽기 응답처럼 메모리 큐를 먼저, 핫큐를 뒤에 보낸다. 원본 대응 시험은 큐가 하나뿐이라 영향이 없다. 편집을 거절할 때의 상태 0x32·빈 목록 응답은 원본(rekordbox와 같다는 원본 주석, `cue_writes.rs`)대로 둔다. 실기 기록은 [LINK-EXPORT-LEGACY-CUES.md](LINK-EXPORT-LEGACY-CUES.md).
+
+**고친 것**(2026-10-16, 시험용 USB 실기)
+
+- localdb(#13): 긴 ASCII 문자열(0x40)을 원본 Kaitai 정의처럼 +3부터 u16 length바이트 읽었다. rekordbox가 실제로 쓴 export.pdb(§8)는 UTF-16(0x90)과 같은 배치였다. u16은 머리 4바이트를 포함한 길이이고, 0 한 바이트 뒤 +4부터 length-4바이트가 본문이다(DJCrate 리더와 같다). 그래서 127자 이상 영문 제목·아티스트·앨범이 앞에 NUL이 붙고 다음 문자열 3바이트를 먹은 채로 읽혔다. 이제 +4부터 length-4바이트를 읽고, length가 4보다 작거나 행을 넘으면 거부한다. 실제 export에서 잘라 낸 바이트(합성 곡의 제목과 파일 이름)로 회귀 시험 2개를 `LocalDBUpstreamFixTests`에 더했다. 우리 바이트 리더 시험(`LocalDBReaderIntegrationTests`의 느슨한 문자열 시험)의 0x40 입력도 이 배치로 고쳤다. CLI의 기본 경로는 OneLibrary를 먼저 읽어서 rekordbox 7 export에서는 드러나지 않았고, `export.pdb`만 있는 장치에서 드러난다.
 
 **고친 것**(2026-10-16, 패시브 실기)
 
@@ -420,7 +428,7 @@ let package = Package(
   CDJ가 1~6만 답하기 때문이며 원본 주석에 CDJ-3000 실기 확인(2026-08-30)이 있다.
   그래서 가상 CDJ가 7 이상이어도 remotedb 질의에는 같은 랙의 다른 CDJ 번호(없으면 비어 있는 1~6)가 실린다.
   1:1이라 고치지 않았고, CLI는 연결할 때 고른 번호를 한 줄 로그로 남긴다.
-  CDJ-2000nexus(2026-10-16, §8)는 announce 7번 가상 CDJ가 질의 번호 2번(옆 CDJ의 번호)을 실은 Introduce를 받아 줬고, 질의하는 동안 두 덱의 상태는 바뀌지 않았다. 실제 곡 조회는 아직이다(#9). 바꿀지는 사용자가 정한다.
+  CDJ-2000nexus(2026-10-16, §8)는 announce 7번 가상 CDJ가 질의 번호 2번(옆 CDJ의 번호)을 실은 Introduce를 받아 줬고, 질의하는 동안 두 덱의 상태는 바뀌지 않았다. 분석하지 않은 곡의 remotedb 조회도 이 번호로 성공했다. 다만 빌린 번호의 플레이어가 망에 없으면 항목 0개로 답했다(#48). 바꿀지는 사용자가 정한다.
 - 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 재생 상태 패킷에 칸이 있는 1~4번 플레이어에만 보낸다(§9, 2026-10-14 실기 확인 뒤 고침).
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
 - MAC(#41): macOS 27.0.1에서 일반 프로세스가 `getifaddrs`의 AF_LINK로 읽으면 `en0`·`en8` 모두 `02:00:00:00:00:00`이 나온다(`ifconfig`는 실제 값). `SystemInterfaceProvider`가 이 값을 그대로 써서 가상 CDJ(7번)와 Link Export(17번)가 announce·keep-alive에 이 MAC을 싣는다(2026-10-16 pcap). 원본(Node `os.networkInterfaces`)도 같은 시스템 호출이다. CDJ-2000nexus는 이 값으로도 두 장치를 받아 줬다. Mac 여러 대가 같은 망에 있으면 같은 MAC을 알리고, Stagehand 모드의 MAC(OUI + 하위 3바이트)도 모두 같아진다. 바꿀지는 §9 "기능 추가·검토 필요"에 둔다.

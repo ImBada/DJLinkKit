@@ -312,12 +312,13 @@ import Testing
         #expect(try PdbStringDecoder.decode([0x90, 7, 0, 0, 0, 0xD8, 0xFF], at: 0).value == "�")
         #expect(try PdbStringDecoder.decode([1], at: 0).value == nil)
         #expect(try PdbStringDecoder.decode([2], at: 0).value == nil)
-        #expect(try PdbStringDecoder.decode([0x40, 3, 0, 65, 0x80, 0xFF], at: 0).value == "A\u{80}ÿ")
+        // PLAN §9(#13): 긴 ASCII의 길이는 머리 4바이트를 포함하고 본문은 +4부터다(실제 export 확인). 바이트를 그대로 문자로 만드는 것은 같다.
+        #expect(try PdbStringDecoder.decode([0x40, 7, 0, 0, 65, 0x80, 0xFF], at: 0).value == "A\u{80}ÿ")
         #expect(
             try PdbStringDecoder.decode([0x90, 11, 0, 0, 0xFF, 0xFE, 0x00, 0xD8, 65, 0, 0x42], at: 0).value == "�A�")
         #expect(try PdbStringDecoder.decode([0x90, 6, 0, 0, 0x03, 0], at: 0, isrcAllowed: true).value == "\u{3}")
         #expect(throws: LocalDBPdbError.self) {
-            try PdbStringDecoder.decode([0x40, 4, 0, 65], at: 0)
+            try PdbStringDecoder.decode([0x40, 8, 0, 0, 65], at: 0)
         }
     }
 
