@@ -356,7 +356,7 @@
 | `Tests/DJLinkKitTests/LocalDB/LocalDBUpstreamFixTests.swift` | 13 | **main.** PLAN §9 localdb 고침(PDB 사슬, 장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일, ANLZ 큐 태그 잇기 #22, 알 수 없는 PSSI mood #26, 긴 ASCII 0x40 #13) |
 | `Tests/DJLinkKitTests/MixStatus/MixStatusUpstreamFixTests.swift` | 7 | **main.** PLAN §9 mixstatus 고침 |
 | `Tests/DJLinkKitTests/Network/NetworkUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `bringOnline` bind 실패 때 만든 소켓 닫기 |
-| `Tests/DJLinkKitTests/RemoteDB/RemoteDBUpstreamFixTests.swift` | 15 | **main.** PLAN §9 remotedb 응답이 CDJ가 먼저 보낸 메시지에 밀리지 않는 것(#46)과 질의 응답 시간 제한(#47) |
+| `Tests/DJLinkKitTests/RemoteDB/RemoteDBUpstreamFixTests.swift` | 17 | **main.** PLAN §9 remotedb 응답이 CDJ가 먼저 보낸 메시지에 밀리지 않는 것(#46), 질의 응답 시간 제한(#47), 분석하지 않은 곡의 항목 0개(#48) |
 | `Tests/DJLinkKitTests/Status/StatusUpstreamFixTests.swift` | 8 | **main.** PLAN §9 위치 파서의 종류 바이트 검사와 비트 포트(50001) on-air |
 | `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJKeepAliveUpstreamFixTests.swift` | 1 | **main.** PLAN §9 keep-alive 54바이트 |
 | `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJReadyUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `ready` 재호출과 번호 거부 때 대기자 풀기 |
@@ -378,13 +378,13 @@
 
 | 시험 대상 | 원본 대응 | 우리 시험 | 합 | 1:1 기준선 합 |
 |---|---|---|---|---|
-| `DJLinkKitTests` | 580 | 200 | 780 | 683 |
+| `DJLinkKitTests` | 580 | 202 | 782 | 683 |
 | `DJLinkControlTests` | 11 | 7 | 18 | 13 |
 | `DJLinkPassiveTests` | 31 | 40 | 71 | 48 |
 | `djlinkTests` | 0 | 180 | 180 | 163 |
-| 합 | 622 | 427 | 1,049 | 907 |
+| 합 | 622 | 429 | 1,051 | 907 |
 
-1:1 기준선(`port/one-to-one`)의 선언 수는 907개다(위 표의 마지막 칸, #26의 PSSI 시험 2개를 2026-10-16 기준선에도 더해 905개에서 늘었다). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 907개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 519개까지 합친 전체 선언 수 1,568개와 조건부 30개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 README "시험"에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
+1:1 기준선(`port/one-to-one`)의 선언 수는 907개다(위 표의 마지막 칸, #26의 PSSI 시험 2개를 2026-10-16 기준선에도 더해 905개에서 늘었다). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 907개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 519개까지 합친 전체 선언 수 1,570개와 조건부 30개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 README "시험"에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
 
 ## 4. 우리가 더한 Swift 파일 (원본에 대응하는 파일이 없다)
 
