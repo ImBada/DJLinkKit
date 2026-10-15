@@ -63,13 +63,14 @@
 | model | `rbl-index/tests/smartlists.rs` | `DJLinkExportModelTests/SmartlistsTests.swift` | 5 |
 | model | `rbl-index/tests/unanalysed.rs` | `DJLinkExportModelTests/UnanalysedTests.swift` | 1 |
 | model | `rbl-index/tests/filter.rs` | `DJLinkExportModelTests/FilterTests.swift` | 12 (1개 `.disabled`) |
+| model | `rbl-index/tests/file_created.rs` | `DJLinkExportModelTests/FileCreatedTests.swift` | 7 (1개 `.disabled`) |
 | xml | `rbl-core/src/xml.rs` | `DJLinkExportModelTests/XmlTests.swift` | 2 |
 
-총 487개: 서버 core 321, ANLZ 78, 서버 메모리 모델 86, XML 스캐너 2. 모델 시험 파일 3개(18개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 새 3개 파일의 `.disabled` 1개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`)는 서버 범위 밖이라 이름만 유지했다. [검증 기록](LINK-EXPORT-VALIDATION.md).
+총 494개: 서버 core 321, ANLZ 78, 서버 메모리 모델 93, XML 스캐너 2. 모델 시험 파일 4개(25개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 새 4개 파일의 `.disabled` 2개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`, 폴더 브라우저의 `a_folder_sorts_its_tracks_and_loose_files_by_creation_together`)는 서버 범위 밖이라 이름만 유지했다. `FileCreatedTests.swift`의 활성 시험 6개는 구현 단계에서 실행하지 않았다. [검증 기록](LINK-EXPORT-VALIDATION.md).
 
 ## 의존 범위의 제한
 
-`rbl-index` 전체 149개 시험을 옮겼다고 주장하지 않는다. 이번 서버가 사용하는 메모리 알고리즘의 원본 시험 86개와 `rbl-core` XML 2개를 별도로 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 이번 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
+`rbl-index` 전체 149개 시험을 옮겼다고 주장하지 않는다. 이번 서버가 사용하는 메모리 알고리즘·파일 생성 시각의 원본 시험 93개와 `rbl-core` XML 2개를 별도로 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 이번 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
 
 픽스처 파일이나 실곡 문자열이 필요한 경우 원본 값을 외부 고정 체크아웃에서 그대로 읽는다. 바꾼 값·sanitized capture를 대신 넣지 않는다.
 
@@ -84,3 +85,5 @@ Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공
 `port/rbxport-one-to-one` (`03d3371`)이 원본과 동일한 기준선이다. 현재 브랜치는 PLAN §9의 WAV 디코더 선택 id 수정과 `TrackInfoCompatibilityTests.swift` 2개를 더한다. 이 시험은 `export-test-map.json`의 `regressions`에 따로 기록하고 원본 대응 469개에 합치지 않는다. 수정 뒤 전체 CI는 등록 1,479개에서 실패 0이다. [실기 기록](LINK-EXPORT-HARDWARE.md).
 
 #20 레거시 큐 조회는 별도 자체 회귀 `LegacyCueReadTests.swift` 6개와 `LegacyCueClientTests.swift` 2개를 추가 작성했다. 원본 대응 469개는 그대로이며 자체 회귀는 총 10개다. 실기에서 찾은 큐 순서 문제(메모리 큐 먼저)를 고쳐 CDJ에서 확인했다. [#20 기록](LINK-EXPORT-LEGACY-CUES.md).
+
+#24 정렬 키 캐시의 자체 회귀 3개(`FilenameSortingRegressionTests.swift` 1개, `CatalogSortingRegressionTests.swift` 2개), #25 그레고리력 날짜의 자체 회귀 1개(`SmartDateRegressionTests.swift`)를 별도 등록했다. 원본 대응 494개와 별개로 자체 회귀는 총 14개다. 새 시험은 구현 단계에서 실행하지 않았다.

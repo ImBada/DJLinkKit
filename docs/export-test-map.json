@@ -197,6 +197,11 @@
       "swift": "DJLinkExportModelTests/FilterTests.swift"
     },
     {
+      "group": "model",
+      "source": "rbl-index/tests/file_created.rs",
+      "swift": "DJLinkExportModelTests/FileCreatedTests.swift"
+    },
+    {
       "group": "xml",
       "source": "rbl-core/src/xml.rs",
       "swift": "DJLinkExportModelTests/XmlTests.swift"
@@ -226,6 +231,25 @@
       "names": [
         "기존 클라이언트가 메모리 큐·A/B/C·루프를 가짜 TCP에서 읽는다",
         "빈 레거시 큐 응답을 기존 클라이언트가 대기 없이 해석한다"
+      ]
+    },
+    {
+      "swift": "DJLinkExportModelTests/FilenameSortingRegressionTests.swift",
+      "names": [
+        "파일명 정렬이 대소문자·전각 문자와 동률의 행 순서를 유지한다"
+      ]
+    },
+    {
+      "swift": "DJLinkExportTests/CatalogSortingRegressionTests.swift",
+      "names": [
+        "이름 메뉴 정렬이 대소문자·전각 문자와 동률의 밀집 id 순서를 유지한다",
+        "앨범 메뉴 정렬이 중복·빈 이름·Unknown과 동률의 밀집 id 순서를 유지한다"
+      ]
+    },
+    {
+      "swift": "DJLinkExportModelTests/SmartDateRegressionTests.swift",
+      "names": [
+        "오늘 날짜가 비그레고리력 설정에서도 현지 그레고리력 연월일을 반환한다"
       ]
     }
   ]
