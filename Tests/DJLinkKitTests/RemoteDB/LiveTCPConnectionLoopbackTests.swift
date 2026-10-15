@@ -98,6 +98,16 @@ private final class LoopbackServer {
     }
 }
 
+/// 127.0.0.1을 다른 이름의 인터페이스 주소로 알려 준다.
+private struct LoopbackAliasInterfaces: InterfaceProvider {
+    func networkInterfaces() -> [(name: String, addresses: [NetworkInterfaceInfo])] {
+        let info = NetworkInterfaceInfo(
+            address: "127.0.0.1", netmask: "255.0.0.0", family: "IPv4", mac: "00:00:00:00:00:00",
+            internal: true, cidr: "127.0.0.1/8")
+        return [("djlink-test-interface", [info])]
+    }
+}
+
 @Suite("LiveTCPConnectionLoopback", .enabled(if: TestProcess.loopbackTestsEnabled))
 @DJLinkActor
 struct LiveTCPConnectionLoopbackTests {
@@ -189,6 +199,33 @@ struct LiveTCPConnectionLoopbackTests {
         #expect(try await client.read(1) == nil)
         try await Task.sleep(for: .milliseconds(20))
         #expect(try await client.read(1) == nil)
+    }
+
+    @Test("인터페이스에 묶은 연결은 그 인터페이스 주소에서 연결한다")
+    func pinnedToInterface() async throws {
+        // #40: 경로 감시에 나오지 않는 인터페이스도 주소로 묶으면 연결된다.
+        let server = try LoopbackServer()
+        let client = LiveTCPConnection()
+        defer { client.destroy(nil) }
+        try client.setRequiredInterface(name: "lo0")
+        try await connect(client, server)
+        #expect(client.isOpen)
+    }
+
+    @Test("묶은 인터페이스가 아닌 경로로 붙으면 연결을 끊는다")
+    func pinnedInterfaceMismatch() async throws {
+        // 주소는 127.0.0.1이지만 이름이 다른 인터페이스로 꾸며, 실제 경로(lo0)가 묶은 이름과 다르게 한다.
+        let server = try LoopbackServer()
+        let client = LiveTCPConnection()
+        defer { client.destroy(nil) }
+        client.interfaceProvider = LoopbackAliasInterfaces()
+        try client.setRequiredInterface(name: "djlink-test-interface")
+        await #expect(throws: DJLinkError("TCP connection is not on network interface djlink-test-interface")) {
+            try await withTimeout(clock: SystemClock.shared, .seconds(3)) {
+                try await client.connect(port: server.port, host: "127.0.0.1")
+            }
+        }
+        #expect(!client.isOpen)
     }
 
     @Test("연결 객체를 해제하면 NWConnection도 취소한다")

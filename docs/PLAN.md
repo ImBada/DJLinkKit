@@ -271,6 +271,10 @@ let package = Package(
   - 재시작 전후 DB 본체·WAL·SHM 경로를 확인하고 Ctrl-C로 watch를 종료했다. 정상 종료 코드 130 뒤 확인한 경로 6개 중 남은 파일은 0개였다. 이전과 달리 수동 삭제 없이 정리됐다(#16).
   - 개인 곡 제목·경로·DB 내용은 공개 기록에 넣지 않고 원시 로그는 저장소 밖에 둔다. 실제 소켓을 열지 않는 회귀 시험 15개와 전체 로컬 CI도 통과했다.
 
+- 2026-10-16(링크 로컬 remotedb TCP, [#40](https://github.com/ImBada/DJLinkKit/issues/40)), CDJ-2000nexus 2대(1·2번)와 DJM-900NXS2(33번), macOS 27, Mac `en8`(169.254/16, 라우터 없음), 가상 CDJ 7번.
+  - `djlink metadata --iface en8`이 localdb를 찾지 못해 remotedb로 넘어가자 `Network interface not found: en8`로 TCP 연결을 시작하지도 못했다. `NWPathMonitor`가 기본 경로(`en0`)만 보여 주고 링크 로컬 주소만 있는 `en8`은 넣지 않기 때문이다. 이전 실기는 메타데이터를 NFS(UDP)로만 읽어 드러나지 않았다.
+  - 고친 뒤(인터페이스의 IPv4 주소를 로컬 주소로 지정하고, 연결 뒤 경로가 `en8`인지 검사) 같은 명령이 1번 CDJ의 질의 포트(12523)와 remotedb 포트에 `en8`로 연결해 응답을 받았다. USB가 없는 슬롯이라 응답은 0x4003(거절)이었고, 연결 자체를 확인하는 데 그쳤다. 실제 곡의 remotedb 조회는 #9에 남는다.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
@@ -381,7 +385,7 @@ let package = Package(
 
 - 시험은 기본적으로 실제 소켓을 열지 않는다(원본 시험도 0개다). 예외는 아래 루프백 시험뿐이다.
 - 실제 소켓을 만드는 쪽(`SocketFactory.live`)은 시험 프로세스에서 부르면 바로 실패하게 한다. DJCrate의 `TestProcess`처럼 시험 프로세스를 알아본다.
-- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다(DJLinkKit 6개, Link Export 8개). Link Export의 실제 소켓 가드(`LiveExportSocketFactory`)도 같은 조건에서만 열고, 그때도 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다)(#28). 시험은 LAN에 아무것도 보내지 않는다.
+- 루프백(127.0.0.1) 통합 시험은 `DJLINK_LOOPBACK_TESTS=1`일 때만 따로 돈다(DJLinkKit 8개, Link Export 8개). Link Export의 실제 소켓 가드(`LiveExportSocketFactory`)도 같은 조건에서만 열고, 그때도 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다)(#28). 시험은 LAN에 아무것도 보내지 않는다.
 
 **실기와 CLI**
 

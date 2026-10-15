@@ -22,47 +22,27 @@ final class LiveTCPConnection: TCPConnection {
         requiredInterfaceName = name
     }
 
-    /// 인터페이스 이름을 찾는 동안의 대기. `destroy`가 바로 풀 수 있게 들고 있는다.
-    private struct InterfaceResolution {
-        var continuation: CheckedContinuation<NWInterface, any Error>
-        var monitor: NWPathMonitor
-        var timer: TimerHandle?
-    }
-    private var resolution: InterfaceResolution?
-    /// 인터페이스 해석을 기다리는 중인가(시험용).
-    var isResolvingInterface: Bool { resolution != nil }
-    /// 시험이 경로 감시를 시작하지 않고 대기 상태만 만들 때 끈다. 기본은 원본처럼 감시한다.
-    var startsPathMonitor = true
+    /// 인터페이스 주소를 읽는 곳. 시험이 바꿀 수 있게 둔다.
+    var interfaceProvider: any InterfaceProvider = SystemInterfaceProvider()
 
-    private func resolveInterface(_ name: String) async throws -> NWInterface {
-        guard !ended else { throw DJLinkError("Socket closed") }
-        let monitor = NWPathMonitor()
-        return try await withCheckedThrowingContinuation { continuation in
-            let timer = clock.setTimeout(.seconds(3)) { [self] in
-                finishResolving(.failure(DJLinkError("Network interface not found: \(name)")))
-            }
-            resolution = InterfaceResolution(continuation: continuation, monitor: monitor, timer: timer)
-            monitor.pathUpdateHandler = { path in
-                DJLinkActor.assumeIsolated {
-                    if let interface = path.availableInterfaces.first(where: { $0.name == name }) {
-                        self.finishResolving(.success(interface))
-                    } else {
-                        self.finishResolving(.failure(DJLinkError("Network interface not found: \(name)")))
-                    }
-                }
-            }
-            if startsPathMonitor { monitor.start(queue: DJLinkActor.queue) }
+    /// 묶을 인터페이스의 IPv4 주소. 연결할 주소와 같은 서브넷에 있는 것을 먼저 고르고, 없으면 첫 주소다.
+    /// #40: `NWPathMonitor`는 기본 경로만 보여 주소가 링크 로컬뿐인 인터페이스를 찾지 못한다. 그래서 이름 대신 주소로 묶는다.
+    func localAddress(interface name: String, host: String) throws -> String {
+        guard let interface = interfaceProvider.networkInterfaces().first(where: { $0.name == name }) else {
+            throw DJLinkError("Network interface not found: \(name)")
         }
+        let addresses = interface.addresses.filter { $0.family == "IPv4" }
+        let destination = try? Address4(host)
+        let sameSubnet = addresses.first { info in
+            guard let destination, let cidr = info.cidr, let subnet = try? Address4(cidr) else { return false }
+            return destination.isInSubnet(subnet)
+        }
+        guard let chosen = sameSubnet ?? addresses.first else {
+            throw DJLinkError("Network interface has no IPv4 address: \(name)")
+        }
+        return chosen.address
     }
 
-    /// 인터페이스 해석 대기를 한 번만 끝낸다. 타이머와 감시를 거둔다.
-    private func finishResolving(_ result: Result<NWInterface, any Error>) {
-        guard let pending = resolution else { return }
-        resolution = nil
-        clock.clearTimeout(pending.timer)
-        pending.monitor.cancel()
-        pending.continuation.resume(with: result)
-    }
     private var connecting: CheckedContinuation<Void, any Error>?
     private var reads: [(size: Int?, continuation: CheckedContinuation<[UInt8]?, any Error>)] = []
     private var bytes: [UInt8] = []
@@ -88,8 +68,9 @@ final class LiveTCPConnection: TCPConnection {
         }
         let parameters = NWParameters.tcp
         if let requiredInterfaceName {
-            parameters.requiredInterface = try await resolveInterface(requiredInterfaceName)
             guard !ended else { throw DJLinkError("Socket closed") }
+            let local = try localAddress(interface: requiredInterfaceName, host: host)
+            parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(local), port: .any)
         }
         try connectGuard?()
         let conn = NWConnection(host: NWEndpoint.Host(host), port: port, using: parameters)
@@ -102,6 +83,12 @@ final class LiveTCPConnection: TCPConnection {
                     switch state {
                     case .ready:
                         guard !self.ended else { return }
+                        // 로컬 주소만으로는 나가는 인터페이스가 보장되지 않는다. 다른 인터페이스로 붙었으면 끊는다.
+                        if let name = self.requiredInterfaceName,
+                           !(self.connection?.currentPath?.availableInterfaces.contains { $0.name == name } ?? false) {
+                            self.destroy(DJLinkError("TCP connection is not on network interface \(name)"))
+                            return
+                        }
                         self.isOpen = true
                         self.connecting?.resume()
                         self.connecting = nil
@@ -159,8 +146,6 @@ final class LiveTCPConnection: TCPConnection {
         isOpen = false
         ended = true
         clock.clearTimeout(timer)
-        // CLI 안전을 위한 추가: 인터페이스를 찾는 중이면 destroy가 3초를 기다리지 않고 바로 푼다.
-        finishResolving(.failure(failure ?? DJLinkError("Socket closed")))
         if let connecting {
             connecting.resume(throwing: failure ?? DJLinkError("Socket closed"))
             self.connecting = nil
