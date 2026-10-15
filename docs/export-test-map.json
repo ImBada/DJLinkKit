@@ -217,7 +217,7 @@
       "swift": "DJLinkExportTests/ExportSocketGuardTests.swift",
       "names": [
         "루프백 시험이 아니면 시험 프로세스에서 실제 소켓을 만들지 않는다",
-        "루프백 시험에서도 루프백 밖 주소에는 묶지 않는다"
+        "루프백 시험에서도 TCP는 루프백 밖 주소에 묶지 않고 UDP는 루프백 밖으로 보내지 않는다"
       ]
     },
     {

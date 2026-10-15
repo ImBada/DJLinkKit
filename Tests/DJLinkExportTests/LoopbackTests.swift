@@ -44,6 +44,7 @@ private func writeFile(_ path: String, _ bytes: [UInt8]) throws {
 private func trackBytes() -> [UInt8] { (0..<40_000).map { UInt8($0 % 251) } }
 
 /// 실제 파일 둘, 깊은 경로 하나, 아무것도 없는 디렉터리 하나.
+@DJLinkActor
 private func exports(_ dir: TempDir) throws -> Exports {
     let track = trackBytes()
     try writeFile(dir.join("track.mp3"), track)

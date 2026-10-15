@@ -131,7 +131,6 @@ final class DualStackUDPSocket: ServerUDPSocket {
     func bind(port: Int?, address: String?) async throws -> AddressInfo {
         guard !closed, fd < 0 else { throw failure("bind", EINVAL) }
         let host = address ?? "0.0.0.0"
-        try ExportLiveSocketGuard.requireLoopbackBindInTests(host)
         family = host.contains(":") ? AF_INET6 : AF_INET
         let descriptor = socket(family, SOCK_DGRAM, IPPROTO_UDP)
         guard descriptor >= 0 else { throw failure("socket") }
@@ -198,6 +197,7 @@ final class DualStackUDPSocket: ServerUDPSocket {
         var sent = 0
         do {
             guard !closed, fd >= 0 else { throw SocketNotRunningError() }
+            try ExportLiveSocketGuard.requireLoopbackDestinationInTests(address)
             sent = try withAddress(address, port) { pointer, length in
                 let count = msg.withUnsafeBytes { sendto(fd, $0.baseAddress, $0.count, 0, pointer, length) }
                 guard count >= 0 else { throw failure("sendto") }

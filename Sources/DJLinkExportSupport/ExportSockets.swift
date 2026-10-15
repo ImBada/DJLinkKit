@@ -48,7 +48,9 @@ extension ServerUDPSocket {
 }
 
 /// 시험 프로세스에서 Link Export 실제 소켓을 쓸 수 있는지 정한다.
-/// 기본은 금지다. `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 루프백 주소에만 묶는다(LAN에 보내지 않는다).
+/// 기본은 금지다. `DJLINK_LOOPBACK_TESTS=1`일 때만 허용하고, 그때도 TCP는 루프백 주소에만 묶고
+/// UDP는 루프백 주소로만 보낸다(LAN에 보내지 않는다). UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤
+/// 인터페이스를 고정하므로 묶는 주소가 아니라 보내는 주소를 검사한다.
 public enum ExportLiveSocketGuard {
     static let loopbackHosts: Set<String> = ["127.0.0.1", "::1"]
 
@@ -63,6 +65,12 @@ public enum ExportLiveSocketGuard {
     public static func requireLoopbackBindInTests(_ host: String) throws {
         if TestProcess.isRunning, !loopbackHosts.contains(host) {
             throw DJLinkError("Link Export loopback tests may bind only 127.0.0.1 or ::1 (got \(host))")
+        }
+    }
+
+    public static func requireLoopbackDestinationInTests(_ host: String) throws {
+        if TestProcess.isRunning, !loopbackHosts.contains(host) {
+            throw DJLinkError("Link Export loopback tests may send only to 127.0.0.1 or ::1 (got \(host))")
         }
     }
 }
