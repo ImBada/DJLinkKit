@@ -293,6 +293,89 @@ struct LocalDBUpstreamFixTests {
         #expect(fs.unlinks == fs.writes)
         #expect(oneLibrary.closeCalls == (scenario == "success" ? 1 : 0))
     }
+
+    // 이슈 #22
+    @Test("같은 종류의 PCOB·PCO2 태그를 덮어쓰지 않고 파일 순서대로 잇는다")
+    @DJLinkActor func anlzCueListsConcatenate() async throws {
+        let track = LocalDBAnlzTrackReference(analyzePath: "/ANLZ0000")
+        // DAT: 핫 큐 목록(1) 뒤에 메모리 목록(0)이 온다.
+        let dat = createAnlzFile([
+            anlzCueList(
+                type: 1,
+                [
+                    anlzCue(hotCue: 1, type: 1, time: 1000, loopTime: 0xffff_ffff),
+                    anlzCue(hotCue: 2, type: 2, time: 2000, loopTime: 3000),
+                ]),
+            anlzCueList(
+                type: 0,
+                [
+                    anlzCue(hotCue: 0, type: 1, time: 4000, loopTime: 0xffff_ffff),
+                    anlzCue(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+                ]),
+        ])
+        let datResult = try await loadAnlz(track, type: "DAT", anlzResolver: { _ in dat })
+        #expect(
+            datResult.cueAndLoops == [
+                .hotCue(.init(offset: 1000, button: .A)),
+                .hotLoop(.init(offset: 2000, button: .B, length: 1000)),
+                .cuePoint(.init(offset: 4000)),
+                .loop(.init(offset: 5000, length: 1000)),
+            ])
+        // EXT: 핫 큐 D 목록 뒤의 빈 메모리 PCOB가 앞 목록을 지우지 않고, PCO2 두 목록도 잇는다.
+        let ext = createAnlzFile([
+            anlzCueList(type: 1, [anlzCue(hotCue: 4, type: 1, time: 7000, loopTime: 0xffff_ffff)]),
+            anlzCueList(type: 0, []),
+            anlzExtendedCueList(type: 1, [anlzExtendedCue(hotCue: 1, type: 1, time: 1000, loopTime: 0)]),
+            anlzExtendedCueList(
+                type: 0,
+                [
+                    anlzExtendedCue(hotCue: 0, type: 1, time: 4000, loopTime: 0),
+                    anlzExtendedCue(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+                ]),
+        ])
+        let extResult = try await loadAnlz(track, type: "EXT", anlzResolver: { _ in ext })
+        #expect(extResult.cueAndLoops == [.hotCue(.init(offset: 7000, button: .D))])
+        #expect(
+            extResult.extendedCues == [
+                .init(hotCue: 1, type: 1, time: 1000),
+                .init(hotCue: 0, type: 1, time: 4000),
+                .init(hotCue: 0, type: 2, time: 5000, loopTime: 6000),
+            ])
+    }
+}
+
+/// 원본 cue_entry 배치의 56바이트 PCPT 항목.
+private func anlzCue(hotCue: Int, type: UInt8, time: Int, loopTime: Int) -> [UInt8] {
+    let body: [UInt8] =
+        anlzBE32(hotCue) + anlzBE32(1) + anlzBE32(0x10000) + anlzBE16(0xffff) + anlzBE16(0xffff) + [type, 0]
+        + anlzBE16(1000) + anlzBE32(time) + anlzBE32(loopTime) + [UInt8](repeating: 0, count: 16)
+    return anlzSection("PCPT", body, headerLength: 28)
+}
+
+/// 원본 cue_tag: 목록 형(1 핫 큐, 0 메모리)과 항목 수를 머리에 둔 PCOB 태그.
+private func anlzCueList(type: Int, _ cues: [[UInt8]]) -> [UInt8] {
+    anlzSection(
+        "PCOB", anlzBE32(type) + anlzBE16(0) + anlzBE16(cues.count) + anlzBE32(0) + cues.flatMap { $0 },
+        headerLength: 24)
+}
+
+/// 원본 cue_extended_entry의 가장 짧은 40바이트 PCP2 항목(주석·색 없음).
+private func anlzExtendedCue(hotCue: Int, type: UInt8, time: Int, loopTime: Int) -> [UInt8] {
+    var entry = [UInt8](repeating: 0, count: 40)
+    entry.replaceSubrange(0..<4, with: "PCP2".utf8)
+    entry.replaceSubrange(4..<8, with: anlzBE32(16))
+    entry.replaceSubrange(8..<12, with: anlzBE32(40))
+    entry.replaceSubrange(12..<16, with: anlzBE32(hotCue))
+    entry[16] = type
+    entry.replaceSubrange(20..<24, with: anlzBE32(time))
+    entry.replaceSubrange(24..<28, with: anlzBE32(loopTime))
+    return entry
+}
+
+/// 원본 cue_extended_tag: 목록 형(1 핫 큐, 0 메모리)과 항목 수를 머리에 둔 PCO2 태그.
+private func anlzExtendedCueList(type: Int, _ cues: [[UInt8]]) -> [UInt8] {
+    anlzSection(
+        "PCO2", anlzBE32(type) + anlzBE16(cues.count) + anlzBE16(0) + cues.flatMap { $0 }, headerLength: 20)
 }
 
 @DJLinkActor private final class LocalDBFailingFileSystem: LocalDBFileSystem {

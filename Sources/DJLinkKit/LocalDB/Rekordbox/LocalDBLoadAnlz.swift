@@ -8,8 +8,10 @@
     for section in sections {
         switch section.fourcc {
         case "PQTZ": result.DAT.beatGrid = makeBeatGrid(section)
-        case "PCOB": result.DAT.cueAndLoops = makeCueAndLoop(section)
-        case "PCO2": result.EXT.extendedCues = makeExtendedCues(section)
+        // PLAN §9: 원본은 태그마다 덮어써서 핫 큐(1)·메모리(0) 목록 중 마지막 태그만 남았다.
+        // 같은 종류 태그를 파일 순서대로 잇는다. 태그가 하나면 결과가 같고, 없으면 nil이다.
+        case "PCOB": result.DAT.cueAndLoops = (result.DAT.cueAndLoops ?? []) + makeCueAndLoop(section)
+        case "PCO2": result.EXT.extendedCues = (result.EXT.extendedCues ?? []) + makeExtendedCues(section)
         case "PWAV": result.DAT.waveformPreview = makeWaveformPreview(section)
         case "PWV2": result.DAT.waveformTiny = makeWaveformPreview(section)
         case "PWV3": result.EXT.waveformDetail = section.entries
