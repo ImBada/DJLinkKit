@@ -142,8 +142,8 @@ public final class PassiveLocalDatabase: EventEmitting {
         mediaCache[key] = info
     }
     private func handleDeviceRemoved(_ device: Device) {
-        // 원본은 find로 첫 DB만 닫고 filter로 해당 장치의 모든 DB를 뺀다. 그대로 둔다.
-        if let db = dbs.first(where: { $0.media.deviceId == device.id }) { cleanup(db) }
+        // PLAN §9: 원본은 find로 첫 DB만 닫고 filter로 해당 장치의 모든 DB를 뺐다. 빠지는 DB를 모두 닫는다.
+        for db in dbs where db.media.deviceId == device.id { cleanup(db) }
         dbs.removeAll { $0.media.deviceId == device.id }
         let keys = mediaOrder.filter { $0.hasPrefix("\(device.id)-") }
         for key in keys { mediaCache.removeValue(forKey: key) }
@@ -167,15 +167,21 @@ public final class PassiveLocalDatabase: EventEmitting {
     private func tryLoadOneLibrary(_ device: Device, _ slot: MediaSlot, _ tx: TelemetrySpan) async -> (
         adapter: any DatabaseAdapter, tempFile: String
     )? {
+        var writtenFile: String?
         do {
             let data = try await fetchFileWithFallback(device, slot, "PIONEER/rekordbox/exportLibrary.db", tx)
             let tempFile = URL(fileURLWithPath: fileSystem.tmpdir()).appendingPathComponent(
                 "prolink-onelibrary-\(device.id)-\(slot.rawValue)-\(Int64(clock.nowMilliseconds())).db"
             ).path
+            writtenFile = tempFile
             try fileSystem.writeFileSync(tempFile, data)
             let adapter = try requireBackend().makeOneLibraryAdapter(tempFile: tempFile)
             return (adapter, tempFile)
-        } catch { return nil }
+        } catch {
+            // PLAN §9: 원본은 쓰기·열기에 실패해도 임시 파일을 남겼다. 쓰다 만 파일도 지운다. 삭제 오류는 무시한다.
+            if let writtenFile { try? fileSystem.unlinkSync(writtenFile) }
+            return nil
+        }
     }
     private func loadPdbDatabase(_ device: Device, _ slot: MediaSlot, _ tx: TelemetrySpan) async throws
         -> any DatabaseAdapter

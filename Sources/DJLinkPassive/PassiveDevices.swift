@@ -50,15 +50,18 @@ public final class PassiveDeviceManager: EventEmitting, RemoteDBDeviceSource {
         final class State {
             var settled = false
             var handler: EventSubscription?
+            var timeoutHandle: TimerHandle?
         }
         let state = State()
         let device: Device? = await withCheckedContinuation { continuation in
-            state.handler = on(.connected) { device in
+            state.handler = on(.connected) { [clock] device in
                 guard device.id == id, !state.settled else { return }
                 state.settled = true
+                // PLAN §9: 장치가 먼저 오면 Promise.race의 남은 시간 제한도 지운다.
+                clock.clearTimeout(state.timeoutHandle)
                 continuation.resume(returning: device)
             }
-            clock.setTimeout(.ms(timeout)) {
+            state.timeoutHandle = clock.setTimeout(.ms(timeout)) {
                 guard !state.settled else { return }
                 state.settled = true
                 continuation.resume(returning: nil)
