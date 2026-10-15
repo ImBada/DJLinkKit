@@ -1,6 +1,6 @@
 # Link Export 파일·시험 대응
 
-고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 상태는 **빌드·대응 시험·전체 로컬 CI 통과(날짜별 기록은 [검증 기록](LINK-EXPORT-VALIDATION.md)), CDJ-2000nexus MP3/WAV·레거시 큐 실기 확인**이다. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 실행한다. 코드나 시험 본문을 실행하지 않는 검사다. 선언된 `@Test`는 518개(원본 대응 502 + 자체 회귀 16)다.
+고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 상태는 **빌드·대응 시험·전체 로컬 CI 통과(날짜별 기록은 [검증 기록](LINK-EXPORT-VALIDATION.md)), CDJ-2000nexus MP3/WAV·레거시 큐 실기 확인**이다. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 실행한다. 코드나 시험 본문을 실행하지 않는 검사다. 선언된 `@Test`는 519개(원본 대응 502 + 자체 회귀 17)다.
 
 ## 서버 소스
 
@@ -90,4 +90,4 @@ Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공
 
 #20 레거시 큐 조회는 별도 자체 회귀 `LegacyCueReadTests.swift` 6개와 `LegacyCueClientTests.swift` 2개를 추가 작성했다. 원본 대응 시험은 그대로이며 이 시점의 자체 회귀는 총 10개였다. 실기에서 찾은 큐 순서 문제(메모리 큐 먼저)를 고쳐 CDJ에서 확인했다. [#20 기록](LINK-EXPORT-LEGACY-CUES.md).
 
-#24 정렬 키 캐시의 자체 회귀 3개(`FilenameSortingRegressionTests.swift` 1개, `CatalogSortingRegressionTests.swift` 2개), #25 그레고리력 날짜의 자체 회귀 1개(`SmartDateRegressionTests.swift`), #28 소켓 가드의 자체 회귀 2개(`ExportSocketGuardTests.swift`)를 별도 등록했다. 원본 대응 502개(루프백 8개 포함)와 별개로 자체 회귀는 총 16개다. 이 새 시험들은 2026-10-15 기본 실행에서 모두 통과했다(루프백 8개는 `--loopback`에서 통과).
+#24 정렬 키 캐시의 자체 회귀 3개(`FilenameSortingRegressionTests.swift` 1개, `CatalogSortingRegressionTests.swift` 2개), #25 그레고리력 날짜의 자체 회귀 1개(`SmartDateRegressionTests.swift`), #28 소켓 가드의 자체 회귀 2개(`ExportSocketGuardTests.swift`)를 별도 등록했다. #32 편집 응답 순서의 자체 회귀 1개(`LegacyCueReadTests.swift`)도 더했다. 원본 대응 502개(루프백 8개 포함)와 별개로 자체 회귀는 총 17개다. 이 새 시험들은 2026-10-15 기본 실행에서 모두 통과했다(루프백 8개는 `--loopback`에서 통과).

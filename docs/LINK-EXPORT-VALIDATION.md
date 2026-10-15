@@ -4,7 +4,7 @@
 
 ## 현재 선언 수 (정적)
 
-아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-15 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,509개가 모두 통과했다. `scripts/ci.sh --loopback`은 기본 시험 뒤에 루프백 시험 16개(DJLinkKit 6, Link Export 루프백 8과 가드 2)만 따로 돌리며 모두 통과한다. `DJLINK_LOOPBACK_TESTS=1 swift test`로 한 번에 다 돌리면 같은 프로세스의 SQLCipher DB 열기가 `DJLinkActor`를 몇 초씩 막아 TCP 루프백 시험이 시간 초과로 실패할 수 있다([#33](https://github.com/ImBada/DJLinkKit/issues/33)).
+아래 숫자는 `@Test` 선언을 `grep -rE '^\s*@Test' Tests`로 센 정적 수다. 시험을 실행한 결과가 아니다. 이 문서의 날짜별 기록에 있는 "등록"·"건너뜀" 숫자는 그날 실행 결과이므로 아래 현재 수와 다를 수 있다. 2026-10-16 기본 실행(`scripts/ci.sh`)에서는 26개를 건너뛰고 1,510개가 모두 통과했다. `scripts/ci.sh --loopback`은 기본 시험 뒤에 루프백 시험 16개(DJLinkKit 6, Link Export 루프백 8과 가드 2)만 따로 돌리며 모두 통과한다. `DJLINK_LOOPBACK_TESTS=1 swift test`로 한 번에 다 돌리면 같은 프로세스의 SQLCipher DB 열기가 `DJLinkActor`를 몇 초씩 막아 TCP 루프백 시험이 시간 초과로 실패할 수 있다([#33](https://github.com/ImBada/DJLinkKit/issues/33)).
 
 | 시험 대상 | 선언 | 원본 대응 | 자체 시험 |
 |---|---:|---:|---:|
@@ -14,14 +14,14 @@
 | djlinkTests (CLI) | 180 | 0 | 180 |
 | DJLinkExportProtocolTests | 39 | 39 | 0 |
 | DJLinkExportNFSTests | 73 | 73 | 0 |
-| DJLinkExportDBServerTests | 112 | 104 | 8 |
+| DJLinkExportDBServerTests | 113 | 104 | 9 |
 | DJLinkExportModelTests | 97 | 95 (모델 93, XML 2) | 2 |
 | DJLinkExportANLZTests | 78 | 78 | 0 |
 | DJLinkExportTests | 119 | 113 (rbl-link 105, 루프백 8) | 6 |
-| **합계** | **1,535** | **1,124** | **411** |
+| **합계** | **1,536** | **1,124** | **412** |
 
 - 원본 대응 1,124개는 TypeScript 계열 622개(alphatheta-connect 532, onelibrary-connect 62, metadata-connect 28)와 rbxport 502개(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)다. 루프백을 뺀 rbxport는 494개다.
-- 자체 시험 411개 중 Link Export 자체 회귀는 16개다(`export-test-map.json`의 `regressions`). 소켓 가드 2, WAV 곡 정보 2, 레거시 큐 8, 정렬 키 3, 날짜 1이다. 나머지 395개는 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 같은 DJLinkKit 계열 시험이다.
+- 자체 시험 412개 중 Link Export 자체 회귀는 17개다(`export-test-map.json`의 `regressions`). 소켓 가드 2, WAV 곡 정보 2, 레거시 큐 9, 정렬 키 3, 날짜 1이다. 나머지 395개는 기반 코드·소켓 전송·바이트 리더·CLI·PLAN §9 회귀 같은 DJLinkKit 계열 시험이다.
 - 조건부는 28개다. `DJLINK_LOOPBACK_TESTS=1`에서만 15개(DJLinkKit 6, Export 루프백 8, 소켓 가드 1), 꺼졌을 때만 2개(Export 소켓 가드, DJLinkKit 실제 소켓 거부), 실제 음원이 있을 때만 5개(앨범아트), 자식 프로세스 안에서만 2개(SQLCipher 도우미), `.disabled` 4개(Beacon 2개는 원본 `#[ignore]`, 나머지 2개는 서버 범위 밖)다.
 
 ## 결과 (2026-10-15 초기 검증)
@@ -91,4 +91,4 @@ git diff --check
 - #24: 파일명·이름·앨범 정렬 키를 행마다 한 번만 만든다. 순서는 같다. 자체 회귀 3개를 더했다.
 - #25: `SmartDate.today`가 현지 시간대의 그레고리력으로 계산한다(원본 chrono Local과 같다). 자체 회귀 1개를 더했다.
 - #28: Link Export 실제 소켓 가드가 `DJLINK_LOOPBACK_TESTS=1`일 때만 소켓을 허용하고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다). 가드 회귀 2개와 `rbl-fakecdj/tests/loopback.rs` 대응 8개(`LoopbackTests.swift`)를 더했다. 원본 대응은 502개가 된다.
-- `DJLinkExport*` 선언 수는 레거시 큐 회귀 시점의 479개에서 모델 시험 보강(+18, 497개), #27(+7), #24·#25 회귀(+4), #28 가드·루프백(+10)을 거쳐 518개가 되었다. `python3 scripts/export-port-status.py --strict`가 보는 대응(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)과 자체 회귀 16개의 이름·순서는 정적으로 일치한다.
+- `DJLinkExport*` 선언 수는 레거시 큐 회귀 시점의 479개에서 모델 시험 보강(+18, 497개), #27(+7), #24·#25 회귀(+4), #28 가드·루프백(+10)을 거쳐 518개, #32 편집 응답 순서 회귀(+1)로 519개가 되었다. `python3 scripts/export-port-status.py --strict`가 보는 대응(core 321, ANLZ 78, 모델 93, XML 2, 루프백 8)과 자체 회귀 17개의 이름·순서는 정적으로 일치한다.

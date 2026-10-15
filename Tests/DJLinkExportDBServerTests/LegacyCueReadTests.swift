@@ -14,6 +14,7 @@ private enum CueReadFixtureError: Error { case notBlob }
     var values: [UInt32: [UsbCue]] = [:]
     var reads: [UInt32] = []
     var edits: [Edit] = []
+    var accept = false
     func list(_ query: Query) -> [Row] { [] }
     func track_row(_ id: UInt32, _ column: TrackColumn?) -> TrackRow? { nil }
     func track(_ id: UInt32) -> TrackDetails? { nil }
@@ -26,7 +27,7 @@ private enum CueReadFixtureError: Error { case notBlob }
     }
     func edit(_ edit: Edit) -> Bool {
         edits.append(edit)
-        return false
+        return accept
     }
 }
 @Suite @DJLinkActor struct LegacyCueReadTests {
@@ -119,6 +120,45 @@ private enum CueReadFixtureError: Error { case notBlob }
         #expect(positions == [0, 10000, 20000, 5000, 15000, 30000])
         #expect(catalog.edits.isEmpty)
     }
+    @Test("받아들인 큐 편집의 응답도 메모리 큐를 앞에, 핫큐를 뒤에 보낸다")
+    func orders_memory_cues_before_hot_cues_after_an_edit() throws {
+        // CDJ-2000nexus 실기(2026-10-16, #32): 편집을 받아들인 뒤 시간순 목록을 돌려주면 읽기 응답과 같이
+        // 앞의 memory 개수만큼을 메모리 큐로 읽어 Hot Cue A 버튼이 꺼졌다.
+        let catalog = CueReadCatalog()
+        catalog.accept = true
+        catalog.values[track] = [
+            UsbCue(slot: 0, in_ms: 0), UsbCue(slot: 1, in_ms: 5000, color_table_index: 21),
+            UsbCue(slot: 2, in_ms: 15000, color_table_index: 22),
+            UsbCue(slot: 0, in_ms: 20000, out_ms: 24000),
+            UsbCue(slot: 3, in_ms: 30000, out_ms: 34000, color_table_index: 23),
+        ]
+        let session = CatalogHandler(catalog).open()
+        _ = session.handle(.new(0xfffffffe, kind.SETUP, [.number(2)]))
+        // CDJ가 DELETE로 보낸 것과 같은 꼴: op 0, 10초 메모리 큐 레코드와 밀리초 sidecar.
+        var record = [UInt8](repeating: 0, count: 36)
+        record.replaceSubrange(0..<4, with: [0x00, 0x01, 0x00, 0x00])
+        record.replaceSubrange(12..<16, with: [0xdc, 0x05, 0x00, 0x00])
+        let sidecar: [UInt8] = [0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        let reply = try wireReply(
+            session.handle(
+                .new(
+                    0x12345679, kind.SAVE_CUE,
+                    [
+                        .number(context), .number(track), .number(0), .number(36), .blob(record), .number(8),
+                        .blob(sidecar),
+                    ])))
+        #expect(catalog.edits.count == 1)
+        #expect(reply.arguments[1] == .number(0))
+        #expect(reply.arguments[5] == .number(3))
+        #expect(reply.arguments[6] == .number(2))
+        let records = try blob(reply, 3)
+        let sidecars = try blob(reply, 8)
+        let buttons = try (0..<5).map { try records.readUInt32LE($0 * 36) >> 16 }
+        #expect(buttons == [0, 0, 1, 2, 3])
+        let positions = try (0..<5).map { try sidecars.readUInt32LE($0 * 8) }
+        #expect(positions == [0, 20000, 5000, 15000, 30000])
+    }
+
     @Test("빈 목록과 알 수 없는 곡도 빈 큐 응답으로 왕복한다")
     func empty_and_unknown_tracks_are_empty() throws {
         let catalog = CueReadCatalog()
