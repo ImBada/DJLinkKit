@@ -129,6 +129,7 @@ CLI가 지키는 안전 규칙(docs/PLAN.md §11):
     그래서 가상 CDJ가 7 이상이어도 메타데이터·파형 같은 remotedb 조회 메시지에는 원본이 고른 다른 CDJ의 번호(없으면 비어 있는 1~6)가 실린다.
     announce·heartbeat에는 쓰이지 않고 `--allow-player-id` 규칙과도 무관하다.
     동작은 바꾸지 않았고, CLI는 remotedb에 연결할 때 고른 번호를 `remotedb 질의 번호 N번을 쓴다 …` 한 줄로 출력한다(announce 번호가 1~6이면 같은 번호를 쓰므로 그 줄이 없다).
+    CDJ-2000nexus는 announce 7번인 가상 CDJ가 2번(옆 CDJ의 번호)을 실은 Introduce를 받아 줬고, 질의하는 동안 두 덱의 상태는 바뀌지 않았다(2026-10-16, [#9](https://github.com/ImBada/DJLinkKit/issues/9)).
     이 방식을 바꿀지는 사용자가 정한다(docs/PLAN.md §11 메모).
 - 제어 명령은 `--confirm`이 대상 장치 이름과 정확히 같을 때만 보낸다.
     대상을 확인하기 전에는 가상 CDJ로 참여하지 않는다.

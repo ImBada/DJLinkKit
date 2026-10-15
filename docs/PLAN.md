@@ -288,6 +288,12 @@ let package = Package(
   - 원인: `LibpcapBackend`가 DispatchSource 읽기 소스를 기다리는데 인터페이스가 사라지면 그 소스가 다시 읽히지 않고, 원본 cap처럼 `pcap_dispatch` 오류를 보지 않는다. 고친 내용은 §9.
   - 고친 뒤 같은 순서로 다시 확인했다. 캡처 중 어댑터를 뽑자 `패킷 캡처 오류: Capture interface "en8" is gone (index 26 -> 0). Capturing stopped.`를 내고 종료 코드 1로 끝났다. 어댑터를 다시 꽂은 뒤 새로 띄운 `passive`는 장치 3대와 on-air를 정상으로 받았다.
 
+- 2026-10-16(remotedb 질의 번호, [#9](https://github.com/ImBada/DJLinkKit/issues/9) 일부), CDJ-2000nexus 2대(1·2번)와 DJM-900NXS2, Mac `en8`, 가상 CDJ 7번. USB가 없어 1번 CDJ의 빈 USB 슬롯에 `djlink metadata`를 보내고 TCP를 pcap으로 기록했다.
+  - 순서: 질의 포트 12523에 `RemoteDBServer` → 포트 1051, 머리말 `0x11 00000001` → 같은 값, Introduce(트랜잭션 0xfffffffe, 종류 0x0000, 인자 2) → 성공(0x4000), 메타데이터 요청(0x2002, DMST 첫 바이트 2·USB·rb) → 오류(0x4003, 인자로 요청 종류 0x2002), 끝인사(0x0100).
+  - CLI의 `remotedb 질의 번호 2번을 쓴다` 로그와 Introduce·DMST에 실린 번호가 같았다. 원본 `pickRemoteDbQueryId`대로 옆 CDJ의 번호(2번)를 빌렸다.
+  - 같은 시간에 `passive`로 두 덱의 상태를 기록했다. 질의 동안 1·2번 덱의 상태 줄(핵심 값이 바뀔 때만 낸다)이 새로 나오지 않았다.
+  - 빈 슬롯의 응답은 시간 초과가 아니라 0x4003 오류로 구분된다. 실제 곡의 remotedb 조회(분석하지 않은 곡처럼 remote로 가는 경우)는 시험용 USB가 있어야 해서 남겼다. 원시 pcap은 저장소 밖에 둔다.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
@@ -414,7 +420,7 @@ let package = Package(
   CDJ가 1~6만 답하기 때문이며 원본 주석에 CDJ-3000 실기 확인(2026-08-30)이 있다.
   그래서 가상 CDJ가 7 이상이어도 remotedb 질의에는 같은 랙의 다른 CDJ 번호(없으면 비어 있는 1~6)가 실린다.
   1:1이라 고치지 않았고, CLI는 연결할 때 고른 번호를 한 줄 로그로 남긴다.
-  실기에서 이 번호가 CDJ에 어떻게 보이는지 확인하고, 바꿀지는 사용자가 정한다.
+  CDJ-2000nexus(2026-10-16, §8)는 announce 7번 가상 CDJ가 질의 번호 2번(옆 CDJ의 번호)을 실은 Introduce를 받아 줬고, 질의하는 동안 두 덱의 상태는 바뀌지 않았다. 실제 곡 조회는 아직이다(#9). 바꿀지는 사용자가 정한다.
 - 소켓은 고른 인터페이스에 묶고 그 서브넷 밖의 장치와는 통신하지 않는다. `play`·`pause`는 재생 상태 패킷에 칸이 있는 1~4번 플레이어에만 보낸다(§9, 2026-10-14 실기 확인 뒤 고침).
 - 제어 명령(곡 올리기, Stagehand 설정 쓰기)은 CLI에서 `--confirm <장치 이름>` 없이는 보내지 않는다.
 - MAC(#41): macOS 27.0.1에서 일반 프로세스가 `getifaddrs`의 AF_LINK로 읽으면 `en0`·`en8` 모두 `02:00:00:00:00:00`이 나온다(`ifconfig`는 실제 값). `SystemInterfaceProvider`가 이 값을 그대로 써서 가상 CDJ(7번)와 Link Export(17번)가 announce·keep-alive에 이 MAC을 싣는다(2026-10-16 pcap). 원본(Node `os.networkInterfaces`)도 같은 시스템 호출이다. CDJ-2000nexus는 이 값으로도 두 장치를 받아 줬다. Mac 여러 대가 같은 망에 있으면 같은 MAC을 알리고, Stagehand 모드의 MAC(OUI + 하위 3바이트)도 모두 같아진다. 바꿀지는 §9 "기능 추가·검토 필요"에 둔다.
