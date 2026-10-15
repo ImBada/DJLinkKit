@@ -275,6 +275,12 @@ let package = Package(
   - `djlink metadata --iface en8`이 localdb를 찾지 못해 remotedb로 넘어가자 `Network interface not found: en8`로 TCP 연결을 시작하지도 못했다. `NWPathMonitor`가 기본 경로(`en0`)만 보여 주고 링크 로컬 주소만 있는 `en8`은 넣지 않기 때문이다. 이전 실기는 메타데이터를 NFS(UDP)로만 읽어 드러나지 않았다.
   - 고친 뒤(인터페이스의 IPv4 주소를 로컬 주소로 지정하고, 연결 뒤 경로가 `en8`인지 검사) 같은 명령이 1번 CDJ의 질의 포트(12523)와 remotedb 포트에 `en8`로 연결해 응답을 받았다. USB가 없는 슬롯이라 응답은 0x4003(거절)이었고, 연결 자체를 확인하는 데 그쳤다. 실제 곡의 remotedb 조회는 #9에 남는다.
 
+- 2026-10-16(패시브 인터페이스 제거, [#8](https://github.com/ImBada/DJLinkKit/issues/8)), macOS 27, USB 랜 어댑터 `en8`, `djlink passive --iface en8`.
+  - LAN 케이블만 뽑았다: 인터페이스는 남고 같은 프로세스에서 재연결 뒤 캡처가 저절로 이어졌다. 오류로 다루지 않는다.
+  - USB 어댑터를 뽑았다: `en8`이 사라지고 프로세스는 오류도 종료도 없이 CPU 0%로 남았다. 어댑터를 다시 꽂아 `en8`이 살아난 뒤에도 같은 프로세스는 아무것도 받지 못하고 캡처 중으로만 남았다. 새로 띄운 `passive`는 정상이다.
+  - 원인: `LibpcapBackend`가 DispatchSource 읽기 소스를 기다리는데 인터페이스가 사라지면 그 소스가 다시 읽히지 않고, 원본 cap처럼 `pcap_dispatch` 오류를 보지 않는다. 고친 내용은 §9.
+  - 고친 뒤 같은 순서로 다시 확인했다. 캡처 중 어댑터를 뽑자 `패킷 캡처 오류: Capture interface "en8" is gone (index 26 -> 0). Capturing stopped.`를 내고 종료 코드 1로 끝났다. 어댑터를 다시 꽂은 뒤 새로 띄운 `passive`는 장치 3대와 on-air를 정상으로 받았다.
+
 ## 9. 1:1 이후 고칠 것
 
 1:1이 모두 통과한 뒤에 고친다. 하나마다 실패하는 시험을 먼저 더하고, 따로 커밋한다. 1:1 기준선은 `port/one-to-one` 브랜치(PR #1)이고, 고친 것은 그 위의 `fix/upstream-bugs` 브랜치(PR #2)에 쌓아 main에 합쳤다(§12). 원본 대응 시험의 기대값을 바꿔야 했던 곳은 그 시험 위에 `// PLAN §9:` 주석을 단다. 새 시험은 영역마다 `*UpstreamFixTests.swift`에 둔다. 예외로 패시브 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)은 `PassiveFlowTests.swift`에 있다.
@@ -311,7 +317,6 @@ let package = Package(
 **실기 확인 뒤 정할 것**
 
 - localdb: 긴 ASCII 문자열(0x40)을 +3부터 length만큼 읽는다(DJCrate는 +4부터 length-4).
-- passive: 캡처 중 인터페이스가 사라지면 오류 없이 캡처 중 상태가 남을 수 있다(cap의 dispatch 반복과 같다).
 
 **기능 추가·검토 필요**
 
@@ -338,6 +343,10 @@ let package = Package(
 **고친 것**(2026-10-16, Link Export 원본 동작)
 
 - 큐 편집 응답(#32): rbxport의 `0x2105` 저장·삭제 응답은 편집 뒤 큐 목록을 시간순 그대로 보냈다. CDJ-2000nexus는 `0x4702`의 앞쪽 memory 개수만큼을 메모리 큐로 읽어(#20과 같은 원인) 편집 뒤 Hot Cue A 버튼이 꺼졌다. 읽기 응답처럼 메모리 큐를 먼저, 핫큐를 뒤에 보낸다. 원본 대응 시험은 큐가 하나뿐이라 영향이 없다. 편집을 거절할 때의 상태 0x32·빈 목록 응답은 원본(rekordbox와 같다는 원본 주석, `cue_writes.rs`)대로 둔다. 실기 기록은 [LINK-EXPORT-LEGACY-CUES.md](LINK-EXPORT-LEGACY-CUES.md).
+
+**고친 것**(2026-10-16, 패시브 실기)
+
+- passive(#8): 캡처 중 인터페이스가 사라지면 오류 없이 영영 캡처 중으로 남았다(실기 `en8` USB 어댑터 제거, §8). 원본 cap의 반복은 `pcap_dispatch` 오류를 무시해 조용하다. 이제 `PcapAdapter`가 시작 뒤 1초마다 인터페이스 이름의 번호(`if_nametoindex`)를 시작 때의 번호와 견주어, 0이 되거나 바뀌면 `.error`(인터페이스 이름과 번호를 적은 `DJLinkError`)를 한 번 내고 캡처를 멈춰 백엔드를 닫는다. CLI는 이 오류를 "패킷 캡처 오류"로 보고 종료 코드 1로 끝낸다. 주소가 아니라 번호로 보는 것은 케이블만 뽑아도 169.254 주소가 사라지기 때문이다. 케이블만 뽑은 경우는 번호가 그대로여서 오류가 아니며 재연결 뒤 캡처가 이어진다. win32(장치 이름이 다름)와 시작 때 번호를 찾지 못한 이름(`any` 등)은 감시하지 않는다. 시계와 번호 조회는 `PcapAdapter.init`으로 주입하고, `PassiveProlinkNetwork`는 자기 시계를 어댑터에 넘긴다. `stop` 없이 어댑터가 해제되면 감시 타이머도 거둔다. 회귀 시험 8개를 `PassivePcapUpstreamFixTests`에 더했다.
 
 **고친 것**(2026-10-15, Link Export Swift 쪽)
 

@@ -41,7 +41,7 @@ public final class PassiveProlinkNetwork {
         self.clock = clock
         adapter = PcapAdapter(
             config: .init(iface: config.iface, bufferSize: config.bufferSize), backend: backend, platform: platform,
-            interfaceProvider: interfaceProvider)
+            interfaceProvider: interfaceProvider, clock: clock)
         deviceManager = PassiveDeviceManager(
             adapter, config: config.deviceTimeout.map { .init(deviceTimeout: $0) }, clock: clock)
         statusEmitter = PassiveStatusEmitter(adapter)

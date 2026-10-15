@@ -117,11 +117,18 @@ public final class PcapAdapter: EventEmitting {
     private let platform: String
     private let interfaceProvider: any InterfaceProvider
     private let backendFactory: @DJLinkActor () throws -> any PcapBackend
+    // PLAN §9: 캡처 중 인터페이스가 사라졌는지 1초마다 인터페이스 번호로 본다(원본 cap 반복은 조용하다).
+    private let clock: any DJLinkClock
+    private let interfaceIndex: @DJLinkActor (String) -> UInt32
+    private var startIndex: UInt32 = 0
+    private var watchTimer: TimerHandle?
     public init(
         config: PcapAdapterConfig, backend: (any PcapBackend)? = nil,
         platform: String = PassivePlatform.current,
         interfaceProvider: any InterfaceProvider = SystemInterfaceProvider(),
-        backendFactory: @escaping @DJLinkActor () throws -> any PcapBackend = { try LibpcapBackend() }
+        backendFactory: @escaping @DJLinkActor () throws -> any PcapBackend = { try LibpcapBackend() },
+        clock: any DJLinkClock = SystemClock.shared,
+        interfaceIndex: @escaping @DJLinkActor (String) -> UInt32 = { if_nametoindex($0) }
     ) {
         iface = config.iface
         bufferSize = config.bufferSize ?? 10 * 1024 * 1024
@@ -129,6 +136,8 @@ public final class PcapAdapter: EventEmitting {
         buffer = [UInt8](repeating: 0, count: max(0, bufferSize))
         self.platform = platform
         self.interfaceProvider = interfaceProvider
+        self.clock = clock
+        self.interfaceIndex = interfaceIndex
         self.backendFactory = {
             if let backend { return backend }
             return try backendFactory()
@@ -159,14 +168,44 @@ public final class PcapAdapter: EventEmitting {
         backend.onPacket { [weak self] bytes, truncated in self?.handlePacket(bytes, truncated) }
         backend.onError { [weak self] error in self?.emitter.emit(.error, error) }
         started = true
+        watchInterface()
+    }
+    deinit {
+        // isolated deinit는 macOS 15.4부터다. stop 없이 해제돼도 감시 타이머를 거둔다.
+        let clock = clock
+        let watchTimer = watchTimer
+        Task { @DJLinkActor in clock.clearInterval(watchTimer) }
     }
     public func stop() {
+        clock.clearInterval(watchTimer)
+        watchTimer = nil
         cap?.close()
         cap = nil
         started = false
     }
     public var isCapturing: Bool { started }
     public var interfaceName: String { iface }
+    /// PLAN §9: USB 어댑터를 뽑아 인터페이스가 사라지면 BPF 읽기 소스가 다시 읽히지 않아 영영 캡처 중으로 남았다.
+    /// 시작 때의 인터페이스 번호를 적어 두고 1초마다 견줘, 0이 되거나 바뀌면 오류를 내고 캡처를 멈춘다.
+    /// 케이블만 뽑으면 번호는 그대로여서 오류가 아니다(재연결되면 캡처가 이어진다).
+    /// 번호는 시작 때 찾을 수 있을 때만 본다: Windows는 장치 이름이 커널 인터페이스 이름과 다르고, `any` 같은 가상 이름도 번호가 없다.
+    private func watchInterface() {
+        guard platform != "win32" else { return }
+        startIndex = interfaceIndex(iface)
+        guard startIndex != 0 else { return }
+        watchTimer = clock.setInterval(.seconds(1)) { [weak self] in self?.checkInterface() }
+    }
+    private func checkInterface() {
+        guard started else { return }
+        let current = interfaceIndex(iface)
+        guard current != startIndex else { return }
+        stop()
+        emitter.emit(
+            .error,
+            DJLinkError(
+                "Capture interface \"\(iface)\" is gone (index \(startIndex) -> \(current)). Capturing stopped."
+            ))
+    }
     private func resolveWindowsInterface(_ ifaceName: String, _ backend: any PcapBackend) throws -> String? {
         guard let nodeIface = interfaceProvider.networkInterfaces().first(where: { $0.name == ifaceName })?.addresses
         else { return nil }
