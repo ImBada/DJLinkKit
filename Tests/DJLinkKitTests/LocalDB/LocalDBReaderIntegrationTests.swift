@@ -122,9 +122,11 @@ import Testing
         ]
         for i in 18..<section.count { section[i] ^= mask[(i - 18) % 19] &+ 1 }
         let masked = createAnlzFile([section])
-        #expect(throws: (any Error).self) {
-            try readLocalDBAnlz(plain)
-        }
+        // 평문에도 마스크를 적용해 mood가 0x0002 ^ 0xCCE2 = 0xCCE0이 된다.
+        // 원본 Kaitai처럼 알 수 없는 mood에서도 실패하지 않고 kind를 unknown_tag로 읽는다.
+        let fromPlain = try #require(try readLocalDBAnlz(plain).first)
+        #expect(fromPlain.mood == 0xCCE0)
+        #expect(fromPlain.phrases.map(\.kind) == [.unknownTag])
         let a = try await loadAnlz(track, type: .ext, anlzResolver: { _ in masked })
         #expect(
             a.songStructure
