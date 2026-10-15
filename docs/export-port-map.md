@@ -17,6 +17,7 @@
 | `서버 전송 경계 (Swift 자체 구현)` | `DJLinkExportSupport/{ExportSockets,BSDTCPListener,DualStackUDPSocket,AtomicValues,MonotonicClock}.swift` |
 | `루프백 전송·외부 픽스처 경계 (Swift 자체 구현)` | `DJLinkExportTestSupport/{FakeExportSockets,UpstreamFixtures}.swift` |
 | `rbl-fakecdj/src/lib.rs 및 rbl-db/src/fixture.rs의 통합 시험 준비 경로` | `../Tests/DJLinkExportTests/ExportIntegrationSupport.swift` |
+| `rbl-fakecdj/src/lib.rs의 실제 소켓 클라이언트 (루프백 시험용)` | `../Tests/DJLinkExportTests/FakeCdjClient.swift` |
 
 ## 시험 파일
 
@@ -65,8 +66,11 @@
 | model | `rbl-index/tests/filter.rs` | `DJLinkExportModelTests/FilterTests.swift` | 12 (1개 `.disabled`) |
 | model | `rbl-index/tests/file_created.rs` | `DJLinkExportModelTests/FileCreatedTests.swift` | 7 (1개 `.disabled`) |
 | xml | `rbl-core/src/xml.rs` | `DJLinkExportModelTests/XmlTests.swift` | 2 |
+| loopback | `rbl-fakecdj/tests/loopback.rs` | `DJLinkExportTests/LoopbackTests.swift` | 8 (`DJLINK_LOOPBACK_TESTS=1`일 때만 실행) |
 
 총 494개: 서버 core 321, ANLZ 78, 서버 메모리 모델 93, XML 스캐너 2. 모델 시험 파일 4개(25개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없다. 새 4개 파일의 `.disabled` 2개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`, 폴더 브라우저의 `a_folder_sorts_its_tracks_and_loose_files_by_creation_together`)는 서버 범위 밖이라 이름만 유지했다. `FileCreatedTests.swift`의 활성 시험 6개는 구현 단계에서 실행하지 않았다. [검증 기록](LINK-EXPORT-VALIDATION.md).
+
+`loopback` 구분 8개(`LoopbackTests.swift`)는 실제 127.0.0.1 소켓을 열기 때문에 `DJLINK_LOOPBACK_TESTS=1`(`scripts/ci.sh --loopback`)일 때만 실행하고, 기본 실행에서는 건너뛴다. 그래서 위 총 487개에 넣지 않고 따로 센다. 가짜 CDJ 클라이언트는 가짜 소켓 버스용 `ExportIntegrationSupport.swift`와 별개로 `FakeCdjClient.swift`에 둔다.
 
 ## 의존 범위의 제한
 
@@ -76,7 +80,7 @@
 
 ## Swift 전송·동시성 대응
 
-Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공유 셀·잠금, 주입 소켓/시계로 옮긴다. `Instant`의 경과 시간은 단조 시계로 유지한다. OS UDP 옵션·TCP keepalive·즉시 재바인딩을 위한 해제 대기는 실제 전송 경계에서 처리한다. 시험은 실제 TCP/UDP listen/connect를 하지 않는다.
+Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공유 셀·잠금, 주입 소켓/시계로 옮긴다. `Instant`의 경과 시간은 단조 시계로 유지한다. OS UDP 옵션·TCP keepalive·즉시 재바인딩을 위한 해제 대기는 실제 전송 경계에서 처리한다. 시험은 실제 TCP/UDP listen/connect를 하지 않는다(위 `loopback` 8개만 `DJLINK_LOOPBACK_TESTS=1`일 때 127.0.0.1에서 연다).
 
 원본의 병렬 색인/파일 메타데이터 구축은 Swift에서 같은 행 순서와 결과로 직렬 수행한다. 실제 처리량·지연은 실기 확인 전이다. 기존 MIT 클라이언트의 수신 상태 파서와 Rust 파서의 다른 길이·반올림 경계는 Export 어댑터에서 처리한다.
 

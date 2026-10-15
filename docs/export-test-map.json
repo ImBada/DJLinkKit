@@ -205,9 +205,21 @@
       "group": "xml",
       "source": "rbl-core/src/xml.rs",
       "swift": "DJLinkExportModelTests/XmlTests.swift"
+    },
+    {
+      "group": "loopback",
+      "source": "rbl-fakecdj/tests/loopback.rs",
+      "swift": "DJLinkExportTests/LoopbackTests.swift"
     }
   ],
   "regressions": [
+    {
+      "swift": "DJLinkExportTests/ExportSocketGuardTests.swift",
+      "names": [
+        "루프백 시험이 아니면 시험 프로세스에서 실제 소켓을 만들지 않는다",
+        "루프백 시험에서도 루프백 밖 주소에는 묶지 않는다"
+      ]
+    },
     {
       "swift": "DJLinkExportDBServerTests/TrackInfoCompatibilityTests.swift",
       "names": [
