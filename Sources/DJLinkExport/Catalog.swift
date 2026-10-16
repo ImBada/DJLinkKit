@@ -71,7 +71,7 @@ private struct QueryCacheEntry {
 }
 private struct ArtworkCacheEntry {
     weak var library: Library?
-    var row: UInt32, bytes: [UInt8]
+    var row: UInt32, medium: Bool, bytes: [UInt8]
 }
 private struct BrowseCache {
     var queries: [QueryCacheEntry] = [], artwork: [ArtworkCacheEntry] = []
@@ -87,6 +87,7 @@ private struct LinkHistory {
 private func catalogAt<T>(_ values: [T], _ at: Int) -> T? { values.indices.contains(at) ? values[at] : nil }
 private let MAX_ARTWORK: UInt64 = 4 * 1024 * 1024
 private let MEDIUM_ARTWORK_SUFFIX = "_m"
+private let SMALL_ARTWORK_SUFFIX = "_s"
 private let ANALYSIS_CACHE = 32
 private let QUERY_CACHE = 24
 private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
@@ -147,8 +148,10 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
         return library.album.enumerated().first { $0.element == album && !library.artwork_path.get($0.offset).isEmpty }
             .flatMap { UInt32(exactly: $0.offset) }
     }
-    private func artwork_at(_ library: Library, _ row: UInt32) -> [UInt8]? {
-        if let at = browse.artwork.firstIndex(where: { $0.row == row && $0.library === library }) {
+    /// `medium`이면 `_m`(240px)을, 아니면 `_s`(80px)를 먼저 보낸다. 없으면 더 큰 파일로 넘어간다.
+    /// 2026-10-16 캡처: CDJ-2000nexus의 목록 썸네일 요청(인자 둘인 ARTWORK)에 rekordbox는 `_s`를 보냈다.
+    private func artwork_at(_ library: Library, _ row: UInt32, medium: Bool) -> [UInt8]? {
+        if let at = browse.artwork.firstIndex(where: { $0.row == row && $0.medium == medium && $0.library === library }) {
             let hit = browse.artwork.remove(at: at)
             browse.artwork.append(hit)
             return hit.bytes
@@ -159,7 +162,8 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
         guard !relative.isEmpty else { return nil }
         let share = source.share_root()
         guard
-            let path = [medium_artwork(relative), relative].compactMap({ resolve_under(share, $0) }).first(where: {
+            let path = ((medium ? [] : [sized_artwork(relative, SMALL_ARTWORK_SUFFIX)]) + [medium_artwork(relative), relative])
+                .compactMap({ resolve_under(share, $0) }).first(where: {
                 path in catalogMetadata(path).map { $0.st_mode & S_IFMT == S_IFREG } ?? false
             }), let meta = catalogMetadata(path), UInt64(max(meta.st_size, 0)) <= MAX_ARTWORK,
             let data = try? Data(contentsOf: URL(fileURLWithPath: path))
@@ -171,7 +175,7 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
         }
         if bytes.count <= ARTWORK_CACHE_BYTES {
             browse.artwork_bytes += bytes.count
-            browse.artwork.append(ArtworkCacheEntry(library: library, row: row, bytes: bytes))
+            browse.artwork.append(ArtworkCacheEntry(library: library, row: row, medium: medium, bytes: bytes))
         }
         return bytes
     }
@@ -565,12 +569,13 @@ private let ARTWORK_CACHE_BYTES = 32 * 1024 * 1024
             file_type: details?.file_type ?? 0)
     }
     public func artwork(_ id: UInt32) -> [UInt8]? {
-        guard let library = source.library(), id >= 2 else { return nil }
-        return artwork_at(library, id - 2)
+        // 원본은 id를 줄 번호+2로 읽었다. CDJ는 목록 줄의 곡 id로 묻는다(2026-10-16 캡처, rekordbox도 같은 id). 줄+2로 읽으면 앞 곡 그림이 나왔다
+        guard let library = source.library(), let row = Self.item_row(library, id) else { return nil }
+        return artwork_at(library, row, medium: false)
     }
     public func item_artwork(_ id: UInt32) -> [UInt8]? {
         guard let library = source.library(), let row = Self.item_row(library, id) else { return nil }
-        return artwork_at(library, row)
+        return artwork_at(library, row, medium: true)
     }
     public func analysis(_ track: UInt32, _ what: DJLinkExportDBServer.Analysis) -> [UInt8]? {
         guard let library = source.library(), let row = Self.row_of(library, track) else { return nil }
@@ -754,10 +759,12 @@ func date_prefix(_ year: UInt32, _ month: UInt32?, _ day: UInt32?) -> String {
     }
     return String(format: "%04u", year)
 }
-func medium_artwork(_ relative: String) -> String {
+func medium_artwork(_ relative: String) -> String { sized_artwork(relative, MEDIUM_ARTWORK_SUFFIX) }
+/// 확장자 앞에 크기 접미사(`_m`·`_s`)를 붙인 옆 파일 경로
+func sized_artwork(_ relative: String, _ suffix: String) -> String {
     let raw = Array(relative.utf8)
     guard let dot = raw.lastIndex(of: 46), !raw[dot...].contains(47), !raw[dot...].contains(92) else { return relative }
-    return String(decoding: raw[..<dot], as: UTF8.self) + MEDIUM_ARTWORK_SUFFIX + String(decoding: raw[dot...], as: UTF8.self)
+    return String(decoding: raw[..<dot], as: UTF8.self) + suffix + String(decoding: raw[dot...], as: UTF8.self)
 }
 func resolve_under(_ share: String, _ relative: String) -> String? {
     let relative = String(String.UnicodeScalarView(relative.unicodeScalars.drop(while: { $0 == "/" || $0 == "\\" })))
