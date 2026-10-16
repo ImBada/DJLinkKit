@@ -1,7 +1,7 @@
 # 옮기는 규칙 (porting guide)
 
-alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전트가 따르는 규칙이다. 계획은 [PLAN.md](PLAN.md), 대응표는 [port-map.md](port-map.md).
-0단계에서 만든 기반 코드가 이 규칙을 구현한다. 기반 자체 시험은 `Tests/DJLinkKitTests/Infrastructure/InfrastructureTests.swift`에 있다(쓰는 예로도 본다).
+alphatheta-connect(TypeScript)를 Swift로 옮기는 규칙이다. 계획은 [PLAN.md](PLAN.md), 대응표는 [port-map.md](port-map.md)에 있다.
+이 규칙을 구현한 기반 코드의 시험(쓰는 예이기도 하다)은 `Tests/DJLinkKitTests/Infrastructure/InfrastructureTests.swift`다.
 
 ## 1. 순서
 
@@ -12,7 +12,7 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
    - JS에만 있는 검사(`typeof`, `instanceof Buffer` 등)는 가장 가까운 Swift 검사로 옮기고 `// 원본과 다름: 이유` 주석을 단다.
 2. 원본 코드를 옮긴다.
 3. 사용자가 "구현 완료"라고 하면 `swift build`와 `swift test --filter <Suite 형 이름>`로 통과시킨다. 구현하는 동안에는 빌드·시험을 돌리지 않는다(AGENTS.md).
-4. `scripts/port-status.sh --stage N`에서 원본 `it(` 수와 `@Test` 수가 같은지 본다. 이 스크립트는 읽기만 하므로 구현 중에도 쓸 수 있다.
+4. `scripts/port-status.sh --stage N`으로 원본 `it(` 수와 `@Test` 수가 같은지 확인한다. 읽기만 하는 스크립트라 구현 중에도 쓸 수 있다.
 
 ## 2. 이름과 파일
 
@@ -57,7 +57,7 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
   emitter.emit(.connected, device)      // 안에서
   deviceManager.on(.connected) { … }    // 밖에서. once/off/events(.connected)(AsyncStream)도 있다
   ```
-  인자가 여럿인 이벤트는 작은 구조체나 튜플 대신 구조체로 묶는다. 인자가 없으면 `Payload == Void`.
+  인자가 여럿인 이벤트는 튜플 대신 구조체로 묶는다. 인자가 없으면 `Payload == Void`.
 - `async-mutex` → `AsyncMutex`(`runExclusive`). `promise-timeout` → `withTimeout(clock:_:_:)`, `TimeoutError`("Timeout").
 - `Promise.race([p, timeout])` 같은 것은 `withCheckedContinuation` + `clock.setTimeout`으로 옮긴다(InfrastructureTests의 `waitForPing` 예).
 - 원본 이벤트 핸들러 안에서 잡지 않은 예외는 Node 프로세스를 죽인다. Swift에서는 그 경계에서 잡고 넘어가며 주석을 단다.
@@ -68,7 +68,7 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
 - TCP: `TCPConnection` 프로토콜(`Socket/TCPConnection.swift`).
 - 소켓을 만드는 형은 `SocketFactory`를 주입받는다(`LiveSocketFactory.shared`가 기본). 시험은 `FakeSocketFactory`·`FakeUDPSocket`.
 - 실제 소켓은 시험 프로세스에서 만들 수 없다(`TestProcess`). 시험은 LAN에 아무것도 보내지 않는다.
-  예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험(DJLinkKit 8개, `DJLinkExport` 8개)이다. 이 시험은 127.0.0.1에만 묶는다. Export는 소켓 가드가 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다).
+  예외는 `DJLINK_LOOPBACK_TESTS=1`일 때만 도는 루프백 시험이고, 127.0.0.1에만 묶는다([testing.md](testing.md#루프백-시험)).
 
 ## 6. 시험
 
@@ -84,5 +84,4 @@ alphatheta-connect(TypeScript)를 Swift로 옮길 때 모든 사람·에이전�
 
 ## 7. 공유 파일
 
-여러 단계가 같이 쓰는 기반 파일(`Package.swift`, `Sources/DJLinkKit/{Concurrency,Socket,Utils}/`, `Types.swift`, `Entities.swift`, `Constants.swift`, `Logger.swift`, `LocalDB/OneLibrary/OneLibraryEntities.swift`, `Sources/DJLinkTestSupport/`)는
-꼭 필요할 때만 더하는 쪽으로 고친다. 고쳤으면 보고에 "공유 파일 변경"으로 적는다.
+여러 단계가 같이 쓰는 기반 파일(`Package.swift`, `Sources/DJLinkKit/{Concurrency,Socket,Utils}/`, `Types.swift`, `Entities.swift`, `Constants.swift`, `Logger.swift`, `LocalDB/OneLibrary/OneLibraryEntities.swift`, `Sources/DJLinkTestSupport/`)는 꼭 필요할 때만, 더하는 쪽으로 고친다. 고쳤으면 보고에 "공유 파일 변경"으로 적는다.
