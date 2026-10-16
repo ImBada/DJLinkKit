@@ -500,9 +500,27 @@ func interface_lost(_ config: BeaconConfig, _ provider: any InterfaceProvider) -
     }
     return present ? nil : "\(name) no longer has the address \(config.address)"
 }
-@DJLinkActor func send(_ socket: any UDPSocket, _ packet: [UInt8], _ to: LinkAddress, _ port: UInt16) {
+@DJLinkActor func send(
+    _ socket: any UDPSocket, _ packet: [UInt8], _ to: LinkAddress, _ port: UInt16, retries: Int = UNICAST_RETRIES,
+    delay: Duration = UNICAST_RETRY_DELAY
+) {
     // PLAN §9: 보내기 실패는 버린다. 콜백 없이 보내면 실패가 소켓 오류로 올라가 상태 고리(`status_running`)가 영영 멈춘다.
-    socket.send(packet, port: Int(port), address: to.description, callback: { _, _ in })
+    socket.send(packet, port: Int(port), address: to.description, callback: { error, _ in
+        // PLAN §9: 한 장치에게 보내는 패킷이 경로 오류로 실패하면 잠시 뒤 다시 보낸다. 2026-10-16: 참여 직후 CDJ에게 보낸
+        // 인사·장치 정보 답이 "No route to host"로 실패했고, CDJ가 약 5초 뒤 다시 물을 때까지 마운트하지 않았다
+        guard let error, retries > 0, retries_unreachable(error), to.octets.last != 255 else { return }
+        Task { @DJLinkActor in
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            send(socket, packet, to, port, retries: retries - 1, delay: delay)
+        }
+    })
+}
+/// 다시 보낼 경로 오류: 경로·호스트 없음, 호스트 꺼짐, 네트워크 없음(주소 확인이 끝나기 전에 macOS가 돌려준다)
+let UNICAST_RETRIES = 20
+let UNICAST_RETRY_DELAY: Duration = .milliseconds(250)
+func retries_unreachable(_ error: any Error) -> Bool {
+    let error = error as NSError
+    return error.domain == NSPOSIXErrorDomain && [Int(EHOSTUNREACH), Int(EHOSTDOWN), Int(ENETUNREACH)].contains(error.code)
 }
 @DJLinkActor func send_announce(_ socket: any UDPSocket, _ out: Outgoing, _ broadcast: LinkAddress, _ port: UInt16) {
     send(socket, out.packet, out.to ?? broadcast, port)
