@@ -78,7 +78,7 @@ func run() async throws {
 
 ## 상태
 
-실기는 CDJ-2000nexus 2대와 DJM-900NXS2로만 확인했다. CDJ-3000, 6채널 믹서, 실제 pcap 캡처는 아직 확인하지 못했다. 확인한 범위는 [PLAN §8](docs/PLAN.md)과 [Link Export 실기 기록](docs/LINK-EXPORT-HARDWARE.md)에 있다.
+실기는 CDJ-2000nexus 2대와 DJM-900NXS2로만 확인했다. CDJ-3000과 6채널 믹서는 아직 확인하지 못했다. 확인한 범위는 [PLAN §8](docs/PLAN.md)과 [Link Export 실기 기록](docs/LINK-EXPORT-HARDWARE.md)에 있다.
 
 ## 개발
 

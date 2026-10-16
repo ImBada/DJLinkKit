@@ -1,6 +1,6 @@
 # Link Export 파일·시험 대응
 
-고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 상태는 **빌드·대응 시험·전체 로컬 CI 통과(날짜별 기록은 [검증 기록](LINK-EXPORT-VALIDATION.md)), CDJ-2000nexus MP3/WAV·레거시 큐 실기 확인**이다. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 실행한다. 코드나 시험 본문을 실행하지 않는 검사다. 선언된 `@Test`는 519개(원본 대응 502 + 자체 회귀 17)다.
+고정 원본: rbxport `90bfb53da59c5b2c3f0b76101601f30a6b74ab2b`. 원본 이름·순서 대조는 `python3 scripts/export-port-status.py --strict`로 한다(시험을 돌리지 않는 정적 검사). 범위와 설계는 [LINK-EXPORT-PLAN.md](LINK-EXPORT-PLAN.md), 시험 구성은 [검증 기록](LINK-EXPORT-VALIDATION.md)에 있다.
 
 ## 서버 소스
 
@@ -68,15 +68,15 @@
 | xml | `rbl-core/src/xml.rs` | `DJLinkExportModelTests/XmlTests.swift` | 2 |
 | loopback | `rbl-fakecdj/tests/loopback.rs` | `DJLinkExportTests/LoopbackTests.swift` | 8 (`DJLINK_LOOPBACK_TESTS=1`일 때만 실행) |
 
-루프백을 뺀 합계는 494개다(서버 core 321, ANLZ 78, 서버 메모리 모델 93, XML 스캐너 2). 루프백 8개를 더하면 원본 대응은 502개다. 모델 시험 파일 4개(25개)는 2026-10-15 뒤늦게 더했다. 처음 등록한 469개 중 원본 ignore 2개를 제외한 467개를 실행했고 실패가 없었다(그날의 기록). 새 4개 파일의 `.disabled` 2개(디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`, 폴더 브라우저의 `a_folder_sorts_its_tracks_and_loose_files_by_creation_together`)는 서버 범위 밖이라 이름만 유지했다. `.disabled`는 이 둘과 Beacon 2개를 합쳐 4개다. `FileCreatedTests.swift`의 활성 시험 6개는 추가한 시점에는 구현 단계라 실행하지 않았고, 그 뒤 2026-10-15 기본 실행에서 모두 통과했다. [검증 기록](LINK-EXPORT-VALIDATION.md).
+루프백을 뺀 합계는 494개다(서버 core 321, ANLZ 78, 서버 메모리 모델 93, XML 스캐너 2). 루프백 8개를 더하면 원본 대응은 502개다. `.disabled`는 4개다. Beacon 2개는 원본 ignore 사유를 따르고, 디스크 캐시를 거치는 `a_snapshot_keeps_the_tag_categories`와 폴더 브라우저의 `a_folder_sorts_its_tracks_and_loose_files_by_creation_together`는 서버 범위 밖이라 이름만 남겼다.
 
-`loopback` 구분 8개(`LoopbackTests.swift`)는 실제 127.0.0.1 소켓을 열기 때문에 `DJLINK_LOOPBACK_TESTS=1`(`scripts/ci.sh --loopback`)일 때만 실행하고, 기본 실행에서는 건너뛴다. 그래서 위 494개에 넣지 않고 따로 센다. Export 소켓 가드는 루프백 시험이 아니면 실제 소켓을 막고, 시험 프로세스에서는 TCP를 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며, UDP는 127.0.0.1·::1로만 보낸다(UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다)(#28). 가짜 CDJ 클라이언트는 가짜 소켓 버스용 `ExportIntegrationSupport.swift`와 별개로 `FakeCdjClient.swift`에 둔다.
+`loopback` 8개는 실제 127.0.0.1 소켓을 열어 `DJLINK_LOOPBACK_TESTS=1`(`scripts/ci.sh --loopback`)일 때만 돌고 기본 실행에서는 건너뛴다. 그래서 494개와 따로 센다. Export 소켓 가드는 루프백 시험이 아니면 실제 소켓을 막고, 루프백 시험에서도 TCP는 127.0.0.1·::1에만 묶고 그쪽으로만 연결하며 UDP는 127.0.0.1·::1로만 보낸다. UDP RPC 소켓은 원본처럼 0.0.0.0에 묶은 뒤 인터페이스를 고정하므로 보내는 주소를 검사한다(#28). 실제 소켓을 쓰는 가짜 CDJ 클라이언트는 가짜 소켓 버스용 `ExportIntegrationSupport.swift`와 따로 `FakeCdjClient.swift`에 둔다.
 
 ## 의존 범위의 제한
 
-`rbl-index` 전체 149개 시험을 옮겼다고 주장하지 않는다. 이번 서버가 사용하는 메모리 알고리즘·파일 생성 시각의 원본 시험 93개와 `rbl-core` XML 2개를 별도로 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 이번 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
+`rbl-index` 시험 149개를 다 옮기지는 않았다. 서버가 쓰는 메모리 알고리즘·파일 생성 시각의 원본 시험 93개와 `rbl-core` XML 2개만 대응했다. DB 적재·쓰기, cloud/drive 매핑 적재, 디스크 캐시, XML export, device export, 느슨한 음원 폴더 브라우저 등 앱 의존 시험은 서버 범위 밖이다. `Source` 입력 스냅샷은 호출자가 제공한다. 통합 시험의 SQL fixture 구축/적재는 동일한 합성 행을 메모리에 준비하는 코드로 바꾸었고 해당 위치에 이유를 표시했다.
 
-픽스처 파일(원본 캡처)이 필요한 경우 원본 값을 외부 고정 체크아웃에서 그대로 읽는다. 원본 시험 코드의 짧은 문자열 상수는 그대로 옮긴다. 바꾼 값·sanitized capture를 대신 넣지 않는다.
+픽스처 규칙은 [LINK-EXPORT-PLAN.md](LINK-EXPORT-PLAN.md)의 "픽스처"에 있다.
 
 ## Swift 전송·동시성 대응
 
@@ -84,10 +84,6 @@ Rust의 `Arc`/원자값·잠금/스레드는 직렬 `DJLinkActor`, 참조형 공
 
 원본의 병렬 색인/파일 메타데이터 구축은 Swift에서 같은 행 순서와 결과로 직렬 수행한다. 실제 처리량·지연은 실기 확인 전이다. 기존 MIT 클라이언트의 수신 상태 파서와 Rust 파서의 다른 길이·반올림 경계는 Export 어댑터에서 처리한다.
 
-## 원본 기준선 후 실기 회귀
+## 원본 기준선 뒤에 더한 시험
 
-`port/rbxport-one-to-one` (`03d3371`)이 원본과 동일한 기준선이다. 현재 브랜치는 PLAN §9의 WAV 디코더 선택 id 수정과 `TrackInfoCompatibilityTests.swift` 2개를 더한다. 이 시험은 `export-test-map.json`의 `regressions`에 따로 기록하고 원본 대응 개수에 합치지 않는다. 수정 직후(2026-10-15)의 전체 CI는 등록 1,479개에서 실패 0이었다(그날의 기록). [실기 기록](LINK-EXPORT-HARDWARE.md).
-
-#20 레거시 큐 조회는 별도 자체 회귀 `LegacyCueReadTests.swift` 6개와 `LegacyCueClientTests.swift` 2개를 추가 작성했다. 원본 대응 시험은 그대로이며 이 시점의 자체 회귀는 총 10개였다. 실기에서 찾은 큐 순서 문제(메모리 큐 먼저)를 고쳐 CDJ에서 확인했다. [#20 기록](LINK-EXPORT-LEGACY-CUES.md).
-
-#24 정렬 키 캐시의 자체 회귀 3개(`FilenameSortingRegressionTests.swift` 1개, `CatalogSortingRegressionTests.swift` 2개), #25 그레고리력 날짜의 자체 회귀 1개(`SmartDateRegressionTests.swift`), #28 소켓 가드의 자체 회귀 2개(`ExportSocketGuardTests.swift`)를 별도 등록했다. #32 편집 응답 순서의 자체 회귀 1개(`LegacyCueReadTests.swift`)도 더했다. 원본 대응 502개(루프백 8개 포함)와 별개로 자체 회귀는 총 17개다. 이 새 시험들은 2026-10-15 기본 실행에서 모두 통과했다(루프백 8개는 `--loopback`에서 통과).
+`port/rbxport-one-to-one` (`03d3371`)이 원본과 같은 기준선이다. 그 뒤 원본과 다르게 고친 곳의 자체 회귀를 원본 대응과 따로 더했다. 원본 대응 시험의 입력·기대값은 바꾸지 않았다. 파일 목록과 고친 내용은 [검증 기록](LINK-EXPORT-VALIDATION.md#시험-구성), 실기 근거는 [실기 기록](LINK-EXPORT-HARDWARE.md)과 [레거시 큐 기록](LINK-EXPORT-LEGACY-CUES.md)에 있다.

@@ -1,25 +1,21 @@
 # 파일 단위 대응표 (원본 → Swift)
 
-원본 세 저장소(고정 커밋은 [UPSTREAM.md](../UPSTREAM.md))의 `src/` 파일을 실제로 옮긴 Swift 파일에 하나씩 대응시킨다. 단계 번호는 [PLAN.md](PLAN.md) §8 표를 따른다. 원본과 다르게 옮긴 곳은 [port-notes.md](port-notes.md)에 있다.
+원본 세 저장소(고정 커밋은 [UPSTREAM.md](../UPSTREAM.md))의 `src/` 파일과 Swift 파일의 대응이다. 단계 번호는 [PLAN.md](PLAN.md) §8 표를 따른다. 원본과 다르게 옮긴 곳은 [port-notes.md](port-notes.md)에 있다.
 
-이 표는 1:1 포트를 마친 뒤의 실제 파일을 기준으로 다시 썼다. Swift 파일 이름은 각 파일 머리 주석(`// 원본 src/...`)과 내용을 열어 확인했다.
-
-이 문서는 alphatheta-connect 계열(`DJLinkKit`·`DJLinkControl`·`DJLinkPassive`·`djlink`)만 다룬다. Link Export(`DJLinkExport*`, rbxport 원본)의 대응은 [export-port-map.md](export-port-map.md)에 따로 있다. 이 문서의 §3·§4는 main의 현재 파일을 기준으로 하고, 1:1 기준선(`port/one-to-one`)과 다른 곳은 그렇게 적었다.
+alphatheta-connect 계열(`DJLinkKit`·`DJLinkControl`·`DJLinkPassive`·`djlink`)만 다룬다. Link Export(`DJLinkExport*`, rbxport 원본)는 [export-port-map.md](export-port-map.md)에 있다. §3·§4는 main 기준이다.
 
 ## 범례와 갱신 규칙
 
-- **상태**
-  - `통과`: 옮겼고, 그 단계의 원본 시험(원본 `it` 수와 `@Test` 수가 같다)이 통과한다.
-  - `옮김`: 옮겼지만 원본 시험이 없다(우리가 만든 시험만 있다).
-  - `재수출(Swift에서 필요 없음)`: 다시 내보내기만 있는 파일. Swift는 모듈 안 이름이 바로 보이므로 파일이 필요 없다.
-  - `빈 구현`: Sentry를 뺀 원본처럼 아무것도 하지 않는 구현만 둔다.
+- 상태
+  - `통과`: 옮겼고, 그 단계의 원본 시험이 통과한다(원본 `it` 수와 `@Test` 수가 같다).
+  - `옮김`: 옮겼지만 원본 시험이 없다.
+  - `재수출(Swift에서 필요 없음)`: 다시 내보내기만 하는 파일. Swift는 모듈 안 이름이 바로 보인다.
+  - `빈 구현`: 아무것도 하지 않는 구현만 둔다.
   - `범위 밖`: 옮기지 않는다(PLAN §1).
-  - `옮기지 않음`: 라이선스나 설계 때문에 일부러 옮기지 않았다.
-- **갱신 규칙**: 파일을 옮기거나 이름을 바꾸는 사람이 같은 변경에서 이 표를 고친다. 시험 파일을 바꾸면 `scripts/port-status.sh`의 대응표도 같이 고친다.
-- **이름 규칙** (PLAN §5, [porting-guide.md](porting-guide.md) §2):
-  - 한 모듈 안에서 파일 이름(basename)이 겹치면 안 된다. 그래서 `index.ts`는 대표 형 이름이나 `<폴더>Index`, `utils.ts`·`types.ts`는 폴더 이름을 붙인 이름이 되었다.
-  - `localdb/`의 Swift 파일은 대부분 `LocalDB` 접두사, `db/`는 `DB`, `remotedb/`는 `RemoteDB`, `artwork/`는 `Artwork`, metadata-connect는 `Metadata`, onelibrary-connect는 `OneLibrary`가 앞에 붙는다.
-- **하나의 원본이 여러 Swift 파일로 나뉜 곳, 여러 원본이 한 Swift 파일로 합쳐진 곳**은 해당 칸에 적었다.
+  - `옮기지 않음`: 라이선스나 설계 때문에 옮기지 않았다.
+- 갱신: 파일을 옮기거나 이름을 바꾸면 같은 변경에서 이 표를 고친다. 시험 파일을 바꾸면 `scripts/port-status.sh`의 대응표도 고친다.
+- 이름(PLAN §5, [porting-guide.md](porting-guide.md) §2): 한 모듈 안에서 파일 basename이 겹치면 안 되므로 `index.ts`는 대표 형 이름이나 `<폴더>Index`, `utils.ts`·`types.ts`는 폴더 이름을 붙인다. 접두사는 `localdb/` → `LocalDB`(대부분), `db/` → `DB`, `remotedb/` → `RemoteDB`, `artwork/` → `Artwork`, metadata-connect → `Metadata`, onelibrary-connect → `OneLibrary`다.
+- 원본 하나가 여러 Swift 파일로 나뉘거나 여러 원본이 한 파일로 합쳐진 곳은 해당 칸에 적었다.
 
 ## 1. 코드 파일 (`src/`)
 
@@ -178,7 +174,7 @@
 
 | 원본 파일 | Swift 파일 | 상태 |
 |---|---|---|
-| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 14개 파일로 나뉘었다(1:1 기준선은 13개, `CLIWatchTracks.swift`는 main에서 더했다). 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 한 번의 실행이 가진 네트워크·소켓·작업과 정리 `CLISession.swift`, 주입하는 바깥 세계(소켓·인터페이스·시계·파일·NFS) `CLIRuntime.swift`, 소켓 소유권·인터페이스 묶기·중단 뒤 송신 차단 `CLISocketGuard.swift`, 중단 토큰·신호 `CLIAbort.swift`, 액터와 독립된 제한 시간·강제 종료 감시 `CLIWatchdog.swift`, 덮어쓰지 않는 파일 쓰기 `CLIFileWriter.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift`, watch의 곡별 조회 중복·재시도·늦은 결과 관리 `CLIWatchTracks.swift`(#17) | 옮김 (원본 시험 없음. 우리 시험 180개, §3) |
+| `alphatheta-connect/src/cli/index.ts` | `Sources/djlink/` 아래 14개 파일. 진입점 `DJLinkCLI.swift`, 인자 해석 `CLIArguments.swift`, 명령 실행(`watch`가 원본 흐름) `CLICommands.swift`, 한 번의 실행이 가진 네트워크·소켓·작업과 정리 `CLISession.swift`, 주입하는 바깥 세계(소켓·인터페이스·시계·파일·NFS) `CLIRuntime.swift`, 소켓 소유권·인터페이스 묶기·중단 뒤 송신 차단 `CLISocketGuard.swift`, 중단 토큰·신호 `CLIAbort.swift`, 액터와 독립된 제한 시간·강제 종료 감시 `CLIWatchdog.swift`, 덮어쓰지 않는 파일 쓰기 `CLIFileWriter.swift`, 안전 검사 `CLISafety.swift`, 출력 `CLIConsole.swift`·`CLIFormat.swift`, 도움말 `CLIHelp.swift`, watch의 곡별 조회 중복·재시도·늦은 결과 관리 `CLIWatchTracks.swift`(#17) | 옮김 (원본 시험 없음. 우리 시험 180개, §3) |
 
 ### 빈 구현
 
@@ -190,7 +186,7 @@
 
 | 원본 파일 | Swift 파일 | 상태 |
 |---|---|---|
-| `alphatheta-connect/src/remote/hue.ts`, `remote/index.ts`, `remote/server.ts` | (없음) | 범위 밖 (원본 시험 0개라 시험 수는 줄지 않는다. PLAN §1) |
+| `alphatheta-connect/src/remote/hue.ts`, `remote/index.ts`, `remote/server.ts` | (없음) | 범위 밖(PLAN §1). 원본 시험 없음 |
 | `alphatheta-connect/src/localdb/kaitai/rekordbox_pdb.ksy`, `rekordbox_anlz.ksy` | (없음) — §6의 DJCrate 리더(`LocalDBPdb*.swift`, `LocalDBAnlzFile.swift`)가 같은 형식을 읽는다 | 옮기지 않음(EPL, DJCrate 리더로 대신) |
 | `alphatheta-connect/src/global.d.ts` | (없음) — `kaitai-struct`·`js-xdr`·`.ksy` 모듈 선언뿐이다 | 범위 밖 |
 | `alphatheta-connect/src/index.ts` | (없음) — 공개 이름을 모아 내보내기만 한다(`Control`, `PositionEmitter`, `loadAnlz`, `fetchFile`, `OneLibraryAdapter` 등). Swift는 모듈 안 공개 이름이 바로 보인다 | 재수출(Swift에서 필요 없음) |
@@ -198,12 +194,11 @@
 
 ### 합계
 
-- `src/` 코드 파일(시험 파일·`.d.ts` 제외): alphatheta-connect 85개, onelibrary-connect 8개, metadata-connect 11개 = 104개. 위 표에 모두 있다.
-- 대응하는 Swift 파일을 찾지 못한 원본 `src/` 코드 파일은 없다. Swift 파일이 없는 것은 모두 `재수출`·`범위 밖`·`옮기지 않음`으로 적은 파일이다.
+`src/` 코드 파일(시험 파일·`.d.ts` 제외)은 alphatheta-connect 85개, onelibrary-connect 8개, metadata-connect 11개, 모두 104개이고 위 표에 모두 있다. Swift 파일이 없는 것은 `재수출`·`범위 밖`·`옮기지 않음`으로 적은 파일뿐이다.
 
 ## 2. 시험 파일 (`scripts/port-status.sh`의 대응표와 같다)
 
-`UPSTREAM_DIR=~/src/upstream bash scripts/port-status.sh`의 결과다. 모든 파일에서 원본 `it` 수와 Swift `@Test` 수가 같다. 상태 칸의 숫자는 그 수다.
+`scripts/port-status.sh`가 대조하는 목록이다. 모든 파일에서 원본 `it` 수와 Swift `@Test` 수가 같고, 상태 칸의 숫자가 그 수다.
 
 | 구분 | 원본 시험 | Swift 시험 |
 |---|---|---|
@@ -296,7 +291,7 @@
 | `alphatheta-connect/tests/passive/alphatheta.spec.ts` | `Tests/DJLinkPassiveTests/PassiveAlphathetaTests.swift` | 통과 (22) |
 | `alphatheta-connect/tests/passive/pcap-adapter.spec.ts` | `Tests/DJLinkPassiveTests/PassivePcapAdapterTests.swift` | 통과 (9) |
 
-일부 시험은 원본처럼 조건이 맞을 때만 돈다(`.enabled(if:)`). 실제 음원 파일이 있어야 하는 앨범아트·태그 통합 시험, 암호화 픽스처가 있어야 하는 OneLibrary 시험이 그렇다. `@Test` 개수는 조건과 관계없이 같다.
+실제 음원이 있어야 하는 앨범아트·태그 통합 시험과 암호화 픽스처가 있어야 하는 OneLibrary 시험은 원본처럼 조건이 맞을 때만 돈다(`.enabled(if:)`). `@Test` 수는 조건과 관계없이 같다.
 
 ### 시험 도우미 (원본, 시험 수에 들지 않음)
 
@@ -315,7 +310,7 @@
 
 ## 3. 원본 대응이 아닌 우리 시험
 
-원본 시험에는 없고 이 패키지에서 더한 시험이다. 원본 시험의 입력·기대값은 건드리지 않고, 소켓·SQLCipher·CLI처럼 Swift 쪽에서 새로 생긴 경계와 PLAN §9의 고친 동작을 따로 검사한다. 시험은 LAN에 아무것도 보내지 않는다(PLAN §11). `@Test` 개수는 선언 기준이며 main의 현재 값이다. "기준선"은 1:1 기준선(`port/one-to-one`)에도 있는 파일, "main"은 main에서 더한 파일이다.
+원본에 없는 시험이다. 소켓·SQLCipher·CLI처럼 Swift에서 새로 생긴 경계와 PLAN §9의 고친 동작을 검사한다. LAN에는 아무것도 보내지 않는다(PLAN §11). 1:1 기준선(`port/one-to-one`)에 없고 main에만 있는 파일은 `*UpstreamFixTests.swift`(PLAN §9 고침)와 비트(#7)·실기 캡처(#6)·watch 복구(#17) 시험이다.
 
 | Swift 시험 파일 | `@Test` | 하는 일 |
 |---|---|---|
@@ -332,13 +327,13 @@
 | `Tests/DJLinkControlTests/ControlNetworkTests.swift` | 2 | `ProlinkNetwork.control`이 연결 뒤에 만들어지는 것 |
 | `Tests/DJLinkPassiveTests/PassiveFlowTests.swift` | 17 | 패시브 네트워크 전체 흐름(가짜 pcap). PLAN §9의 UDP 길이 시험(`UDP payload keeps every byte and a standard announce uses the full format`)도 이 파일에 있다 |
 | `Tests/djlinkTests/CLIApplicationTests.swift` | 6 | CLI 실행 흐름과 종료 코드(가짜 실행기) |
-| `Tests/djlinkTests/CLIArgumentsTests.swift` | 22 | 인자 해석(옵션 값 삼킴 방지, `play`·`pause` 거부, `--timeout`)(기준선은 23) |
+| `Tests/djlinkTests/CLIArgumentsTests.swift` | 22 | 인자 해석(옵션 값 삼킴 방지, `play`·`pause` 거부, `--timeout`) |
 | `Tests/djlinkTests/CLIFormatTests.swift` | 14 | 출력 형식 |
 | `Tests/djlinkTests/CLISafetyTests.swift` | 11 | 안전 규칙(rekordbox 실행 확인, 가상 CDJ 번호, `--confirm`, 재생 상태 패킷, 경로 거부) |
 | `Tests/djlinkTests/CLIFileWriterTests.swift` | 17 | 덮어쓰지 않는 파일 게시(임시 폴더만 쓴다): `link`·`RENAME_EXCL`·`O_EXCL` 순서, 1MiB 조각 쓰기, 쓰기 도중 취소 |
 | `Tests/djlinkTests/CLIPublishCleanupTests.swift` | 4 | 막힌 파일 큐를 `cleanup()`·`run`이 3초까지 기다리는 것 |
 | `Tests/djlinkTests/CLISignalHandlingTests.swift` | 5 | SIGHUP 정리 경로, SIGPIPE 무시, 닫힌 파이프 출력 |
-| `Tests/djlinkTests/CLILocalTempCleanupTests.swift` | 13 | OneLibrary 임시 DB 추적·정리(부속 파일 포함, #16)(기준선은 7) |
+| `Tests/djlinkTests/CLILocalTempCleanupTests.swift` | 13 | OneLibrary 임시 DB 추적·정리(부속 파일 포함, #16) |
 | `Tests/djlinkTests/CLIRealSchedulerTests.swift` | 3 | 실제 `DispatchCLIScheduler`가 막힌 `DJLinkActor.queue`와 독립으로 도는 것(약 3초) |
 | `Tests/djlinkTests/CLINFSGlobalsTests.swift` | 1 | 전역 NFS 경로 검사 훅의 설치·해제(`.serialized`) |
 | `Tests/djlinkTests/CLIRuntimeTests.swift` | 47 | 가짜 소켓·시계·파일·NFS로 돌린 실행 경로: 인터페이스 묶기·서브넷 제한, 번호 정책, 중단 뒤 송신·쓰기 0회, 제한 시간, 정리, 종료 코드, NFS 경로 검사 |
@@ -350,45 +345,45 @@
 | `Tests/djlinkTests/CLIStagehandSafetyTests.swift` | 1 | 지원하지 않는 안전 정책이 있으면 Stagehand를 바이트를 보내기 전에 거부하는 것 |
 | `Tests/djlinkTests/CLITCPRegistrySafetyTests.swift` | 5 | 닫힌 TCP를 장부에서 바로 지우고, 포트 조회 연결을 응답 직후 닫는 것. remotedb 질의 번호 로그 포함 |
 | `Tests/djlinkTests/CLITCPSafetyTests.swift` | 2 | 포트 조회와 DB 연결이 고른 인터페이스를 요구하고, 해석 못 하면 연결하지 않는 것 |
-| `Tests/DJLinkKitTests/Artwork/ArtworkUpstreamFixTests.swift` | 7 | **main.** PLAN §9 앨범아트 고침(mp4 atom 이름, APIC BOM, ID3 v2.3 확장 헤더) |
-| `Tests/DJLinkKitTests/MetadataConnect/MetadataConnectUpstreamFixTests.swift` | 25 | **main.** PLAN §9 metadata-connect 고침(mp4 문자열 atom, ID3 프레임 ID, 빈 값, APIC BOM, 확장 헤더) |
-| `Tests/DJLinkKitTests/Devices/DevicesUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `getDeviceEnsured` 타이머·구독 정리 |
-| `Tests/DJLinkKitTests/LocalDB/LocalDBUpstreamFixTests.swift` | 13 | **main.** PLAN §9 localdb 고침(PDB 사슬, 장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일, ANLZ 큐 태그 잇기 #22, 알 수 없는 PSSI mood #26, 긴 ASCII 0x40 #13) |
-| `Tests/DJLinkKitTests/MixStatus/MixStatusUpstreamFixTests.swift` | 7 | **main.** PLAN §9 mixstatus 고침 |
-| `Tests/DJLinkKitTests/Network/NetworkUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `bringOnline` bind 실패 때 만든 소켓 닫기 |
-| `Tests/DJLinkKitTests/RemoteDB/RemoteDBUpstreamFixTests.swift` | 17 | **main.** PLAN §9 remotedb 응답이 CDJ가 먼저 보낸 메시지에 밀리지 않는 것(#46), 질의 응답 시간 제한(#47), 분석하지 않은 곡의 항목 0개(#48) |
-| `Tests/DJLinkKitTests/Status/StatusUpstreamFixTests.swift` | 8 | **main.** PLAN §9 위치 파서의 종류 바이트 검사와 비트 포트(50001) on-air |
-| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJKeepAliveUpstreamFixTests.swift` | 1 | **main.** PLAN §9 keep-alive 54바이트 |
-| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJReadyUpstreamFixTests.swift` | 3 | **main.** PLAN §9 `ready` 재호출과 번호 거부 때 대기자 풀기 |
-| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJStatusUpstreamFixTests.swift` | 2 | **main.** PLAN §9 `makeStatusPacket` 머리말 |
-| `Tests/DJLinkControlTests/ControlUpstreamFixTests.swift` | 5 | **main.** PLAN §9 제어 재생 상태 패킷의 칸 배치 |
-| `Tests/DJLinkPassiveTests/PassiveDevicesUpstreamFixTests.swift` | 3 | **main.** PLAN §9 패시브 `getDeviceEnsured` 타이머 정리(#23) |
-| `Tests/DJLinkPassiveTests/PassiveLocalDBUpstreamFixTests.swift` | 3 | **main.** PLAN §9 패시브 localdb 고침(장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일)(#23) |
-| `Tests/DJLinkPassiveTests/PassivePcapUpstreamFixTests.swift` | 8 | **main.** PLAN §9 패시브 캡처 중 인터페이스가 사라지면 오류로 멈춤(#8) |
-| `Tests/DJLinkPassiveTests/PassivePositionUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 위치 파서의 종류 바이트 검사 |
-| `Tests/DJLinkPassiveTests/PassiveStatusUpstreamFixTests.swift` | 1 | **main.** PLAN §9 패시브 on-air(비트 포트 50001) |
-| `Tests/DJLinkPassiveTests/PassiveRemoteDBUpstreamFixTests.swift` | 2 | **main.** PLAN §9 패시브 remotedb가 CDJ가 먼저 보낸 메시지를 건너뜀(#46), 닫힌 연결을 버리고 다시 연결(#47) |
-| `Tests/DJLinkPassiveTests/PassiveCaptureTests.swift` | 2 | **main.** 실기 pcap 프레임(MAC 가림)이 패시브 경로를 지나는 것(#6) |
-| `Tests/DJLinkKitTests/Status/BeatTests.swift` | 9 | **main.** 비트 0x28 해석과 능동 `BeatEmitter` 연결(#7, PROVENANCE §D) |
-| `Tests/DJLinkPassiveTests/PassiveBeatTests.swift` | 3 | **main.** 패시브 비트 이벤트 연결과 종료(#7) |
-| `Tests/djlinkTests/CLIBeatTests.swift` | 3 | **main.** CLI `status`·`passive`의 비트 출력(#7) |
-| `Tests/djlinkTests/CLIWatchRecoveryTests.swift` | 9 | **main.** `watch`의 재접속·재시도·늦은 결과 버리기(#17) |
+| `Tests/DJLinkKitTests/Artwork/ArtworkUpstreamFixTests.swift` | 7 | PLAN §9 앨범아트 고침(mp4 atom 이름, APIC BOM, ID3 v2.3 확장 헤더) |
+| `Tests/DJLinkKitTests/MetadataConnect/MetadataConnectUpstreamFixTests.swift` | 25 | PLAN §9 metadata-connect 고침(mp4 문자열 atom, ID3 프레임 ID, 빈 값, APIC BOM, 확장 헤더) |
+| `Tests/DJLinkKitTests/Devices/DevicesUpstreamFixTests.swift` | 3 | PLAN §9 `getDeviceEnsured` 타이머·구독 정리 |
+| `Tests/DJLinkKitTests/LocalDB/LocalDBUpstreamFixTests.swift` | 13 | PLAN §9 localdb 고침(PDB 사슬, 장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일, ANLZ 큐 태그 잇기 #22, 알 수 없는 PSSI mood #26, 긴 ASCII 0x40 #13) |
+| `Tests/DJLinkKitTests/MixStatus/MixStatusUpstreamFixTests.swift` | 7 | PLAN §9 mixstatus 고침 |
+| `Tests/DJLinkKitTests/Network/NetworkUpstreamFixTests.swift` | 3 | PLAN §9 `bringOnline` bind 실패 때 만든 소켓 닫기 |
+| `Tests/DJLinkKitTests/RemoteDB/RemoteDBUpstreamFixTests.swift` | 17 | PLAN §9 remotedb 응답이 CDJ가 먼저 보낸 메시지에 밀리지 않는 것(#46), 질의 응답 시간 제한(#47), 분석하지 않은 곡의 항목 0개(#48) |
+| `Tests/DJLinkKitTests/Status/StatusUpstreamFixTests.swift` | 8 | PLAN §9 위치 파서의 종류 바이트 검사와 비트 포트(50001) on-air |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJKeepAliveUpstreamFixTests.swift` | 1 | PLAN §9 keep-alive 54바이트 |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJReadyUpstreamFixTests.swift` | 3 | PLAN §9 `ready` 재호출과 번호 거부 때 대기자 풀기 |
+| `Tests/DJLinkKitTests/VirtualCDJ/VirtualCDJStatusUpstreamFixTests.swift` | 2 | PLAN §9 `makeStatusPacket` 머리말 |
+| `Tests/DJLinkControlTests/ControlUpstreamFixTests.swift` | 5 | PLAN §9 제어 재생 상태 패킷의 칸 배치 |
+| `Tests/DJLinkPassiveTests/PassiveDevicesUpstreamFixTests.swift` | 3 | PLAN §9 패시브 `getDeviceEnsured` 타이머 정리(#23) |
+| `Tests/DJLinkPassiveTests/PassiveLocalDBUpstreamFixTests.swift` | 3 | PLAN §9 패시브 localdb 고침(장치 제거 때 모든 DB 닫기, OneLibrary 임시 파일)(#23) |
+| `Tests/DJLinkPassiveTests/PassivePcapUpstreamFixTests.swift` | 8 | PLAN §9 패시브 캡처 중 인터페이스가 사라지면 오류로 멈춤(#8) |
+| `Tests/DJLinkPassiveTests/PassivePositionUpstreamFixTests.swift` | 1 | PLAN §9 패시브 위치 파서의 종류 바이트 검사 |
+| `Tests/DJLinkPassiveTests/PassiveStatusUpstreamFixTests.swift` | 1 | PLAN §9 패시브 on-air(비트 포트 50001) |
+| `Tests/DJLinkPassiveTests/PassiveRemoteDBUpstreamFixTests.swift` | 2 | PLAN §9 패시브 remotedb가 CDJ가 먼저 보낸 메시지를 건너뜀(#46), 닫힌 연결을 버리고 다시 연결(#47) |
+| `Tests/DJLinkPassiveTests/PassiveCaptureTests.swift` | 2 | 실기 pcap 프레임(MAC 가림)이 패시브 경로를 지나는 것(#6) |
+| `Tests/DJLinkKitTests/Status/BeatTests.swift` | 9 | 비트 0x28 해석과 능동 `BeatEmitter` 연결(#7, PROVENANCE §D) |
+| `Tests/DJLinkPassiveTests/PassiveBeatTests.swift` | 3 | 패시브 비트 이벤트 연결과 종료(#7) |
+| `Tests/djlinkTests/CLIBeatTests.swift` | 3 | CLI `status`·`passive`의 비트 출력(#7) |
+| `Tests/djlinkTests/CLIWatchRecoveryTests.swift` | 9 | `watch`의 재접속·재시도·늦은 결과 버리기(#17) |
 
-시험 수 합계(`@Test` 선언 기준, main의 현재 값):
+시험 수 합계(`@Test` 선언 기준, main):
 
-| 시험 대상 | 원본 대응 | 우리 시험 | 합 | 1:1 기준선 합 |
-|---|---|---|---|---|
-| `DJLinkKitTests` | 580 | 202 | 782 | 683 |
-| `DJLinkControlTests` | 11 | 7 | 18 | 13 |
-| `DJLinkPassiveTests` | 31 | 40 | 71 | 48 |
-| `djlinkTests` | 0 | 180 | 180 | 163 |
-| 합 | 622 | 429 | 1,051 | 907 |
+| 시험 대상 | 원본 대응 | 우리 시험 | 합 |
+|---|---|---|---|
+| `DJLinkKitTests` | 580 | 202 | 782 |
+| `DJLinkControlTests` | 11 | 7 | 18 |
+| `DJLinkPassiveTests` | 31 | 40 | 71 |
+| `djlinkTests` | 0 | 180 | 180 |
+| 합 | 622 | 429 | 1,051 |
 
-1:1 기준선(`port/one-to-one`)의 선언 수는 907개다(위 표의 마지막 칸, #26의 PSSI 시험 2개를 2026-10-16 기준선에도 더해 905개에서 늘었다). main은 PLAN §9 고치기 시험(`*UpstreamFixTests.swift`), 비트 0x28 시험(`BeatTests`·`PassiveBeatTests`·`CLIBeatTests`), CLI 복구 시험(`CLIWatchRecoveryTests` 등)이 더해져 수가 다르다. 기준선에서는 907개 중 조건이 맞을 때만 도는 13개(루프백 6개, 실제 음원이 필요한 앨범아트 통합 시험 5개, 자식 프로세스 안에서만 도는 SQLCipher 동시 열기 도우미 2개)를 건너뜀으로 셌다. 이 13개는 main에도 그대로 있다. Link Export 시험 519개까지 합친 전체 선언 수 1,570개와 조건부 30개의 분류는 [LINK-EXPORT-VALIDATION.md](LINK-EXPORT-VALIDATION.md)와 [testing.md](testing.md)에 있다. CLI 시험은 파일 21개에 180개다(기준선은 19개 파일에 163개). 시험 도우미 `Tests/djlinkTests/CLITestHarness.swift`는 `@Test`가 없다.
+`Tests/djlinkTests/CLITestHarness.swift`는 시험 도우미라 `@Test`가 없다. 조건부 시험은 [testing.md](testing.md#조건부-시험)에 있다.
 
 ## 4. 우리가 더한 Swift 파일 (원본에 대응하는 파일이 없다)
 
-원본이 Node·npm 패키지에 맡기던 일을 Swift에서 직접 해야 하는 곳과, 시험·안전 때문에 주입점을 만든 곳이다.
+원본이 Node·npm 패키지에 맡기던 일을 Swift에서 직접 하는 파일과, 시험·안전 때문에 만든 주입점이다.
 
 | Swift 파일 | 원본에서 이것이 맡던 일 |
 |---|---|
@@ -415,20 +410,20 @@
 | `Sources/CPcap/` (`module.modulemap`, `shim.h`) | libpcap을 부르는 시스템 라이브러리 선언 |
 | `Sources/DJLinkTestSupport/` (`FakeInterfaceProvider`, `FakeTCPConnection`, `FakeUDPSocket`, `TestClock`) | 원본 시험의 `jest.mock('os')`, 가짜 소켓, `jest.useFakeTimers()`. `Mocks.swift`는 원본 `tests/utils.ts`(§2) |
 | `Sources/djlink/*.swift` | 원본 `cli/index.ts`를 나눈 것(§1 단계 9) |
-| `Sources/djlink/CLIWatchTracks.swift` | main에서 더한 파일. `watch`의 곡별 조회 중복 억제·재시도·늦은 결과 버리기(#17). 원본 `cli/index.ts`의 곡 ID만 비교하는 `lastTid` 자리 |
-| `Sources/DJLinkKit/Status/BeatTypes.swift`, `BeatUtils.swift`, `BeatEmitter.swift` | main에서 더한 파일. 원본에 없는 비트 포트(50001) 0x28 패킷 수신: `CDJStatus.BeatState`, `beatFromPacket`, `BeatEmitter`(#7, [PROVENANCE.md](../PROVENANCE.md) §D) |
-| `Sources/DJLinkPassive/PassiveBeat.swift` | main에서 더한 파일. 패시브 어댑터의 비트 포트에서 0x28만 읽는 `PassiveBeatEmitter`(#7) |
+| `Sources/djlink/CLIWatchTracks.swift` | `watch`의 곡별 조회 중복 억제·재시도·늦은 결과 버리기(#17). 원본 `cli/index.ts`의 곡 ID만 비교하는 `lastTid` 자리 |
+| `Sources/DJLinkKit/Status/BeatTypes.swift`, `BeatUtils.swift`, `BeatEmitter.swift` | 원본에 없는 비트 포트(50001) 0x28 패킷 수신: `CDJStatus.BeatState`, `beatFromPacket`, `BeatEmitter`(#7, [PROVENANCE.md](../PROVENANCE.md) §D) |
+| `Sources/DJLinkPassive/PassiveBeat.swift` | 패시브 어댑터의 비트 포트에서 0x28만 읽는 `PassiveBeatEmitter`(#7) |
 
 시험 쪽 도우미 중 원본 대응이 없는 것: `Tests/DJLinkKitTests/DB/DBTestHelpers.swift`, `Tests/DJLinkKitTests/Network/NetworkTestHelpers.swift`, `Tests/DJLinkKitTests/LocalDB/Support/LocalDBTestDependencies.swift`(원본 시험의 `jest.mock` 자리를 주입으로 바꾼 가짜들), `Tests/DJLinkKitTests/LocalDB/Support/LocalDBPdbBuilder.swift`(§6), `Tests/djlinkTests/CLITestHarness.swift`(CLI 시험이 쓰는 가짜 소켓·시계·파일 시스템 모음).
 
 ## 5. 이름·주입점 요약
 
-- 원본 `jest.mock('모듈')`은 그 모듈을 init 인자나 프로토콜로 주입받게 하고 시험에서 가짜를 넣는 방식으로 바꿨다([porting-guide.md](porting-guide.md) §6). 위 §4의 `*Seam*`·`NetworkDependencies.swift`·`DBSeams.swift`가 그 자리다.
-- 대표 형 이름은 원본 파일의 `export`를 열어 정했다.
+- 원본 `jest.mock('모듈')`은 그 모듈을 init 인자나 프로토콜로 주입받고 시험에서 가짜를 넣는 방식으로 바꿨다([porting-guide.md](porting-guide.md) §6). §4의 `*Seam*`·`NetworkDependencies.swift`가 그 자리다.
+- 대표 형 이름은 원본 파일의 `export`를 따랐다.
 
 ## 6. DJCrate에서 옮긴 리더 파일
 
-localdb의 `.ksy`(Kaitai, EPL-1.0)는 쓰지 않고, 같은 저작자의 MIT 저장소 DJCrate(`6b2954892257f7d96aee1328c9f654e267921333`)의 리더를 읽기에 필요한 부분만 옮겨 출발점으로 삼았다(PLAN §7). 그 위에 원본 localdb의 바깥 모양을 그대로 만들었다. 출처 고지는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있다.
+localdb의 `.ksy`(Kaitai, EPL-1.0) 대신 같은 저작자의 MIT 저장소 DJCrate(`6b2954892257f7d96aee1328c9f654e267921333`)의 리더에서 읽기에 필요한 부분만 옮기고, 그 위에 원본 localdb의 바깥 모양을 만들었다(PLAN §7). 출처 고지는 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)에 있다.
 
 | Swift 파일 | DJCrate 출처 | 옮긴 범위 |
 |---|---|---|
