@@ -358,6 +358,10 @@ let package = Package(
 - rbxport `rbl-dbserver/src/session.rs::track_info_rows`가 첫 항목 id를 1로 고정했다. CDJ-2000nexus가 WAV에도 MP3 디코더를 선택해 E-8305가 났다. 동일한 합성 WAV와 송수신 비교에서 이 id만 11로 바꾸자 정상 로드·재생·CUE 복귀를 확인했다. 이제 `TrackDetails.file_type`을 보내고, 0인 기존 Source는 기본값 1을 유지한다. 원본 대응 시험의 입력·기대값은 바꾸지 않고 실기 회귀 2개를 더했다. 원본 그대로인 기준선은 `port/rbxport-one-to-one` (`03d3371`)에 남긴다. [실기 기록](LINK-EXPORT-HARDWARE.md).
 - 남은 레거시 큐 목록 읽기 `0x2104`는 [#20](https://github.com/ImBada/DJLinkKit/issues/20)에 기록했다. 원본에도 핸들러가 없으며, 기본 MP3/WAV 재생 성공을 큐 목록 복원 검증으로 간주하지 않는다.
 
+**더한 것**(2026-10-16, Link Export 빠른 참여)
+
+- `LinkExport.start(seedAnnouncements:)`·`Beacon.hear_seed`: 앱이 띄우기 전에 들은 장치 알림을 넣으면 CDJ의 다음 알림을 기다리지 않고 바로 번호 받기를 시작한다. 원본에는 없는 입구다. 캡처에서 rekordbox도 CDJ 알림을 들은 직후 첫 번호 요청을 보냈고, 알림 간격은 약 2초였다(`BeaconSeedTests`).
+
 **고친 것**(2026-10-16, Link Export 보내기 실패)
 
 - Swift `Beacon`의 `send`는 콜백 없이 보내, 보내기가 한 번 실패하면 `DualStackUDPSocket`이 소켓 오류로 올리고 상태 소켓의 `status_running`이 꺼진다. 그 뒤로는 상태 패킷을 보내지도, CDJ의 질의에 답하지도 않는다. 2026-10-16 DJCrate 앱에서 상태 송신이 첫 패킷 뒤 멈추고 CDJ-2000nexus의 LINK 화면에 Mac이 보이지 않았다. 2026-10-15 실기 실행 도구는 송신 기록 소켓이 늘 콜백을 넘겨 이 문제가 드러나지 않았다. 이제 `send`는 빈 콜백을 넘겨 실패를 버린다(`BeaconUpstreamFixTests.swift`).
