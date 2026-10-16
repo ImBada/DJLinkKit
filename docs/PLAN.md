@@ -367,6 +367,11 @@ let package = Package(
 
 - `LinkExport.start(seedAnnouncements:)`·`Beacon.hear_seed`: 앱이 띄우기 전에 들은 장치 알림을 넣으면 CDJ의 다음 알림을 기다리지 않고 바로 번호 받기를 시작한다. 원본에는 없는 입구다. 캡처에서 rekordbox도 CDJ 알림을 들은 직후 첫 번호 요청을 보냈고, 알림 간격은 약 2초였다(`BeaconSeedTests`).
 
+**고친 것**(2026-10-16, Link Export 목록 썸네일)
+
+- 목록 썸네일 요청(인자 둘인 `ARTWORK` 0x2003)의 id를 원본은 줄 번호+2로 읽었다. 캡처에서 CDJ-2000nexus는 목록 줄의 곡 id로 물었고 rekordbox도 같은 id에 답했다. 곡 id가 1부터 이어지는 라이브러리에서는 앞 곡의 그림이 나왔다. 이제 곡 id(없으면 앨범 id)로 찾는다.
+- rekordbox 7은 그림마다 원본(500~800px)·`_m`(240px)·`_s`(80px)를 둔다. 같은 요청에 rekordbox는 `_s`(약 3KB)를 보냈다. 원본은 `_m`(약 17KB)을 먼저 보내 썸네일이 늦게 떴다. 이제 목록에는 `_s` → `_m` → 원본 순서로, 큰 그림 요청(`CONTENT_ARTWORK`·인자 셋 이상)에는 원본처럼 `_m` → 원본 순서로 보낸다(`CatalogArtworkSizeTests`).
+
 **고친 것**(2026-10-16, Link Export 보내기 실패)
 
 - Swift `Beacon`의 `send`는 콜백 없이 보내, 보내기가 한 번 실패하면 `DualStackUDPSocket`이 소켓 오류로 올리고 상태 소켓의 `status_running`이 꺼진다. 그 뒤로는 상태 패킷을 보내지도, CDJ의 질의에 답하지도 않는다. 2026-10-16 DJCrate 앱에서 상태 송신이 첫 패킷 뒤 멈추고 CDJ-2000nexus의 LINK 화면에 Mac이 보이지 않았다. 2026-10-15 실기 실행 도구는 송신 기록 소켓이 늘 콜백을 넘겨 이 문제가 드러나지 않았다. 이제 `send`는 빈 콜백을 넘겨 실패를 버린다(`BeaconUpstreamFixTests.swift`).
