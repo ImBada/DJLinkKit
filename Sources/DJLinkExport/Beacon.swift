@@ -299,6 +299,17 @@ public enum LinkState: Equatable, Sendable { case waiting, joining, up(number: U
         beacon.schedule_beat(POLL)
         return beacon
     }
+    /// 서버를 띄우기 전에 받아 둔 장치 알림(keep-alive)을 방금 들은 것처럼 넣는다(PLAN §9 더함).
+    /// 알림 포트를 연 뒤 CDJ의 다음 알림(약 2초 간격)을 기다리지 않고 바로 번호 받기를 시작한다.
+    /// 앱이 이미 들은 지 얼마 안 된 알림만 넘겨야 한다(오래된 알림은 그 장치가 아직 있다는 뜻이 아니다)
+    public func hear_seed(_ packet: [UInt8], from address: String) {
+        guard !stopped, announce_running else { return }
+        let from = RemoteInfo(address: address, family: "IPv4", port: Int(PORT_ANNOUNCE), size: packet.count)
+        if let out = hear_announce(Array(packet.prefix(2048)), from, config, shared, started) {
+            send_announce(announce, out, config.broadcast, config.announce_port)
+        }
+    }
+
     func start_announce_loop() {
         announce.onError { [weak self] _ in self?.announce_running = false }
         announce.onMessage { [weak self] packet, from in

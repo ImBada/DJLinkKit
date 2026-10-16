@@ -145,15 +145,19 @@ public struct Snapshot: Equatable, Sendable {
         self.files = files
         self.catalog = catalog
     }
+    /// - Parameter seedAnnouncements: 띄우기 전에 앱이 들은 지 얼마 안 된 장치 알림(바이트·보낸 주소). 다음 알림을 기다리지 않고 바로 참여한다(PLAN §9)
     public static func start(
         _ source: any Source, _ interface: Interface, _ ports: Ports = Ports.REKORDBOX,
         socketFactory: any ExportSocketFactory = LiveExportSocketFactory.shared,
         clock: any DJLinkClock = MonotonicClock.shared,
-        interfaceProvider: any InterfaceProvider = SystemInterfaceProvider(), connectionMode: ConnectionMode? = nil
+        interfaceProvider: any InterfaceProvider = SystemInterfaceProvider(), connectionMode: ConnectionMode? = nil,
+        seedAnnouncements: [(packet: [UInt8], address: String)] = []
     ) async throws -> LinkExport {
-        try await start_with_unsupported_command_reporter(
+        let export = try await start_with_unsupported_command_reporter(
             source, interface, ports, nil, socketFactory: socketFactory, clock: clock,
             interfaceProvider: interfaceProvider, connectionMode: connectionMode)
+        for seed in seedAnnouncements { export.beacon.hear_seed(seed.packet, from: seed.address) }
+        return export
     }
     public static func start_with_unsupported_command_reporter(
         _ source: any Source, _ interface: Interface, _ ports: Ports, _ reporter: UnsupportedCommandReporter?,
