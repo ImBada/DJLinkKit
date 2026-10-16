@@ -490,7 +490,8 @@ func interface_lost(_ config: BeaconConfig, _ provider: any InterfaceProvider) -
     return present ? nil : "\(name) no longer has the address \(config.address)"
 }
 @DJLinkActor func send(_ socket: any UDPSocket, _ packet: [UInt8], _ to: LinkAddress, _ port: UInt16) {
-    socket.send(packet, port: Int(port), address: to.description, callback: nil)
+    // PLAN §9: 보내기 실패는 버린다. 콜백 없이 보내면 실패가 소켓 오류로 올라가 상태 고리(`status_running`)가 영영 멈춘다.
+    socket.send(packet, port: Int(port), address: to.description, callback: { _, _ in })
 }
 @DJLinkActor func send_announce(_ socket: any UDPSocket, _ out: Outgoing, _ broadcast: LinkAddress, _ port: UInt16) {
     send(socket, out.packet, out.to ?? broadcast, port)
