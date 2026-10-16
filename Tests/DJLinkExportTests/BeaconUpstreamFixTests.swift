@@ -24,6 +24,68 @@ import Testing
     }
 }
 
+/// PLAN §9: 한 장치에게 보내는 패킷이 경로 오류("No route to host" 등)로 실패하면 잠시 뒤 다시 보낸다.
+/// 2026-10-16 실기: 참여 직후 CDJ에게 보낸 인사·장치 정보 답이 EHOSTUNREACH로 실패해, CDJ가 약 5초 뒤 다시 물을 때까지 마운트하지 않았다
+@Suite @DJLinkActor struct BeaconRetryTests {
+    static func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<1000 where !condition() { await Task.yield() }
+    }
+
+    @Test("an_unreachable_unicast_send_is_retried_until_it_goes_out")
+    func an_unreachable_unicast_send_is_retried_until_it_goes_out() async {
+        let socket = RouteFailingSocket(failures: 2)
+        send(socket, [1, 2, 3], LinkAddress(169, 254, 86, 192), 50002, retries: 5, delay: .zero)
+        await Self.waitUntil { socket.sends == 3 }
+        #expect(socket.sends == 3)
+        #expect(socket.delivered == 1)
+    }
+
+    @Test("retries_stop_at_the_limit_and_skip_broadcasts_and_other_errors")
+    func retries_stop_at_the_limit_and_skip_broadcasts_and_other_errors() async {
+        let always = RouteFailingSocket(failures: 100)
+        send(always, [1], LinkAddress(169, 254, 86, 192), 50002, retries: 3, delay: .zero)
+        await Self.waitUntil { always.sends == 4 }
+        for _ in 0..<50 { await Task.yield() }
+        #expect(always.sends == 4)
+        let broadcast = RouteFailingSocket(failures: 100)
+        send(broadcast, [1], LinkAddress(169, 254, 255, 255), 50002, retries: 3, delay: .zero)
+        for _ in 0..<50 { await Task.yield() }
+        #expect(broadcast.sends == 1)
+        let other = FailingUDPSocket()
+        send(other, [1], LinkAddress(169, 254, 86, 192), 50002, retries: 3, delay: .zero)
+        for _ in 0..<50 { await Task.yield() }
+        #expect(other.sends == 1)
+    }
+}
+
+/// 처음 `failures`번은 경로 오류로 실패하고 그 뒤로는 보낸다
+@DJLinkActor private final class RouteFailingSocket: UDPSocket {
+    var sends = 0
+    var delivered = 0
+    let failures: Int
+    init(failures: Int) { self.failures = failures }
+
+    func onMessage(_ handler: @escaping @DJLinkActor ([UInt8], RemoteInfo) -> Void) -> SocketListener { SocketListener(id: 0) }
+    func onceMessage(_ handler: @escaping @DJLinkActor ([UInt8], RemoteInfo) -> Void) -> SocketListener { SocketListener(id: 0) }
+    func onError(_ handler: @escaping @DJLinkActor (any Error) -> Void) -> SocketListener { SocketListener(id: 0) }
+    func onClose(_ handler: @escaping @DJLinkActor () -> Void) -> SocketListener { SocketListener(id: 0) }
+    func off(_ listener: SocketListener) {}
+    func removeAllListeners() {}
+    func bind(port: Int?, address: String?) async throws -> AddressInfo { AddressInfo(address: "127.0.0.1", port: 0) }
+    func send(_ msg: [UInt8], port: Int, address: String, callback: (@DJLinkActor ((any Error)?, Int) -> Void)?) {
+        sends += 1
+        if sends <= failures {
+            callback?(NSError(domain: NSPOSIXErrorDomain, code: Int(EHOSTUNREACH)), 0)
+        } else {
+            delivered += 1
+            callback?(nil, msg.count)
+        }
+    }
+    func setBroadcast(_ flag: Bool) {}
+    func address() -> AddressInfo? { nil }
+    func close(_ callback: (@DJLinkActor () -> Void)?) throws {}
+}
+
 /// PLAN §9: 앱이 띄우기 전에 들은 장치 알림을 넣으면 CDJ의 다음 알림(약 2초 간격)을 기다리지 않고 바로 번호 받기를 시작한다.
 /// 2026-10-16 캡처: rekordbox·DJCrate 모두 첫 번호 요청을 CDJ 알림 직후에 보내, 누른 뒤 평균 1초쯤을 알림 기다리기에 썼다.
 @Suite @DJLinkActor struct BeaconSeedTests {
