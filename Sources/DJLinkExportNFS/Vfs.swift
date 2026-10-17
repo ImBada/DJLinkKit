@@ -138,6 +138,8 @@ private func stat_file(_ path: String) -> Stat {
 public final class Vfs {
     private var export: String, nodes: [Node], roots: [Root] = [], tracks: Set<[UInt8]> = []
     fileprivate var id_base: UInt32 = 0
+    /// 원본 경로 → 대신 내어 줄 호스트 경로(`redirect`)
+    private var redirects: [String: String] = [:]
     public init(_ export: String) {
         self.export = export
         nodes = [Node("", .directory, 0, nil, .directory(0), false)]
@@ -148,6 +150,7 @@ public final class Vfs {
         copy.nodes = nodes
         copy.roots = roots
         copy.tracks = tracks
+        copy.redirects = redirects
         copy.id_base = id_base
         return copy
     }
@@ -162,6 +165,18 @@ public final class Vfs {
         else { return }
         roots.append(Root(parts: parts, host: host))
     }
+    /// 그 원본 파일을 찾으면 다른 호스트 파일을 내어 준다(크기·내용이 그 파일 것이다). 원본에 없는 입구다.
+    /// 플레이어가 곡 정보를 곡 번호별로 기억해 바꾼 경로 대신 원본 이름으로 다시 찾을 때 쓴다(CDJ-2000nexus 실기).
+    /// 이미 찾은 노드도 그 자리에서 바꾼다. 새 노드로 이름 자리만 바꾸면 nexus가 싣는 도중 옛 핸들과 섞어 써서 싣기가 멈췄다(2026-10-17 실기).
+    /// 그래서 그 원본을 읽던 다른 플레이어도 다음 읽기부터 바꾼 파일을 받는다
+    public func redirect(_ host: String, to replacement: String) {
+        redirects[host] = replacement
+        for index in nodes.indices where nodes[index].kind == .file && nodes[index].source == host {
+            nodes[index].source = replacement
+            nodes[index].stat = nil
+        }
+    }
+    private func served(_ host: String) -> String { redirects[host] ?? host }
     public func allow_track(_ host: String) { tracks.insert(Array(path_components(host).joined(separator: "\0").utf8)) }
     private func track_path_role(_ path: String) -> (Bool, Bool) {
         let parts = path_components(path).map { Array($0.utf8) }
@@ -232,7 +247,8 @@ public final class Vfs {
             } else {
                 return nil
             }
-            return insert(parent, as_named, found, join_path(dir, as_named), nil, found == .file)
+            let host = join_path(dir, as_named)
+            return insert(parent, as_named, found, found == .file ? served(host) : host, nil, found == .file)
         }
         let path = path_of(parent) + [key(name)]
         let depth = path.count
@@ -262,7 +278,10 @@ public final class Vfs {
             let entries = names.filter(is_plain_name).compactMap { name -> (String, NodeKind)? in
                 host_entry(dir, name).map { (name, $0) }
             }.sorted { $0.0.utf8.lexicographicallyPrecedes($1.0.utf8) }
-            for (name, kind) in entries { _ = insert(index, name, kind, join_path(dir, name), nil, kind == .file) }
+            for (name, kind) in entries {
+                let host = join_path(dir, name)
+                _ = insert(index, name, kind, kind == .file ? served(host) : host, nil, kind == .file)
+            }
         } else {
             let path = path_of(index)
             let depth = path.count
@@ -354,4 +373,8 @@ public final class Exports {
         by_name.keys.sorted { $0.lexicographicallyPrecedes($1) }.map { String(decoding: $0, as: UTF8.self) }
     }
     public func is_empty() -> Bool { by_name.isEmpty }
+    /// 모든 내보내기에서 그 원본 파일 대신 다른 파일을 내어 준다(`Vfs.redirect`)
+    public func redirect(_ host: String, to replacement: String) {
+        for vfs in by_name.values { vfs.redirect(host, to: replacement) }
+    }
 }
