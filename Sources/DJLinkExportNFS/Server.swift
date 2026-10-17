@@ -89,6 +89,7 @@ public final class Server {
     private var mounts: [[UInt8]: [Address4]] = [:]
     private var replies: [(ReplyKey, [UInt8])] = []
     private var file_observer: (@DJLinkActor (String, Address4) -> Void)?
+    private var file_gate: (@DJLinkActor (String, Address4) -> Bool)?
     public init(
         _ exports: Exports, _ nfs_port: UInt16, _ mount_port: UInt16, logger: any Logger = noopLogger,
         clock: any DJLinkClock = SystemClock.shared
@@ -115,6 +116,12 @@ public final class Server {
     /// 원본에 없는 입구다. 앱이 "곡을 실으려 한다"는 것을 알아 못 읽는 형식을 미리 바꾸게 한다(PLAN §9). 답하는 도중에 부르므로 짧게 끝낸다
     @discardableResult public func with_file_observer(_ observer: @escaping @DJLinkActor (String, Address4) -> Void) -> Server {
         file_observer = observer
+        return self
+    }
+    /// 플레이어가 파일을 찾거나 읽을 때 지금 답할지 묻는다. false면 답하지 않는다(플레이어는 1초쯤 뒤 같은 요청을 다시 보낸다).
+    /// 원본에 없는 입구다. 앱이 못 읽는 형식을 바꾸는 동안 싣기를 실패시키지 않고 기다리게 한다(PLAN §9). 답하는 도중에 부르므로 짧게 끝낸다
+    @discardableResult public func with_file_gate(_ gate: @escaping @DJLinkActor (String, Address4) -> Bool) -> Server {
+        file_gate = gate
         return self
     }
     private func is_up() -> Bool { up.map { $0.load() != 0 } ?? true }
@@ -164,7 +171,13 @@ public final class Server {
         switch call.program {
         case PROGRAM_PORTMAP: reply = portmap(call, from)
         case PROGRAM_MOUNT: reply = mount(call, from)
-        case PROGRAM_NFS: reply = nfs(call, from)
+        case PROGRAM_NFS:
+            // 앱이 답을 미룬 파일 요청은 답하지 않는다. 플레이어가 같은 요청을 다시 보내면 그때 다시 묻는다
+            guard let answered = nfs(call, from) else {
+                logger.debug("file request held by the app; no reply", call.xid)
+                return nil
+            }
+            reply = answered
         case PROGRAM_NLM, PROGRAM_NSM:
             logger.debug("lock-manager call; dropped without a reply", call.xid, call.program)
             return nil
@@ -269,7 +282,7 @@ public final class Server {
             return Rpc.accepted_empty(call.xid, Rpc.accept.PROC_UNAVAIL)
         }
     }
-    private func nfs(_ call: Rpc.Call, _ from: Address4) -> [UInt8] {
+    private func nfs(_ call: Rpc.Call, _ from: Address4) -> [UInt8]? {
         guard call.version == VERSION_NFS else { return Rpc.program_mismatch(call.xid, VERSION_NFS, VERSION_NFS) }
         switch call.procedure {
         case nfs_proc.NULL: return Rpc.accepted_empty(call.xid, Rpc.accept.SUCCESS)
@@ -310,7 +323,7 @@ public final class Server {
         write_attributes(writer, attributes)
         return writer.into_bytes()
     }
-    private func lookup(_ call: Rpc.Call, _ from: Address4) -> [UInt8] {
+    private func lookup(_ call: Rpc.Call, _ from: Address4) -> [UInt8]? {
         let reader = call.reader()
         guard let handle = Self.read_handle(reader), let name = try? reader.utf16() else {
             return Rpc.accepted_empty(call.xid, Rpc.accept.GARBAGE_ARGS)
@@ -334,12 +347,15 @@ public final class Server {
         }
         logger.trace("lookup found a node", call.xid, name, attributes.size)
         // 허락한 폴더(`allow_folder`)의 폴더 노드에도 원본 경로가 붙으므로 파일일 때만 알린다
-        if vfs.kind(index) != .directory, let source = vfs.source(index) { file_observer?(source, from) }
+        if vfs.kind(index) != .directory, let source = vfs.source(index) {
+            file_observer?(source, from)
+            if file_gate?(source, from) == false { return nil }
+        }
         let writer = Rpc.accepted(call.xid, Rpc.accept.SUCCESS).u32(nfs_status.OK).opaque_fixed(child.as_bytes())
         write_attributes(writer, attributes)
         return writer.into_bytes()
     }
-    private func read(_ call: Rpc.Call, _ from: Address4) -> [UInt8] {
+    private func read(_ call: Rpc.Call, _ from: Address4) -> [UInt8]? {
         let reader = call.reader()
         guard let handle = Self.read_handle(reader), let offset = try? reader.u32(), let count = try? reader.u32()
         else { return Rpc.accepted_empty(call.xid, Rpc.accept.GARBAGE_ARGS) }
@@ -361,6 +377,7 @@ public final class Server {
             // 같은 곡을 다시 실을 때는 기억한 핸들로 LOOKUP 없이 바로 읽을 수 있어 여기서도 알린다
             file_observer?(source, from)
         }
+        if file_gate?(source, from) == false { return nil }
         guard !source.utf8.contains(0) else { return Self.status_only(call.xid, nfs_status.IO) }
         // 원본 Mutex의 open→seek→read→stat→close 범위를 액터 위 동기 호출로 보존한다.
         let file: FileHandle

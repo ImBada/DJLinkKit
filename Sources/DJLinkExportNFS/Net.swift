@@ -210,6 +210,8 @@ public enum Net {
         public func observe_files(_ observer: @escaping @DJLinkActor (String, Address4) -> Void) {
             server.with_file_observer(observer)
         }
+        /// 파일 요청에 지금 답할지 묻는다(`Server.with_file_gate`)
+        public func gate_files(_ gate: @escaping @DJLinkActor (String, Address4) -> Bool) { server.with_file_gate(gate) }
         /// 그 원본 파일 대신 다른 파일을 내어 준다(`Exports.redirect`)
         public func redirect(_ host: String, to replacement: String) { server.exports().redirect(host, to: replacement) }
         public func mounted_hosts() -> [Address4] { server.mounted_hosts() }

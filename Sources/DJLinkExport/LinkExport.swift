@@ -231,8 +231,15 @@ public struct Snapshot: Equatable, Sendable {
         }
     }
     /// 플레이어가 그 원본 파일을 NFS로 찾으면 다른 파일을 내어 준다. 곡 정보의 경로를 바꿔도 이미 그 곡을 본 플레이어는
-    /// 옛 경로로 찾으므로(CDJ-2000nexus 실기) 함께 쓴다. 원본에 없는 입구다(PLAN §9)
+    /// 옛 경로로 찾으므로(CDJ-2000nexus 실기) 함께 쓴다. 이미 연 핸들은 원본을 이어 읽는다. 원본에 없는 입구다(PLAN §9)
     public func redirect_file(_ host: String, to replacement: String) { files.redirect(host, to: replacement) }
+    /// 플레이어가 NFS로 파일을 찾거나 읽을 때 지금 답할지 묻는다. false면 답하지 않아 플레이어가 같은 요청을 다시 보내게 한다.
+    /// 앱이 못 읽는 형식을 바꾸는 동안 싣기를 기다리게 할 때 쓴다. 원본에 없는 입구다(PLAN §9)
+    public func gate_files(_ gate: @escaping @DJLinkActor (_ path: String, _ player: Player?) -> Bool) {
+        files.gate_files { [beacon] path, from in
+            gate(path, beacon.players().first { $0.address.octets == from.octets })
+        }
+    }
     public func load_track(_ player_number: UInt8, _ track_id: UInt32) async throws {
         if let address = beacon.players().first(where: { $0.number == player_number })?.address,
             !files.is_mounted(try DJLinkKit.Address4(address.description))
