@@ -164,10 +164,10 @@ struct NFSFileObserverTests {
         #expect(seen.requests.map(\.0) == [dir.join("Music/LINK/track.wav"), dir.join("Music/LINK/track.wav")])
     }
 
-    @Test("이미 찾은 원본도 바꿔 내면 기억한 핸들로 다른 파일을 읽는다")
-    func redirectAfterLookupSwitchesTheRememberedHandle() throws {
-        // CDJ-2000nexus는 곡 번호별로 처음 받은 경로를 기억해, 바꾼 뒤에도 원본 이름과 핸들로 찾는다.
-        // 핸들이 바뀌면 싣는 도중 옛 핸들과 섞어 써서 멈췄으므로(실기) 같은 핸들로 바꾼 파일을 준다
+    @Test("이미 찾은 원본을 바꿔 내면 이름으로 다시 찾을 때 다른 파일을 주고 열린 핸들은 원본을 계속 읽는다")
+    func redirectAfterLookupKeepsOpenHandles() throws {
+        // CDJ-2000nexus는 곡 번호별로 처음 받은 경로를 기억해, 바꾼 뒤에도 원본 이름으로 다시 찾는다.
+        // 같은 원본을 읽던 다른 플레이어(FLAC을 읽는 기종)는 연 핸들로 이어 읽으므로 원본을 그대로 받아야 한다
         let (dir, server, _) = try fixture()
         defer { withExtendedLifetime(dir) {} }
         try Data(repeating: 9, count: 60).write(to: URL(fileURLWithPath: dir.join("track.wav")))
@@ -176,10 +176,14 @@ struct NFSFileObserverTests {
         let open = try lookup(server, folder, "track.flac")
         #expect(try read(server, open, at: 0).size == 40000)
         server.exports().redirect(dir.join("track.flac"), to: dir.join("track.wav"))
-        let read = try read(server, open, at: 0)
-        #expect(read.size == 60)
-        #expect(read.data == [UInt8](repeating: 9, count: 60))
-        #expect(try lookup(server, folder, "track.flac") == open)
+        let kept = try read(server, open, at: 32768)
+        #expect(kept.size == 40000)
+        #expect(kept.data == [UInt8](repeating: 7, count: 40000 - 32768))
+        let fresh = try lookup(server, folder, "track.flac")
+        #expect(fresh != open)
+        let again = try read(server, fresh, at: 0)
+        #expect(again.size == 60)
+        #expect(again.data == [UInt8](repeating: 9, count: 60))
     }
 
     @Test("바꿔 낸 뒤 폴더 목록을 읽어도 원본 이름으로 다른 파일을 준다")
@@ -204,5 +208,35 @@ struct NFSFileObserverTests {
         _ = served.children(folder)
         let read = try read(server, try lookup(server, at, "track.flac"), at: 0)
         #expect(read.size == 60)
+    }
+
+    @Test("앱이 미룬 파일 요청에는 답하지 않고 다시 보낸 같은 요청에 답한다")
+    func heldFileRequestIsAnsweredOnRetransmission() throws {
+        // 바꾸는 동안 원본으로 답하면 CDJ가 E-8305로 실패한다. 답하지 않으면 1초쯤 뒤 같은 요청을 다시 보낸다
+        let (dir, server, seen) = try fixture()
+        defer { withExtendedLifetime(dir) {} }
+        final class Gate { var open = false; var asked: [String] = [] }
+        let gate = Gate()
+        server.with_file_gate { path, _ in
+            gate.asked.append(path)
+            return gate.open
+        }
+        var folder = try root(server)
+        for part in ["Contents", "Artist"] { folder = try lookup(server, folder, part) }
+        #expect(gate.asked.isEmpty)
+        let request = call(
+            PROGRAM_NFS, VERSION_NFS, nfs_proc.LOOKUP, Xdr.Writer().opaque_fixed(folder.as_bytes()).utf16("track.flac").into_bytes())
+        #expect(server.handle_from(request, Self.player, 1023) == nil)
+        #expect(seen.requests.map(\.0) == [dir.join("track.flac")])
+        gate.open = true
+        let reply = try #require(server.handle_from(request, Self.player, 1023))
+        let reader = try Rpc.Reply.decode(reply).reader()
+        #expect(try reader.u32() == nfs_status.OK)
+        let file = try #require(Handle.from_slice(reader.opaque_fixed(HANDLE_LEN)))
+        gate.open = false
+        let held = call(
+            PROGRAM_NFS, VERSION_NFS, nfs_proc.READ, Xdr.Writer().opaque_fixed(file.as_bytes()).u32(0).u32(64).u32(0).into_bytes())
+        #expect(server.handle_from(held, Self.player, 1023) == nil)
+        #expect(gate.asked == Array(repeating: dir.join("track.flac"), count: 3))
     }
 }

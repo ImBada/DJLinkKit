@@ -165,15 +165,18 @@ public final class Vfs {
         else { return }
         roots.append(Root(parts: parts, host: host))
     }
-    /// 그 원본 파일을 찾으면 다른 호스트 파일을 내어 준다(크기·내용이 그 파일 것이다). 원본에 없는 입구다.
+    /// 그 원본 파일을 이름으로 찾으면 다른 호스트 파일을 내어 준다(크기·내용이 그 파일 것이다). 원본에 없는 입구다.
     /// 플레이어가 곡 정보를 곡 번호별로 기억해 바꾼 경로 대신 원본 이름으로 다시 찾을 때 쓴다(CDJ-2000nexus 실기).
-    /// 이미 찾은 노드도 그 자리에서 바꾼다. 새 노드로 이름 자리만 바꾸면 nexus가 싣는 도중 옛 핸들과 섞어 써서 싣기가 멈췄다(2026-10-17 실기).
-    /// 그래서 그 원본을 읽던 다른 플레이어도 다음 읽기부터 바꾼 파일을 받는다
+    /// 이미 찾은 노드는 그대로 두고 이름 자리만 새 노드로 바꾼다. 그 원본을 읽던 다른 플레이어는 연 핸들로 원본을 이어 읽는다
     public func redirect(_ host: String, to replacement: String) {
         redirects[host] = replacement
         for index in nodes.indices where nodes[index].kind == .file && nodes[index].source == host {
-            nodes[index].source = replacement
-            nodes[index].stat = nil
+            let old = nodes[index], parent = old.parent
+            guard nodes.indices.contains(parent), nodes[parent].by_name[key(old.name)] == index else { continue }
+            let fresh = nodes.count
+            nodes.append(Node(old.name, .file, parent, replacement, nil, old.listed))
+            nodes[parent].by_name[key(old.name)] = fresh
+            nodes[parent].children = nodes[parent].children.map { $0 == index ? fresh : $0 }
         }
     }
     private func served(_ host: String) -> String { redirects[host] ?? host }
