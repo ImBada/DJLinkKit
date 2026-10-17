@@ -206,6 +206,12 @@ public enum Net {
             }
         }
         public func is_mounted(_ host: Address4) -> Bool { server.is_mounted(host) }
+        /// 플레이어가 파일을 찾거나 처음부터 읽을 때 알린다(`Server.with_file_observer`)
+        public func observe_files(_ observer: @escaping @DJLinkActor (String, Address4) -> Void) {
+            server.with_file_observer(observer)
+        }
+        /// 그 원본 파일 대신 다른 파일을 내어 준다(`Exports.redirect`)
+        public func redirect(_ host: String, to replacement: String) { server.exports().redirect(host, to: replacement) }
         public func mounted_hosts() -> [Address4] { server.mounted_hosts() }
         public func portmap_address() -> AddressInfo { portmap }
         public func mount_address() -> AddressInfo { mount }

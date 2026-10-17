@@ -223,6 +223,16 @@ public struct Snapshot: Equatable, Sendable {
     public func database_address() -> AddressInfo { database.database_address() }
     public func portmap_address() -> AddressInfo { files.portmap_address() }
     public func analysis_changed() { catalog.forget_analysis() }
+    /// 플레이어가 NFS로 파일을 찾거나 처음부터 읽을 때 호스트 경로와 그 플레이어(알림을 들은 장치 중 주소가 같은 것)를 알린다.
+    /// 음원·분석 파일·그림 모두 알린다. 원본에 없는 입구다(PLAN §9)
+    public func observe_files(_ observer: @escaping @DJLinkActor (_ path: String, _ player: Player?) -> Void) {
+        files.observe_files { [beacon] path, from in
+            observer(path, beacon.players().first { $0.address.octets == from.octets })
+        }
+    }
+    /// 플레이어가 그 원본 파일을 NFS로 찾으면 다른 파일을 내어 준다. 곡 정보의 경로를 바꿔도 이미 그 곡을 본 플레이어는
+    /// 옛 경로로 찾으므로(CDJ-2000nexus 실기) 함께 쓴다. 원본에 없는 입구다(PLAN §9)
+    public func redirect_file(_ host: String, to replacement: String) { files.redirect(host, to: replacement) }
     public func load_track(_ player_number: UInt8, _ track_id: UInt32) async throws {
         if let address = beacon.players().first(where: { $0.number == player_number })?.address,
             !files.is_mounted(try DJLinkKit.Address4(address.description))
